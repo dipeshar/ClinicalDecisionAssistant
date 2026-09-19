@@ -154,10 +154,10 @@ Summarise what you did and anything you were unsure about.
 
 **After each task, before the next one:**
 
-1. Read the diff.
-2. Run `python -m pytest` yourself.
-3. Break the code on purpose in one place (for example, loosen the quote check) and confirm a test fails. Then undo it. A test that still passes is not testing the rule.
-4. Write one line in the dev log under "What I verified by hand".
+7. Read the summary and open the 3 places it lists in the diff.
+
+8. Spot-check one row of the mutation table: break that rule yourself and confirm the test fails.
+
+9. Write one line in the dev log under "What I verified by hand".
 
 **Live model runs (T17 onwards):** run them yourself in your own terminal, with the API keys in your environment variables. Codex never sees the keys. Afterwards, give Codex the run folder if you want help reading a trace or fixing a bug.
-

@@ -41,3 +41,17 @@ You are building the "LLM Council" from `docs/design.md` and `docs/data-contract
 - Type hints everywhere. Small functions. Plain code that a reviewer can read in one pass.
 - Handle errors explicitly. No bare `except`, and no swallowed errors. A failure becomes a trace event and a failed turn.
 - Names follow the contracts (`claim_id`, `grounding_status`, and so on).
+
+## End of every task
+
+Before you stop, do all of this in order:
+
+1. Run the tests (see Environment) and commit the task's work.
+
+2. Mutation check, on the committed code. For each rule this task implements, break it on purpose in one small way, run the tests, and confirm at least one test fails. Undo each break with `git restore <file>` and confirm `git status` is clean before moving on. Report a table: rule, what you broke, which test failed. If no test fails, add a test and repeat. Commit any new test.
+
+3. Contract check. List each rule or field from docs/data-contracts.md that this task touches. For each one, say where it is implemented and where it is tested. Flag anything you could not implement exactly as written.
+
+4. Update docs/ai-dev-log.md with what you did, what went wrong, and the mutation table. Leave the "What I verified by hand" column empty. The human fills it in. Commit.
+
+5. Stop. Give a summary of at most 10 lines, then list the 3 places a human should read first (file and function).
