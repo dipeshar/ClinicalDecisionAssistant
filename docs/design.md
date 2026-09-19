@@ -65,6 +65,8 @@ Read the case, let 4 specialists argue for 2 rounds, have judges score each roun
 
 **A failed specialist turn.** The run continues. That argument is not judged and not counted in the stance split. The report lists it as failed. A specialist whose Round 1 turn failed does not take part in Round 2, because it has no argument to revise and no judge notes. If a Round 2 turn fails, its Round 1 argument stands as its final argument.
 
+**A failed judge call.** If a judge's call still fails after the repair retry, the run continues with the other judge. The report is marked INCOMPLETE with the reason. If no judge scored a round, that round has no scores and no notes, and the missing scores lower the confidence (contracts, section 12).
+
 ## LLM gateway (inside our code)
 
 One class, `LLMGateway`, in our own code. Every model call from every agent goes through it. There is no proxy, no extra service and no gateway product to install. The only outside thing it talks to is the model provider's API, which we need anyway. API keys come from environment variables.
@@ -258,3 +260,4 @@ Every gateway call, retrieval, check, score and decision is appended to `trace.j
 - Round 2 retrieval no longer uses "the claim being answered", because the specialist chooses it inside the same call. It uses the other arguments and the flagged claims instead, and the specialist can still cite passages from Round 1.
 - Confidence penalties count the final round only.
 - A specialist whose Round 1 turn failed skips Round 2. Judges write notes in Round 1 only. The chair's strongest claims and basis come from the final round.
+- Codex stopped at T1 and found three gaps: the shape of a failed argument, the bare report, and the aggregate objects (scorecard summaries, confidence inputs, judge summary, run bundle). All are now specified in the contracts, together with the failed-judge case.

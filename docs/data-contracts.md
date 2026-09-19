@@ -124,7 +124,7 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | argument_id | str | CODE | e.g. `R1-SURG` |
 | role | role code | CODE | |
 | round | 1 \| 2 | CODE | |
-| stance | `for` \| `against` \| `conditional` | LLM | |
+| stance | `for` \| `against` \| `conditional`, or null | LLM | Null only when `status` is `failed` (rule 17) |
 | summary | str | LLM | Short, about 80 words max |
 | claims | list[Claim] | LLM | |
 | conditions | list[str] | LLM | What must happen first, if stance is conditional |
@@ -134,7 +134,8 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | stance_changed | bool | CODE | Compared with the same role in Round 1 |
 | retrieved_passage_ids | list[str] | CODE | What the specialist was shown. In Round 2 this includes the passages it cited in Round 1. |
 | repair_used | bool | CODE | True if the one repair retry was used |
-| status | `ok` \| `failed` | CODE | Failed only if the JSON was still bad after the repair retry |
+| status | `ok` \| `failed` | CODE | Failed only if the JSON was still bad after the repair retry. A failed argument has null `stance`, empty `claims`, `conditions` and `uncertainties`, and null `rebuttal` and `revisions`. |
+| failure_reason | str or null | CODE | Why the turn failed. Null when `status` is `ok`. |
 
 ## 6. Scores
 
@@ -162,11 +163,34 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | scores | list[Score] | CODE | All raw scores |
 | presented_order | dict: `"<judge>-R<round>"` to list[argument_id] | CODE | The shuffled order each judge saw |
 | skipped_arguments | list[argument_id] | CODE | Failed arguments that were not judged |
-| per_argument | list | CODE | Per argument: mean per criterion, gap between judges per criterion, and `disagreement_count` |
+| failed_judge_calls | list of `{judge, round}` | CODE | Judge calls that still failed after the repair retry (rule 18) |
+| per_argument | list[ArgumentScoreSummary] | CODE | Shape below |
 | code_ungrounded_claims | list[claim_id] | CODE | Claim IDs our own check marked ungrounded, so we can compare with what the judges flagged |
-| round_comparison | list | CODE | One entry per specialist: mean judge score in Round 1 and in Round 2 on the three shared criteria (groundedness, logic, uncertainty), the change between them, the count of ungrounded claims in each round, and how many claims were kept, revised and dropped. Counterarguments is left out because it exists only in Round 2. |
+| round_comparison | list[RoundComparison] | CODE | Shape below |
 
 A **disagreement** is one argument-and-criterion pair where the two judges differ by `judge_disagreement_gap` (2) or more.
+
+**ArgumentScoreSummary** (one per judged argument)
+
+| Field | Type | Filled by | Notes |
+|---|---|---|---|
+| argument_id | str | CODE | |
+| role | role code | CODE | |
+| round | 1 \| 2 | CODE | |
+| judges_scored | list[judge] | CODE | Which judges produced a score for this argument. Normally both. |
+| mean | `{groundedness, logic, uncertainty, counterarguments}`, each a float or null | CODE | Mean across the judges who scored it. `counterarguments` is null in Round 1. |
+| gap | `{groundedness, logic, uncertainty, counterarguments}`, each an int or null | CODE | Absolute difference between the two judges. Null when only one judge scored it, and for `counterarguments` in Round 1. |
+| disagreement_count | int | CODE | Number of criteria whose gap is `judge_disagreement_gap` or more. 0 when only one judge scored it. |
+
+**RoundComparison** (one per specialist role)
+
+| Field | Type | Filled by | Notes |
+|---|---|---|---|
+| role | role code | CODE | |
+| shared_score | `{round1, round2, change}`, each a float or null | CODE | Mean of groundedness, logic and uncertainty across judges, per round. `change` is `round2` minus `round1`. Null when either round is missing. Counterarguments is left out because it exists only in Round 2. |
+| ungrounded_claims | `{round1, round2}`, each an int or null | CODE | Count per round. Null if that round has no argument. |
+| revisions | `{kept, revised, dropped}`, each an int | CODE | Counts from the Round 2 `revisions`. All 0 if there was no Round 2. |
+| round2_status | `ok` \| `failed` \| `skipped` | CODE | `skipped` when the Round 1 turn failed |
 
 ## 7. Red team
 
@@ -202,7 +226,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | failed_turns | list[argument_id or role] | CODE | Turns that failed and were left out |
 | recommendation | `proceed` \| `proceed_with_modifications` \| `delay_pending_investigation` \| `decline`, or null | CHAIR (LLM) | Null only in a bare report |
 | recommendation_basis | list[argument_id] | CHAIR (LLM) | Code checks they exist |
-| confidence | `{level: low\|medium\|high, score: 0-100, inputs}`, or null | CODE | Formula in section 12. Null in a bare report. |
+| confidence | Confidence, or null | CODE | Shape below. Formula in section 12. Null in a bare report. |
 | council_warning | str or null | CODE | Set when more than half of the specialists dissent |
 | strongest_for | list[claim_id] | CHAIR (LLM) | Grounded, final-round claims only. Code rejects others and copies in the claim text. |
 | strongest_against | list[claim_id] | CHAIR (LLM) | Same |
@@ -211,13 +235,51 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | dissent | list of `{role, stance, argument_id, note}` | CODE | Specialists whose final stance is not accepted (section 12). `note` is copied from `role_notes`. |
 | red_team_findings | list[RedTeamFinding] | CODE | Copied in full from the red team report |
 | injection_check | object | CODE | Copied from the red team report |
-| judge_summary | object | CODE | From the scorecard, including `round_comparison` |
+| judge_summary | JudgeSummary | CODE | Shape below |
 | narrative | str | CHAIR (LLM) | Short summary. Every sentence ends with at least one ID tag such as `[R1-SURG-C2]`. Code checks the tags exist. |
 | citations_index | list[Citation] | CODE | Every citation used, with its verified flag |
 | disclaimer | str | CODE | Fixed text: decision support only, requires human clinical sign-off, synthetic data |
 | human_decision | HumanDecision or null | CODE | Empty until the gate |
 
-**Bare report:** if the chair call fails, code writes a report with `recommendation` and `confidence` null, status `INCOMPLETE`, and only the CODE fields filled in.
+**Bare report:** if the chair call fails, code writes a report with status `INCOMPLETE` and:
+
+- `recommendation`, `confidence` and `council_warning` set to null.
+- Empty lists (`[]`) for `recommendation_basis`, `strongest_for`, `strongest_against`, `required_actions` and `dissent`, an empty dict (`{}`) for `role_notes`, and an empty string for `narrative`.
+- Every CODE field filled in as far as the data collected so far allows: `incomplete_reasons`, `failed_turns`, `red_team_findings`, `injection_check`, `judge_summary`, `citations_index` and `disclaimer`.
+
+**Confidence**
+
+| Field | Type | Filled by | Notes |
+|---|---|---|---|
+| level | `low` \| `medium` \| `high` | CODE | From `score` (section 12) |
+| score | float, 0 to 100 | CODE | |
+| inputs | ConfidenceInputs | CODE | |
+
+**ConfidenceInputs**
+
+| Field | Type | Filled by | Notes |
+|---|---|---|---|
+| judge_part | float | CODE | 0 to 100 |
+| judge_round_used | 1 \| 2 \| null | CODE | Which round's scores fed `judge_part`. Null if neither round was judged. |
+| agreement_part | float | CODE | 0 to 100 |
+| specialists_counted | int | CODE | Non-failed specialists |
+| specialists_accepting | int | CODE | Those whose final stance the recommendation accepts |
+| base | float | CODE | 0.5 times `judge_part` plus 0.5 times `agreement_part` |
+| ungrounded_claims | `{count, penalty}` | CODE | Final round only. Penalty is capped at 20. |
+| high_severity_findings | `{count, penalty}` | CODE | Penalty is capped at 20. |
+| judge_disagreements | `{count, penalty}` | CODE | Final round only. Penalty is capped at 10. |
+| total_penalty | float | CODE | Sum of the three penalties |
+
+**JudgeSummary**
+
+| Field | Type | Filled by | Notes |
+|---|---|---|---|
+| mean_score | `{round1, round2}`, each a float or null | CODE | Mean of every criterion score, across judges and arguments, per round |
+| disagreement_count | int | CODE | Disagreements in the final round |
+| judges | list of `{judge, model, rounds_scored}` | CODE | `rounds_scored` is a list of round numbers |
+| failed_judge_calls | list of `{judge, round}` | CODE | Copied from the scorecard |
+| round_comparison | list[RoundComparison] | CODE | Copied from the scorecard |
+| code_ungrounded_claims | list[claim_id] | CODE | Copied from the scorecard |
 
 ## 9. Human decision
 
@@ -289,7 +351,7 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 
 **Confidence formula** (all in code, with a unit test):
 
-1. `judge_part` = (mean judge score of Round 2 arguments, across all criteria, judges and arguments, minus 1) divided by 4, times 100. If Round 2 was not judged, use Round 1.
+1. `judge_part` = (mean judge score of Round 2 arguments, across all criteria, judges and arguments, minus 1) divided by 4, times 100. If Round 2 was not judged, use Round 1. If neither round was judged, `judge_part` is 0, so missing evidence lowers the confidence.
 2. `agreement_part` = share of non-failed specialists whose final stance is accepted, times 100.
 3. `base` = 0.5 times `judge_part`, plus 0.5 times `agreement_part`.
 4. Penalties, counted on the final round only (Round 2, or Round 1 for a specialist whose Round 2 turn failed). A claim that was fixed or dropped in Round 2 is therefore not punished again:
@@ -319,6 +381,8 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 14. **Feedback to specialists.** Code passes only the judges' `feedback` and `untraceable_claims` fields, plus its own check results. It never passes the numeric scores or the `justification` text. Notes beyond the limit are cut. Notes are wrapped as data in the prompt, like arguments.
 15. Judges do not receive Round 1 scores when they score Round 2.
 16. A specialist whose Round 1 turn failed is not run in Round 2. It stays failed.
+17. **Failed argument.** `stance` is null if and only if `status` is `failed`. A failed argument has empty `claims`, `conditions` and `uncertainties`, null `rebuttal` and `revisions`, and a `failure_reason`.
+18. **Failed judge call.** If a judge's call still fails after the repair retry, the run continues with the other judge. The call is listed in `failed_judge_calls` and the report is `INCOMPLETE`. For arguments that only one judge scored, `mean` is that judge's scores, `gap` is null and `disagreement_count` is 0. If neither judge scored a round, that round has no scores and no notes.
 
 ## 14. Run folder
 
@@ -327,9 +391,24 @@ Each run writes one folder, `runs/<run_id>/`:
 | File | What it holds |
 |---|---|
 | `trace.jsonl` | Every event (section 10) |
-| `run.json` | One bundle: case context, all arguments, red team report, scorecard, report, and the full text of every passage that was cited |
+| `run.json` | One bundle. Shape below. |
 | `scorecard.json` | Scores only, machine-readable |
 | `report.md` | Report for reading in a terminal or on GitHub |
 | `report.html` | Clickable report page, built from `run.json` |
 
 `run.json` exists so the page needs nothing else. Every ID in the report can be looked up in this one file.
+
+**RunBundle** (`run.json`)
+
+| Field | Type | Notes |
+|---|---|---|
+| run_id, case_id | str | |
+| created_at | timestamp | |
+| config_snapshot | object | The settings used for the run (models, budgets, limits). Never contains secrets. |
+| case_context | CaseContext | |
+| retrievals | list[RetrievalResult] | Every specialist turn, both rounds |
+| arguments | list[Argument] | Both rounds, including failed ones |
+| scorecard | Scorecard | |
+| red_team | RedTeamReport or null | Null if the red team did not run |
+| report | Report | |
+| sources | dict: passage ID to `{source_type, source_title, text}` | Full text of every case section and KB passage cited by a claim or used as red team evidence. `source_title` is the section heading for case sections. |
