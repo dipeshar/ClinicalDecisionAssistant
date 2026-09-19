@@ -34,7 +34,6 @@ One row per task. Fill it in as you go, not at the end.
 | Task | Tool and how it was used | What worked | What went wrong | What I verified by hand |
 |---|---|---|---|---|
 | T0 | Codex read the instructions and design/contracts/tasks, then created package metadata, the src-layout council package, minimal CLI help, and three CLI tests. | `.venv/Scripts/python.exe -m pytest`: 3 passed. From `src/`, `../.venv/Scripts/python.exe -m council --help` exited 0 and displayed the decision-support, human-sign-off and synthetic-data disclaimer. No model calls. | Initially stopped because setuptools was missing; the human installed it. Pytest passed with a cache-write permission warning in the sandbox. Nothing was downloaded or installed by Codex. | |
-
 | T1 | Codex implemented 62 Pydantic contract/draft/helper models and 16 enums, then performed contract and mutation checks. | 601 tests pass; all 115 final mutations detected; full JSON round trips and nested draft trust boundaries tested. | T1 first stopped on contract gaps; the human resolved them. Mutation review found missing non-finite-number test coverage; tests were added and the mutation repeated successfully. An audit-script targeting error was corrected. See details below. | |
 
 ### T0 review notes
