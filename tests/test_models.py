@@ -230,6 +230,28 @@ def test_draft_schemas_do_not_expose_code_fields() -> None:
         assert schema["additionalProperties"] is False
 
 
+def test_round2_argument_draft_round_trip() -> None:
+    data = dict(SAMPLES["ArgumentDraft"], rebuttal=SAMPLES["RebuttalDraft"], revisions=[SAMPLES["RevisionDraft"]])
+    assert json.loads(m.ArgumentDraft.model_validate(data).model_dump_json()) == data
+
+
+@pytest.mark.parametrize("field,value", [
+    ("revisions", [SAMPLES["Revision"]]), ("rebuttal", SAMPLES["Rebuttal"]),
+])
+def test_round2_draft_rejects_nested_full_records(field: str, value: object) -> None:
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        m.ArgumentDraft.model_validate(dict(SAMPLES["ArgumentDraft"], **{field: value}))
+
+
+@pytest.mark.parametrize("name,field", [
+    ("Penalty", "penalty"), ("RoundMeans", "round1"), ("BudgetState", "started_at"),
+])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_finite_numbers(name: str, field: str, value: float) -> None:
+    with pytest.raises(ValidationError):
+        getattr(m, name).model_validate(dict(SAMPLES[name], **{field: value}))
+
+
 @pytest.mark.parametrize("field", ["groundedness", "logic", "uncertainty", "counterarguments"])
 @pytest.mark.parametrize("value", [0, 6, 1.5, True, "3"])
 def test_rating_bounds_and_integer_type(field: str, value: object) -> None:
