@@ -33,7 +33,15 @@ One row per task. Fill it in as you go, not at the end.
 
 | Task | Tool and how it was used | What worked | What went wrong | What I verified by hand |
 |---|---|---|---|---|
-| T0 | | | | |
+| T0 | Codex read the instructions and design/contracts/tasks, then created package metadata, the src-layout council package, minimal CLI help, and three CLI tests. | `.venv/Scripts/python.exe -m pytest`: 3 passed. From `src/`, `../.venv/Scripts/python.exe -m council --help` exited 0 and displayed the decision-support, human-sign-off and synthetic-data disclaimer. No model calls. | Initially stopped because setuptools was missing; the human installed it. Pytest passed with a cache-write permission warning in the sandbox. Nothing was downloaded or installed by Codex. | Pending human review: inspect the diff, rerun pytest, and check CLI help using the commands below. |
+
+### T0 review notes
+
+- Only the skeleton is implemented. No run command or council behavior is available yet.
+- The package uses the planned `src/` layout. Pytest adds `src` to its import path via `pyproject.toml`; the module-help smoke test starts a separate Python process in `src/`.
+- To check help without installing anything, run `../.venv/Scripts/python.exe -m council --help` from `src/`. Running from the repository root requires adding `src` to the Python import path or a human-managed editable install. Installation was not performed because AGENTS.md prohibits it.
+- The documented runtime dependencies are declared, with pytest as a test extra and setuptools as the build backend. Building/installing the package was not tested.
+- No contract uncertainty affected T0. Human verification is still pending; the checks above were performed by Codex.
 
 ## Where the tools were not trustworthy
 
