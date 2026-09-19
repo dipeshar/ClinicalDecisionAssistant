@@ -1,0 +1,83 @@
+# LLM Council config. Starting values, to tune after the first runs.
+# What each setting means: docs/data-contracts.md, section 11.
+# max_rounds is not a setting. It is a constant (2) in code.
+
+paths:
+  cases: cases
+  runs: runs
+  prompts: prompts
+
+# Fill in after choosing providers. Judges must use a different model from the specialists.
+# API keys come from environment variables, never from this file.
+models:
+  specialist: { provider: TBD, model: TBD }
+  chair:      { provider: TBD, model: TBD }
+  red_team:   { provider: TBD, model: TBD }
+  judge_a:    { provider: TBD, model: TBD }
+  judge_b:    { provider: TBD, model: TBD }
+
+temperature:            # used only if the model allows it
+  specialist: 0.4
+  judge: 0.0
+  red_team: 0.5
+  chair: 0.2
+
+budget:
+  max_total_tokens: 200000      # input plus output, all roles
+  max_calls: 40                 # counts every attempt
+  max_seconds_total: 600
+  chair_reserve:                # only the chair can spend this
+    tokens: 10000
+    seconds: 60
+    calls: 2
+  max_tokens_per_call:          # output cap per call
+    specialist: 1500
+    judge: 2500
+    red_team: 2500
+    chair: 3000
+
+retries:
+  max_repair_retries_per_turn: 1   # shared by bad JSON and bad citations
+  max_api_attempts: 2              # the first try plus 1 retry
+  api_retry_wait_seconds: 2
+
+retrieval:
+  top_k: 5
+  # Case sections whose text is added to every specialist's search query.
+  case_sections: [CASE-diagnoses, CASE-comorbidities, CASE-tests, CASE-procedure, CASE-consultant-review]
+
+grounding:
+  quote_words_min: 4
+  quote_words_max: 40
+
+judging:
+  disagreement_gap: 2
+  feedback_max_notes: 5
+  feedback_max_words: 40
+
+# One entry per specialist. Keywords are the fixed part of each role's search query (ours to tune).
+roles:
+  SURG:
+    name: Lead Surgeon
+    kb: kb/surgeon
+    persona_prompt: persona_surg.md
+    keywords: [operative risk, surgical feasibility, expected outcome, mortality, technique]
+  PHYS:
+    name: Specialist Physician
+    kb: kb/physician
+    persona_prompt: persona_phys.md
+    keywords: [disease trajectory, medical management, non-surgical alternative, guideline]
+  ANAES:
+    name: Anaesthesia and Critical Care
+    kb: kb/anaesthesia
+    persona_prompt: persona_anaes.md
+    keywords: [anaesthetic risk, ASA class, fitness, comorbidity, ICU recovery, peri-operative]
+  ADMIN:
+    name: Hospital Administration and Ethics
+    kb: kb/admin
+    persona_prompt: persona_admin.md
+    keywords: [consent, protocol, resource availability, ethics, capacity, institutional guideline]
+  RED:
+    name: Red Team
+    kb: kb/redteam
+    keywords: [missing information, assumption, contradiction, overconfidence, injection]
