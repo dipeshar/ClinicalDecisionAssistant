@@ -82,5 +82,11 @@
     "old": "if start_line < 1:",
     "new": "if False:",
     "test": "test_empty_text_and_line_number_validation"
+  },
+  {
+    "rule": "Exact contract warning tag",
+    "old": "FLAG_TAG: Final = \"[FLAGGED: possible instruction]\"",
+    "new": "FLAG_TAG: Final = \"[warning]\"",
+    "test": "test_four_reviewable_groups"
   }
 ]

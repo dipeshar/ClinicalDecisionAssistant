@@ -53,6 +53,7 @@ def test_clinical_language_not_flagged(text: str) -> None:
 
 
 def test_four_reviewable_groups() -> None:
+    assert FLAG_TAG == "[FLAGGED: possible instruction]"
     assert set(SCANNER_PATTERNS) == {
         "instruction_override", "role_spoofing", "answer_manipulation", "hidden_text",
     }
