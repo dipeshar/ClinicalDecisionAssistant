@@ -1,0 +1,170 @@
+[
+  {
+    "rule": "Exactly two rounds",
+    "old": "MAX_ROUNDS: Final = 2",
+    "new": "MAX_ROUNDS: Final = 3",
+    "test": "test_load_config"
+  },
+  {
+    "rule": "Reject duplicate YAML keys",
+    "old": "if duplicate:",
+    "new": "if False:",
+    "test": "test_invalid_yaml"
+  },
+  {
+    "rule": "Strict setting types",
+    "old": "Config.model_validate(data, strict=True)",
+    "new": "Config.model_validate(data, strict=False)",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Validate loaded policy",
+    "old": "    validate_config(config)",
+    "new": "    # skipped policy validation",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Positive budgets",
+    "old": "getattr(budget, field) > 0",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Positive output caps",
+    "old": "require(cap > 0,",
+    "new": "require(True,",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Reserve within budget",
+    "old": "0 < reserve < total",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Reserve covers chair cap",
+    "old": "budget.chair_reserve.tokens >= budget.max_tokens_per_call.chair",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed retries.max_repair_retries_per_turn",
+    "old": "        \"retries.max_repair_retries_per_turn\": (config.retries.max_repair_retries_per_turn, 1),",
+    "new": "        # removed retries.max_repair_retries_per_turn",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed retries.max_api_attempts",
+    "old": "        \"retries.max_api_attempts\": (config.retries.max_api_attempts, 2),",
+    "new": "        # removed retries.max_api_attempts",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed retrieval.top_k",
+    "old": "        \"retrieval.top_k\": (config.retrieval.top_k, 5),",
+    "new": "        # removed retrieval.top_k",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed grounding.quote_words_min",
+    "old": "        \"grounding.quote_words_min\": (config.grounding.quote_words_min, 4),",
+    "new": "        # removed grounding.quote_words_min",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed grounding.quote_words_max",
+    "old": "        \"grounding.quote_words_max\": (config.grounding.quote_words_max, 40),",
+    "new": "        # removed grounding.quote_words_max",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed judging.disagreement_gap",
+    "old": "        \"judging.disagreement_gap\": (config.judging.disagreement_gap, 2),",
+    "new": "        # removed judging.disagreement_gap",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed judging.feedback_max_notes",
+    "old": "        \"judging.feedback_max_notes\": (config.judging.feedback_max_notes, 5),",
+    "new": "        # removed judging.feedback_max_notes",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Fixed judging.feedback_max_words",
+    "old": "        \"judging.feedback_max_words\": (config.judging.feedback_max_words, 40),",
+    "new": "        # removed judging.feedback_max_words",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Nonnegative retry wait",
+    "old": "config.retries.api_retry_wait_seconds >= 0",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Nonnegative temperature",
+    "old": "temperature >= 0",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Known retrieval sections",
+    "old": "bool(config.retrieval.case_sections) and set(config.retrieval.case_sections) <= CASE_SECTIONS",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Required council roles",
+    "old": "set(config.roles) == SPECIALISTS | {Role.RED}",
+    "new": "True",
+    "test": "test_required_roles"
+  },
+  {
+    "rule": "Nonblank resource paths",
+    "old": "bool(path.strip())",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Nonblank role fields",
+    "old": "bool(getattr(settings, field).strip())",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Role keywords",
+    "old": "bool(settings.keywords) and all(word.strip() for word in settings.keywords)",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Specialist persona",
+    "old": "bool(settings.persona_prompt and settings.persona_prompt.strip())",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Configured model identities",
+    "old": "bool(value.strip()) and value.strip().upper() != \"TBD\"",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Chair shares specialist model",
+    "old": "getattr(models.chair, field) == getattr(models.specialist, field)",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Judges share their model",
+    "old": "getattr(models.judge_a, field) == getattr(models.judge_b, field)",
+    "new": "True",
+    "test": "test_bad_value_has_field_path"
+  },
+  {
+    "rule": "Judges differ from specialists",
+    "old": "models.judge_a != models.specialist",
+    "new": "True",
+    "test": "test_judges_differ_from_specialists"
+  }
+]

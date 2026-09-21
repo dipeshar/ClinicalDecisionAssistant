@@ -8,6 +8,7 @@ paths:
   prompts: prompts
 
 # Fill in after choosing providers. Judges must use a different model from the specialists.
+# load_config rejects TBD entries with the setting's name; tests use synthetic model names.
 # API keys come from environment variables, never from this file.
 models:
   specialist: { provider: TBD, model: TBD }
