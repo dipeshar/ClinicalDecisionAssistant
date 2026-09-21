@@ -36,6 +36,7 @@ One row per task. Fill it in as you go, not at the end.
 | T0 | Codex read the instructions and design/contracts/tasks, then created package metadata, the src-layout council package, minimal CLI help, and three CLI tests. | `.venv/Scripts/python.exe -m pytest`: 3 passed. From `src/`, `../.venv/Scripts/python.exe -m council --help` exited 0 and displayed the decision-support, human-sign-off and synthetic-data disclaimer. No model calls. | Initially stopped because setuptools was missing; the human installed it. Pytest passed with a cache-write permission warning in the sandbox. Nothing was downloaded or installed by Codex. | |
 | T1 | Codex implemented 62 Pydantic contract/draft/helper models and 16 enums, then performed contract and mutation checks. | 601 tests pass; all 115 final mutations detected; full JSON round trips and nested draft trust boundaries tested. | T1 first stopped on contract gaps; the human resolved them. Mutation review found missing non-finite-number test coverage; tests were added and the mutation repeated successfully. An audit-script targeting error was corrected. See details below. | |
 | T2 | Codex added YAML loading and configuration policy validation, with reusable mutation specifications. | 658 tests passed; all 28 T2 mutations detected and restored. | Initial model-error messages were too broad; corrected. Duplicate-key mutation exposed a test gap; added a valid-config regression test and corrected its expected mutation test name. | |
+| T3 | Added template ingestion and four-group injection scanning with synthetic clean/attack fixtures. | 705 tests pass; all 33 mutations detected and restored; contract mapping below. | Paused for preamble clarification; human approved rejection. Added an independent exact-tag assertion during review. | |
 
 ### T0 review notes
 
@@ -403,3 +404,99 @@ Human review starting points:
 1. `src/council/config.py` - `load_config`: safe loading and actionable errors.
 2. `src/council/config.py` - `validate_limits`: the fixed contract values.
 3. `tests/test_config.py` - `test_bad_value_has_field_path`: rejected settings and their error messages.
+
+### T3: ingestion and scanner audit
+
+Implemented `ingest_case`, fixed heading recognition, original-byte SHA-256, missing-heading reporting, and code-owned section/flag fields. `SCANNER_PATTERNS` in `src/council/scanner.py` is the single human-readable pattern list: instruction override, role spoofing, answer manipulation, and hidden text. `scan_section` retains original text and line endings, tags each flagged line once, and records matching groups with original one-based file line numbers. Multiline matches flag every affected line.
+
+The small synthetic fixtures in `tests/fixtures/cases/` cover a clean case and an injection case. The realistic Consultant Review saying ?I recommend proceeding with surgery? and the Medications section remain unflagged. Attack tests cover the requested examples, fake system lines, HTML comments, hidden HTML and invisible characters. No model calls, network access, dependencies, protected-document edits, or T4 work.
+
+What went wrong / uncertainty:
+
+- T3 paused because preamble text cannot be cited, but injection flags need a section ID. The human explicitly approved rejecting suspicious title/preamble text with its original line number. Attacks inside sections are retained and tagged.
+- Review found that tests importing the tag constant did not independently verify its spelling. Added a literal assertion, committed it, and confirmed a changed tag fails it. No mutation survived the completed audit.
+- Sandbox restrictions on pytest temporary directories and Git required approved elevated test, commit and mutation commands. Pytest caching was disabled. Nothing was installed.
+- This is a heuristic scanner, not proof that every attack is detected or every clinical sentence is safe. The requested examples and realistic negative cases are covered. Prompt delimiters, red-team interpretation, trace integration and safe report rendering belong to later tasks.
+- Implementation conventions: `case_id` uses the filename stem, `source_file` preserves the supplied Path spelling, and `title` is the nonempty text after `# Case:`. These fields have no further contract format. A UTF-8 BOM is accepted for parsing but remains part of the file hash. No T3 field knowingly differs from its written contract.
+
+Re-run from the repository root (mutation checks require a clean committed working tree):
+
+```powershell
+.venv/Scripts/python.exe -m pytest -p no:cacheprovider
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/scanner.py --spec tools/t3_scanner_mutations.json
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/ingest.py --spec tools/t3_ingest_mutations.json
+```
+
+Each mutation runs the full suite, requires a named failing test, restores the file with `git restore`, and requires clean Git status before continuing. All 15 scanner and 18 ingestion mutations were detected. The exact-tag mutation was checked after its additional test commit. The runner overwrites `.venv/mutation-results.json` each invocation; this table preserves both audits.
+
+#### T3 contract check
+
+Tests below are in `tests/test_ingest.py`, except names prefixed ?scanner? in `tests/test_scanner.py`.
+
+| Contract rule or field | Implementation | Test |
+|---|---|---|
+| Section 1 case IDs; section 2 eight exact heading/ID mappings | `ingest.CASE_HEADINGS`, `find_headings`, `ingest_case` | `test_clean_case_and_clinical_sections` |
+| Section 2 template-only parsing and missing headings | `find_headings`, `ingest_case` | `test_ambiguous_headings_rejected`, `test_missing_sections_and_empty_existing_section`, `test_no_sections_reports_all_missing` |
+| CaseSection.id | `ingest_case` heading lookup | `test_clean_case_and_clinical_sections` |
+| CaseSection.heading | `find_headings`, `ingest_case` | `test_clean_case_and_clinical_sections` |
+| CaseSection.text: exact body except required tag | `ingest_case`, `scan_section`, `FLAG_TAG` | `test_byte_hash_and_text_preservation`, `test_missing_sections_and_empty_existing_section`, `test_injection_case_preserves_and_tags_evidence`; scanner `test_four_reviewable_groups`, `test_multiline_hidden_text_and_original_line_numbers` |
+| CaseSection.flagged | `ingest_case` from scanner flags | `test_clean_case_and_clinical_sections`, `test_injection_case_preserves_and_tags_evidence` |
+| CaseSection.flag_reasons | `ingest_case` unique matched groups | `test_injection_case_preserves_and_tags_evidence`; scanner `test_split_instruction_and_multiple_reasons` |
+| CaseContext.case_id | `ingest_case` filename stem | `test_clean_case_and_clinical_sections` |
+| CaseContext.source_file | `ingest_case` Path string | `test_clean_case_and_clinical_sections` |
+| CaseContext.case_hash: original-file SHA-256 | `ingest_case` hashes raw bytes before parsing | `test_byte_hash_and_text_preservation`, `test_injection_case_preserves_and_tags_evidence` |
+| CaseContext.title | `read_title`, `ingest_case` | `test_clean_case_and_clinical_sections`, `test_unreadable_invalid_utf8_and_missing_title` |
+| CaseContext.sections | `ingest_case` ordered CaseSections | `test_clean_case_and_clinical_sections`, `test_missing_sections_and_empty_existing_section` |
+| CaseContext.missing_sections: heading names | `ingest_case` expected minus present | `test_missing_sections_and_empty_existing_section`, `test_no_sections_reports_all_missing` |
+| CaseContext.injection_flags | `ingest_case` collects scanner flags | `test_injection_case_preserves_and_tags_evidence` |
+| InjectionFlag.section_id | `scan_section` receives mapped ID | scanner `test_attack_groups`; `test_injection_case_preserves_and_tags_evidence` |
+| InjectionFlag.line_number | `scan_section` original-line offsets from ingest | scanner `test_multiline_hidden_text_and_original_line_numbers`; `test_injection_case_preserves_and_tags_evidence` |
+| InjectionFlag.matched_pattern | `scan_section` named group | scanner `test_attack_groups`, `test_split_instruction_and_multiple_reasons` |
+| Section 3: all fields code-owned | Ingest/scanner construct T1 models without LLM calls | `test_clean_case_and_clinical_sections` field assertions and JSON round trip; attack integration test |
+| Section 7 downstream scanner count / flagged citations | T3 supplies flags only; red-team aggregation and citation matching belong to T13 | Deferred to T13 |
+
+Additional design/user rules: scanner `test_attack_groups` covers the four groups; `test_clinical_language_not_flagged` and the clean-case integration test cover clinical language; `test_suspicious_preamble_rejected` covers the human-approved preamble policy. Ingest errors propagate explicitly as `IngestError`; trace/orchestration integration remains future work.
+
+#### T3 mutation table
+
+| Rule | What was broken | Which test failed |
+|---|---|---|
+| Detect instruction_override | `for name, pattern in SCANNER_PATTERNS.items(): -> for name, pattern in SCANNER_PATTERNS.items(): /         if name == 'instruction_override': /             continue` | `tests/test_scanner.py::test_attack_groups` |
+| Detect role_spoofing | `for name, pattern in SCANNER_PATTERNS.items(): -> for name, pattern in SCANNER_PATTERNS.items(): /         if name == 'role_spoofing': /             continue` | `tests/test_scanner.py::test_attack_groups` |
+| Detect answer_manipulation | `for name, pattern in SCANNER_PATTERNS.items(): -> for name, pattern in SCANNER_PATTERNS.items(): /         if name == 'answer_manipulation': /             continue` | `tests/test_scanner.py::test_attack_groups` |
+| Detect hidden_text | `for name, pattern in SCANNER_PATTERNS.items(): -> for name, pattern in SCANNER_PATTERNS.items(): /         if name == 'hidden_text': /             continue` | `tests/test_scanner.py::test_attack_groups` |
+| Normal clinical language is not flagged | `for match in re.finditer(pattern, text, -> for match in re.finditer(pattern + r'\|recommend', text,` | `tests/test_scanner.py::test_clinical_language_not_flagged` |
+| Case insensitive matching | `flags=re.IGNORECASE \| re.MULTILINE -> flags=re.MULTILINE` | `tests/test_scanner.py::test_attack_groups` |
+| One tag per flagged line | `lines[index] = FLAG_TAG + " " + lines[index] -> lines[index] = lines[index]` | `tests/test_scanner.py::test_attack_groups` |
+| Preserve original line endings | `text.splitlines(keepends=True) -> text.splitlines(keepends=False)` | `tests/test_scanner.py::test_multiline_hidden_text_and_original_line_numbers` |
+| Flag every line in a hidden span | `range(first, last + 1) -> range(first, first + 1)` | `tests/test_scanner.py::test_multiline_hidden_text_and_original_line_numbers` |
+| Deduplicate group on each line | `if name not in reasons: -> if True:` | `tests/test_scanner.py::test_split_instruction_and_multiple_reasons` |
+| Flag original line number | `line_number=start_line + index -> line_number=start_line + index + 1` | `tests/test_scanner.py::test_attack_groups` |
+| Flag section ID | `section_id=section_id -> section_id='CASE-profile'` | `tests/test_scanner.py::test_attack_groups` |
+| Flag pattern name | `matched_pattern=name -> matched_pattern='wrong'` | `tests/test_scanner.py::test_attack_groups` |
+| Require one-based offsets | `if start_line < 1: -> if False:` | `tests/test_scanner.py::test_empty_text_and_line_number_validation` |
+| Exact contract warning tag | `FLAG_TAG: Final = "[FLAGGED: possible instruction]" -> FLAG_TAG: Final = "[warning]"` | `tests/test_scanner.py::test_four_reviewable_groups` |
+| Fixed section IDs | `"Patient Profile": "CASE-profile" -> "Patient Profile": "CASE-wrong"` | `tests/test_ingest.py::test_clean_case_and_clinical_sections` |
+| Preserve section heading | `id=section_id, heading=heading -> id=section_id, heading='wrong'` | `tests/test_ingest.py::test_clean_case_and_clinical_sections` |
+| Case ID is file stem | `case_id=source.stem -> case_id=source.name` | `tests/test_ingest.py::test_clean_case_and_clinical_sections` |
+| Source file path | `source_file=str(source) -> source_file=source.name` | `tests/test_ingest.py::test_clean_case_and_clinical_sections` |
+| Title from preamble | `title=title, -> title='wrong',` | `tests/test_ingest.py::test_clean_case_and_clinical_sections` |
+| Hash original bytes | `sha256(raw).hexdigest() -> sha256(text.encode()).hexdigest()` | `tests/test_ingest.py::test_byte_hash_and_text_preservation` |
+| Exact section body | `lines[index + 1:end] -> lines[index:end]` | `tests/test_ingest.py::test_missing_sections_and_empty_existing_section` |
+| Missing headings list | `if heading not in present -> if False` | `tests/test_ingest.py::test_missing_sections_and_empty_existing_section` |
+| Code-owned flagged marker | `flagged=bool(section_flags) -> flagged=False` | `tests/test_ingest.py::test_injection_case_preserves_and_tags_evidence` |
+| Section flag reasons | `list(dict.fromkeys(flag.matched_pattern for flag in section_flags)) -> []` | `tests/test_ingest.py::test_injection_case_preserves_and_tags_evidence` |
+| Context injection flags | `flags.extend(section_flags) -> flags.extend([])` | `tests/test_ingest.py::test_injection_case_preserves_and_tags_evidence` |
+| Absolute original line offsets | `start_line=index + 2 -> start_line=index + 1` | `tests/test_ingest.py::test_injection_case_preserves_and_tags_evidence` |
+| Reject suspicious preamble | `if flags: -> if False:` | `tests/test_ingest.py::test_suspicious_preamble_rejected` |
+| Reject unknown headings | `if heading not in CASE_HEADINGS: -> if False:` | `tests/test_ingest.py::test_ambiguous_headings_rejected` |
+| Reject duplicate headings | `if heading in seen: -> if False:` | `tests/test_ingest.py::test_ambiguous_headings_rejected` |
+| Require template heading order | `if headings and order.index(heading) < order.index(headings[-1][1]): -> if False:` | `tests/test_ingest.py::test_ambiguous_headings_rejected` |
+| Require title | `if not first_line.startswith("# Case:") or not first_line.removeprefix("# Case:").strip(): -> if False:` | `tests/test_ingest.py::test_unreadable_invalid_utf8_and_missing_title` |
+| Reject invalid UTF-8 | `raw.decode("utf-8-sig") -> raw.decode("utf-8-sig", errors="replace")` | `tests/test_ingest.py::test_unreadable_invalid_utf8_and_missing_title` |
+
+Human review starting points:
+
+1. `src/council/scanner.py` - `scan_section` and adjacent `SCANNER_PATTERNS`: matching, preservation, and false-positive tradeoffs.
+2. `src/council/ingest.py` - `ingest_case`: exact bodies, original-byte hash and flag propagation.
+3. `tests/test_ingest.py` - `test_clean_case_and_clinical_sections`: realistic Consultant Review and Medications regression fixture.
