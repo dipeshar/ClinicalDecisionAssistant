@@ -17,6 +17,7 @@ def valid_data() -> dict[str, Any]:
         data["models"][role] = dict(provider="fake", model="synthetic-specialist")
     for role in ("judge_a", "judge_b"):
         data["models"][role] = dict(provider="fake", model="synthetic-judge")
+    data["privacy"]["approved_providers"] = ["fake"]
     return data
 
 
@@ -33,6 +34,41 @@ def test_load_config(tmp_path: Path, valid_data: dict[str, Any]) -> None:
     }
     assert MAX_ROUNDS == 2
     assert "max_rounds" not in type(config).model_fields
+
+
+@pytest.mark.parametrize("role", ["specialist", "chair", "red_team", "judge_a", "judge_b"])
+def test_each_provider_must_be_approved(tmp_path: Path, valid_data: dict[str, Any], role: str) -> None:
+    # The provider guard is tested independently of model-sharing constraints.
+    from council.config import validate_models
+    config = load_config(write_config(tmp_path, valid_data))
+    config.models = config.models.model_copy(deep=True)
+    choice = getattr(config.models, role)
+    choice.provider = "unapproved"
+    if role in ("specialist", "chair"):
+        config.models.specialist.provider = config.models.chair.provider = "unapproved"
+    if role in ("judge_a", "judge_b"):
+        config.models.judge_a.provider = config.models.judge_b.provider = "unapproved"
+    with pytest.raises(ConfigError, match="privacy.approved_providers"):
+        validate_models(config)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("synthetic_marker", ""), ("synthetic_marker", "  "), ("synthetic_marker", 1),
+    ("approved_providers", []), ("approved_providers", ["FAKE"]),
+    ("approved_providers", [""]), ("approved_providers", [" fake "]),
+    ("approved_providers", ["fake", ""]), ("approved_providers", ["fake", " padded "]),
+    ("approved_providers", "fake"), ("approved_providers", [1]),
+])
+def test_invalid_privacy_config(tmp_path: Path, valid_data: dict[str, Any], field: str, value: object) -> None:
+    valid_data["privacy"][field] = value
+    with pytest.raises(ConfigError, match="privacy"):
+        load_config(write_config(tmp_path, valid_data))
+
+
+def test_privacy_section_required(tmp_path: Path, valid_data: dict[str, Any]) -> None:
+    del valid_data["privacy"]
+    with pytest.raises(ConfigError, match="privacy"):
+        load_config(write_config(tmp_path, valid_data))
 
 
 @pytest.mark.parametrize("value", [2, 3])

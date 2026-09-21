@@ -79,7 +79,14 @@ def validate_config(config: Config) -> None:
     validate_budget(config)
     validate_limits(config)
     validate_roles(config)
+    validate_privacy(config)
     validate_models(config)
+
+
+def validate_privacy(config: Config) -> None:
+    require(bool(config.privacy.synthetic_marker.strip()), "privacy.synthetic_marker", "must not be blank")
+    require(all(name.strip() and name == name.strip() for name in config.privacy.approved_providers),
+            "privacy.approved_providers", "must contain nonblank provider names without surrounding spaces")
 
 
 def validate_budget(config: Config) -> None:
@@ -143,3 +150,6 @@ def validate_models(config: Config) -> None:
         require(getattr(models.judge_a, field) == getattr(models.judge_b, field),
                 f"models.judge_b.{field}", "must match Judge A's provider and model")
     require(models.judge_a != models.specialist, "models.judge_a", "judges must use a different model from specialists")
+    for role, choice in models.model_dump().items():
+        require(choice["provider"] in config.privacy.approved_providers,
+                f"models.{role}.provider", "must be in privacy.approved_providers")

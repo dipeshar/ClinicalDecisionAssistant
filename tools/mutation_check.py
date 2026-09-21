@@ -13,7 +13,7 @@ Mutation = tuple[str, str, str, str, str]
 
 
 def build_t1(source: str) -> list[Mutation]:
-    """Preserve the 115 mutations used for the original T1 audit."""
+    """Keep the original T1 rules, also covering contract shapes added later."""
     tree = ast.parse(source)
     lines = source.splitlines(keepends=True)
     mutations: list[Mutation] = []

@@ -1,0 +1,140 @@
+[
+  {
+    "rule": "Detect email",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'email' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect phone",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'phone' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect national_id",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'national_id' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect long_number",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'long_number' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect date_of_birth",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'date_of_birth' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect url",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'url' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect ip_address",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'ip_address' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect id_label",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'id_label' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Detect name_label",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if kind != 'name_label' and re.search(pattern, line, flags=re.IGNORECASE):",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Ordinary clinical values pass",
+    "old": "if re.search(pattern, line, flags=re.IGNORECASE):",
+    "new": "if re.search(pattern, line, flags=re.IGNORECASE) or \"150/90\" in line:",
+    "test": "test_clinical_values_are_not_identifiers"
+  },
+  {
+    "rule": "Original one-based line numbers",
+    "old": "enumerate(text.splitlines(), start=1)",
+    "new": "enumerate(text.splitlines(), start=2)",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Case-insensitive identifier scan",
+    "old": "flags=re.IGNORECASE",
+    "new": "flags=0",
+    "test": "test_identifier_kinds"
+  },
+  {
+    "rule": "Require the configured marker",
+    "old": "if not synthetic_marker.strip() or synthetic_marker.casefold() not in \"\\n\".join(preamble).casefold():",
+    "new": "if False:",
+    "test": "test_marker_is_required_in_preamble"
+  },
+  {
+    "rule": "Marker must be in preamble",
+    "old": "preamble = preamble[:index]",
+    "new": "preamble = preamble",
+    "test": "test_marker_is_required_in_preamble"
+  },
+  {
+    "rule": "Marker ignores case",
+    "old": "synthetic_marker.casefold() not in",
+    "new": "synthetic_marker not in",
+    "test": "test_normal_case_and_case_insensitive_marker"
+  },
+  {
+    "rule": "Reject blank marker defensively",
+    "old": "not synthetic_marker.strip() or ",
+    "new": "False or ",
+    "test": "test_marker_is_required_in_preamble"
+  },
+  {
+    "rule": "First hit only",
+    "old": "return hits[0]",
+    "new": "return hits[-1]",
+    "test": "test_first_hit_only_and_distinct_rejection_folders"
+  },
+  {
+    "rule": "Privacy event type",
+    "old": "event_type=EventType.PRIVACY_BLOCK",
+    "new": "event_type=EventType.ERROR",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "No prompt data in rejection trace",
+    "old": "prompt=None,",
+    "new": "prompt=\"unsafe data\",",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "Zero tokens spent",
+    "old": "tokens_in=0, tokens_out=0",
+    "new": "tokens_in=1, tokens_out=1",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "Safe error includes kind and line",
+    "old": "error=f\"{hit.kind} at line {hit.line_number}\"",
+    "new": "error=None",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "One event per rejection",
+    "old": "stream.write(event.model_dump_json() + \"\\n\")",
+    "new": "stream.write((event.model_dump_json() + \"\\n\") * 2)",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "Redact filesystem exception chain",
+    "old": "from None",
+    "new": "from OSError(\"fictional@example.invalid\")",
+    "test": "test_trace_write_failure_is_redacted_and_still_blocks"
+  }
+]

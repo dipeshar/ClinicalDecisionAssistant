@@ -1,0 +1,26 @@
+[
+  {
+    "rule": "Privacy precedes parsing",
+    "old": "privacy_hit = check_case_privacy(text, config.privacy.synthetic_marker)",
+    "new": "privacy_hit = None",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "Whole-file scan includes sections",
+    "old": "check_case_privacy(text, config.privacy.synthetic_marker)",
+    "new": "check_case_privacy(text.split(\"##\", 1)[0], config.privacy.synthetic_marker)",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "Write rejected-run audit",
+    "old": "write_privacy_rejection(config.paths.runs, privacy_hit)",
+    "new": "# skip rejected-run audit",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  },
+  {
+    "rule": "Exception must omit identifier value",
+    "old": "raise IngestError(f\"{privacy_hit.kind} at line {privacy_hit.line_number}\")",
+    "new": "raise IngestError(f\"{privacy_hit.kind} at line {privacy_hit.line_number}: {text}\")",
+    "test": "test_rejects_identifiers_everywhere_before_parsing"
+  }
+]

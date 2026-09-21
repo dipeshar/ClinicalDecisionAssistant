@@ -1,0 +1,14 @@
+[
+  {
+    "rule": "Required privacy config shape",
+    "old": "privacy: PrivacyConfig",
+    "new": "privacy: PrivacyConfig | None = None",
+    "test": "test_privacy_section_required"
+  },
+  {
+    "rule": "Privacy block enum value",
+    "old": "PRIVACY_BLOCK = \"privacy_block\"",
+    "new": "PRIVACY_BLOCK = \"wrong\"",
+    "test": "test_enum_values"
+  }
+]

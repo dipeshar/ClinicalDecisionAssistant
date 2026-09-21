@@ -111,7 +111,8 @@ def contract_samples() -> dict[str, dict[str, Any]]:
     s["JudgingConfig"] = dict(disagreement_gap=2, feedback_max_notes=5, feedback_max_words=40)
     s["PathsConfig"] = dict(cases="cases", runs="runs", prompts="prompts")
     s["RoleConfig"] = dict(name="Synthetic surgeon", kb="kb/surgeon", keywords=["risk"], persona_prompt="persona_surg.md")
-    s["Config"] = dict(paths=s["PathsConfig"], models=s["ModelChoices"], temperature=s["RoleValues"],
+    s["PrivacyConfig"] = dict(synthetic_marker="Synthetic case for a demonstration", approved_providers=["fake"])
+    s["Config"] = dict(privacy=s["PrivacyConfig"], paths=s["PathsConfig"], models=s["ModelChoices"], temperature=s["RoleValues"],
                        budget=s["BudgetConfig"], retries=s["RetryConfig"], retrieval=s["RetrievalConfig"],
                        grounding=s["GroundingConfig"], judging=s["JudgingConfig"], roles={"SURG": s["RoleConfig"]})
     s["Source"] = dict(source_type="case", source_title="Tests and Imaging", text="Synthetic data only.")
@@ -170,7 +171,7 @@ ENUMS = {
     "ReportStatus": "COMPLETE INCOMPLETE",
     "Recommendation": "proceed proceed_with_modifications delay_pending_investigation decline",
     "Decision": "approved rejected comment_only", "Step": "ingest retrieve specialist judge red_team chair human",
-    "EventType": "start llm_call retrieval validation budget error decision",
+    "EventType": "start llm_call retrieval validation budget error decision privacy_block",
 }
 
 

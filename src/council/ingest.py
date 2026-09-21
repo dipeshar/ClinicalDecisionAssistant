@@ -4,7 +4,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Final
 
-from council.models import CaseContext, CaseSection, InjectionFlag
+from council.models import CaseContext, CaseSection, Config, InjectionFlag
+from council.privacy import check_case_privacy, write_privacy_rejection
 from council.scanner import scan_section
 
 CASE_HEADINGS: Final[dict[str, str]] = {
@@ -55,7 +56,7 @@ def read_title(preamble: str) -> str:
     return first_line.removeprefix("# Case:").strip()
 
 
-def ingest_case(path: str | Path) -> CaseContext:
+def ingest_case(path: str | Path, config: Config) -> CaseContext:
     """Read once; hash original bytes; preserve section text except warning tags.
 
     case_id is the filename stem. Flag line numbers are one-based positions in
@@ -67,6 +68,10 @@ def ingest_case(path: str | Path) -> CaseContext:
         text = raw.decode("utf-8-sig")
     except (OSError, UnicodeError) as error:
         raise IngestError(f"cannot read UTF-8 case file: {source}") from error
+    privacy_hit = check_case_privacy(text, config.privacy.synthetic_marker)
+    if privacy_hit is not None:
+        write_privacy_rejection(config.paths.runs, privacy_hit)
+        raise IngestError(f"{privacy_hit.kind} at line {privacy_hit.line_number}")
     lines = text.splitlines(keepends=True)
     headings = find_headings(lines)
     preamble_end = headings[0][0] if headings else len(lines)

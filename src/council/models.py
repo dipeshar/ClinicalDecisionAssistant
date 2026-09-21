@@ -119,6 +119,7 @@ class EventType(StrEnum):
     BUDGET = "budget"
     ERROR = "error"
     DECISION = "decision"
+    PRIVACY_BLOCK = "privacy_block"
 
 
 Round = Literal[1, 2]
@@ -632,6 +633,11 @@ class RoleConfig(ContractModel):
     persona_prompt: str | None = None
 
 
+class PrivacyConfig(ContractModel):
+    synthetic_marker: str
+    approved_providers: list[str]
+
+
 class Config(ContractModel):
     """Shape of the human-owned config.yaml; loading/policy validation is T2."""
 
@@ -644,6 +650,7 @@ class Config(ContractModel):
     grounding: GroundingConfig
     judging: JudgingConfig
     roles: dict[Role, RoleConfig]
+    privacy: PrivacyConfig
 
 
 class Source(ContractModel):

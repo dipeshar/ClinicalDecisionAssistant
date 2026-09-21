@@ -1,0 +1,20 @@
+[
+  {
+    "rule": "Require nonblank synthetic marker",
+    "old": "bool(config.privacy.synthetic_marker.strip())",
+    "new": "True",
+    "test": "test_invalid_privacy_config"
+  },
+  {
+    "rule": "Approved names cannot be blank or padded",
+    "old": "all(name.strip() and name == name.strip() for name in config.privacy.approved_providers)",
+    "new": "True",
+    "test": "test_invalid_privacy_config"
+  },
+  {
+    "rule": "Every configured provider must be approved",
+    "old": "choice[\"provider\"] in config.privacy.approved_providers",
+    "new": "True",
+    "test": "test_each_provider_must_be_approved"
+  }
+]
