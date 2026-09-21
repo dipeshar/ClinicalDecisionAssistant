@@ -306,3 +306,12 @@ For a short manual mutation spot-check, change the rating lower bound from `ge=1
 - Re-run the complete T1 audit from the repository root with `.venv/Scripts/python.exe tools/mutation_check.py`. Add `--list` to preview, or `--start 79 --end 80` to run just the non-finite-number check. The working tree must be committed and clean.
 - Later tasks can reuse the runner with `--target src/council/<file>.py --spec tools/<task>_mutations.json`. Each JSON entry has `rule`, `old`, `new`, and `test` strings; the old text must match exactly once. Results are written to ignored `.venv/mutation-results.json` for the current invocation. A baseline test failure stops the audit before mutation; every mutation is restored with `git restore` even on timeout.
 - Tests: 609 passed. The sandbox blocked pytest's temporary-directory setup; rerunning with filesystem approval passed. A PowerShell quoting error in the promotion command was corrected before any source file was generated. Contract impact: none; this is developer tooling, not council behavior.
+
+| Cleanup rule | Mutation | Failing test |
+|---|---|---|
+| Exact target match | Disabled unique-match check | `test_spec_requires_one_exact_match` |
+| Clean/readable tree | Disabled status check | `test_dirty_or_unreadable_tree_refused` |
+| Real test failures required | Accepted pytest collection errors | `test_restore_after_every_outcome` |
+| Always restore | Replaced restore with status | `test_restore_after_every_outcome` |
+
+All four mutations were detected on committed code and restored with clean status between checks. Re-run with `.venv/Scripts/python.exe tools/mutation_check.py --target tools/mutation_check.py --spec tools/cleanup_mutations.json`. No human verification is claimed.
