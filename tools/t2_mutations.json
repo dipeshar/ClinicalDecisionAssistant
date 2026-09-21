@@ -9,7 +9,7 @@
     "rule": "Reject duplicate YAML keys",
     "old": "if duplicate:",
     "new": "if False:",
-    "test": "test_invalid_yaml"
+    "test": "test_duplicate_key_in_valid_config"
   },
   {
     "rule": "Strict setting types",
