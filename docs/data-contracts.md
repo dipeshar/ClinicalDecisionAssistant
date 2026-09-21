@@ -58,6 +58,8 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 
 **Text outside the sections.** The title line and anything before the first `##` heading are scanned too. If the scanner flags a line there, ingest rejects the whole case with an error that names the line number, and no `CaseContext` is built. Only section text is ever sent to the agents. The title and preamble never are.
 
+**Privacy check.** Ingest requires the synthetic-data marker: the text of `privacy.synthetic_marker` (from config) must appear in the preamble, ignoring case. Ingest also scans the whole file, including the title and preamble, for identifier patterns. The kinds are `email`, `phone`, `national_id`, `long_number`, `date_of_birth`, `url`, `ip_address`, `id_label` and `name_label`. If the marker is missing or any pattern matches, ingest rejects the whole case with an error that gives the line number and the kind. The error never contains the matched text, and no `CaseContext` is built. A rejected case still writes a run folder with a `trace.jsonl` that holds one `privacy_block` event (kind and line number only) and no case text.
+
 ## 4. Knowledge base and retrieval
 
 **Passage**
@@ -237,6 +239,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | dissent | list of `{role, stance, argument_id, note}` | CODE | Specialists whose final stance is not accepted (section 12). `note` is copied from `role_notes`. |
 | red_team_findings | list[RedTeamFinding] | CODE | Copied in full from the red team report |
 | injection_check | object | CODE | Copied from the red team report |
+| privacy_summary | PrivacySummary | CODE | Shape below |
 | judge_summary | JudgeSummary | CODE | Shape below |
 | narrative | str | CHAIR (LLM) | Short summary. Every sentence ends with at least one ID tag such as `[R1-SURG-C2]`. Code checks the tags exist. |
 | citations_index | list[Citation] | CODE | Every citation used, with its verified flag |
@@ -283,6 +286,17 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | round_comparison | list[RoundComparison] | CODE | Copied from the scorecard |
 | code_ungrounded_claims | list[claim_id] | CODE | Copied from the scorecard |
 
+**PrivacySummary**
+
+| Field | Type | Filled by | Notes |
+|---|---|---|---|
+| synthetic_marker_found | bool | CODE | Always true in a report, because a case without the marker is rejected |
+| ingest_identifier_hits | int | CODE | Always 0 in a report, for the same reason |
+| outbound_prompts_checked | int | CODE | Prompts scanned by the gateway |
+| outbound_prompts_blocked | int | CODE | Prompts the gateway refused because of an identifier pattern |
+| approved_providers | list[str] | CODE | From config |
+| providers_used | list[str] | CODE | Providers that actually received a prompt |
+
 ## 9. Human decision
 
 | Field | Type | Filled by | Notes |
@@ -301,7 +315,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | run_id, seq | str, int | Order of events in the run. `seq` is assigned under a lock. |
 | timestamp | str | |
 | step | `ingest` \| `retrieve` \| `specialist` \| `judge` \| `red_team` \| `chair` \| `human` | |
-| event_type | `start` \| `llm_call` \| `retrieval` \| `validation` \| `budget` \| `error` \| `decision` | |
+| event_type | `start` \| `llm_call` \| `retrieval` \| `validation` \| `budget` \| `error` \| `decision` \| `privacy_block` | |
 | role, round | str, int or null | |
 | model | str or null | |
 | prompt | str or null | Full prompt sent |
@@ -335,6 +349,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | quote_words | 4 to 40 | Total words in a citation quote |
 | temperature | specialists 0.4, judges 0, red team 0.5, chair 0.2 | Starting values. Used only if the model allows it. |
 | models | Set per role | Specialists and chair share one model. Judges A and B use a different one. |
+| privacy | `synthetic_marker` (text that must appear in every case) and `approved_providers` (list of provider names) | Only approved providers may receive a prompt. Every provider named in `models` must be in the list, once the models are set. |
 
 **BudgetState** (kept by the gateway): `tokens_used`, `calls_used`, `started_at`, `exhausted` (bool), `reason`. It is guarded by a lock.
 
@@ -385,6 +400,10 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 16. A specialist whose Round 1 turn failed is not run in Round 2. It stays failed.
 17. **Failed argument.** `stance` is null if and only if `status` is `failed`. A failed argument has empty `claims`, `conditions` and `uncertainties`, null `rebuttal` and `revisions`, and a `failure_reason`.
 18. **Failed judge call.** If a judge's call still fails after the repair retry, the run continues with the other judge. The call is listed in `failed_judge_calls` and the report is `INCOMPLETE`. For arguments that only one judge scored, `mean` is that judge's scores, `gap` is null and `disagreement_count` is 0. If neither judge scored a round, that round has no scores and no notes.
+19. **Ingest privacy check.** A case without the synthetic marker, or with any identifier pattern anywhere in the file, is rejected before any model call. The error and the trace event hold the kind and line number only, never the matched text.
+20. **Gateway privacy check.** Before every call, the gateway checks that the provider is in `approved_providers` and that the prompt matches no identifier pattern. If either check fails, the call is refused, a `privacy_block` event is written, the turn counts as failed, and the report is `INCOMPLETE` with the reason.
+21. **No secrets in outputs.** API keys never appear in `trace.jsonl`, `run.json` or any report. `config_snapshot` never contains secrets.
+22. **One pattern list.** Ingest and the gateway use the same identifier pattern list, kept in one place, so they cannot drift apart.
 
 ## 14. Run folder
 

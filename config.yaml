@@ -82,3 +82,7 @@ roles:
     name: Red Team
     kb: kb/redteam
     keywords: [missing information, assumption, contradiction, overconfidence, injection]
+
+privacy:
+  synthetic_marker: "Synthetic case for a demonstration"
+  approved_providers: []   # fill in the providers you actually use, for example [openai, anthropic]

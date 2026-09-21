@@ -85,11 +85,12 @@ The code loads these, wraps the data and appends the JSON schema. Prompts hold o
 | T1 | Contract models | `models.py` | Every contract in `data-contracts.md` is a Pydantic model. "Draft" models (what the LLM may write) are separate from full models (with the code-owned fields). JSON round-trip tests pass. Enum values match the contracts. |
 | T2 | Config | `config.py`, `config.yaml` | Config loads and is validated. A bad value fails with a clear message. `max_rounds` is not a setting. |
 | T3 | Ingest and scanner | `ingest.py`, `scanner.py` | The template parses into `CaseContext` with section IDs, hash and `missing_sections`. The scanner flags the four pattern groups and tags flagged lines. Tests on a clean case and an injection case. |
+| T3b | Privacy guard at ingest | `privacy.py`, `ingest.py`, `config.py` | The synthetic marker is required. The identifier patterns (email, phone, national ID formats, long numbers, date of birth, URL, IP address, ID label, name label) live in one clearly named, commented list that the gateway will reuse. A hit rejects the case with the line number and kind, and never prints the value. A rejected case writes a run folder whose trace has one `privacy_block` event. Config loading is extended with the `privacy` section, and every provider named in `models` must be in `approved_providers` once the models are set. Tests: a normal case passes, and normal clinical text (lab values, doses, blood pressure like 150/90, ages, ordinary dates) is not flagged. |
 | T4 | KB and retrieval | `kb.py` | KB files load and IDs are validated. BM25 top 5 is deterministic. The query builder covers Round 1 and Round 2. |
 | T5 | Quote check | `grounding.py` | Every quote rule has a test: case, spaces, quote and dash styles, `...`, 4 to 40 words, unknown ID, passage not shown in that turn. |
 | T6 | Dissent and confidence | `scoring.py` | The stance table and formula from section 12 of the contracts, with tests for failed turns, the Round 2 fallback, penalty caps, clamping and the level boundaries (70 and 40). |
 | T7 | Budget and trace | `budget.py`, `trace.py` | Tokens, calls and time are counted. Only the chair can spend the reserve. Trace lines get unique, increasing `seq` under many parallel threads. Tests for both. |
-| T8 | Gateway and fake provider | `gateway.py`, `providers/base.py`, `providers/fake.py` | Budget check, model per role, API retry (2 attempts), one trace event per attempt. A tiny budget refuses the call. A test fails if any module outside `providers/` imports a provider SDK. |
+| T8 | Gateway and fake provider | `gateway.py`, `providers/base.py`, `providers/fake.py` | Budget check, model per role, API retry (2 attempts), one trace event per attempt. A tiny budget refuses the call. A test fails if any module outside `providers/` imports a provider SDK. The gateway also runs the privacy check (approved provider, no identifier pattern in the prompt) before the budget check, writes a privacy_block event when it refuses, and never writes API keys to the trace (test with a fake key). |
 
 **Checkpoint A.** All tests are green. The human reviews T1, T5, T6 and T8 by hand before Phase 2.
 
@@ -113,8 +114,8 @@ The code loads these, wraps the data and appends the JSON schema. Prompts hold o
 
 | ID | Task | Main files | Done when |
 |---|---|---|---|
-| T18 | More cases | `cases/`, `runs/` | The contrasting case and the injection case run end to end. The injection line is flagged, tagged and not followed. Fix what breaks. Commit the run folders. |
-| T19 | Report page (3-hour cap) | `report_page.py` | `report.html` is built from `run.json`. Every ID opens its panel. The `<script>` case shows as text (test). If the cap is hit, the markdown report is the fallback. |
+| T18 | More cases | `cases/`, `runs/` | The contrasting case and the injection case run end to end. The injection line is flagged, tagged and not followed. Fix what breaks. Commit the run folders. The fake-identifier case is rejected at ingest with zero tokens spent. |
+| T19 | Report page (3-hour cap) | `report_page.py` | `report.html` is built from `run.json`. Every ID opens its panel. The `<script>` case shows as text (test). If the cap is hit, the markdown report is the fallback. The page shows the privacy line (marker, identifier hits, prompts checked and blocked, providers used). |
 | T20 | README, slides, recording | `README.md`, `slides/` | Everything the brief lists, including AI-tool usage and "What I would do next for production". |
 
 ## 5. If time runs short, cut in this order

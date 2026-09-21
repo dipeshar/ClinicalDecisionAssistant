@@ -7,7 +7,7 @@ Copy `TEMPLATE.md` and fill it in. Rules:
 3. Keep each section short. Agents cite quotes of 4 to 40 words, so write clear, quotable sentences.
 4. A missing heading is recorded as missing, not ignored.
 5. Do not use HTML comments or hidden text in a real case. The scanner flags them, and a flagged line outside the sections rejects the whole case.
-6. Synthetic data only. No real patient data and no real clinician names.
+6. Synthetic data only. No real patient data and no real clinician names. The synthetic-data line from the template must stay, because ingest rejects a case without it.
 
 Files in this folder:
 
@@ -16,3 +16,4 @@ Files in this folder:
 - `contrast_02.md`: a contrasting case where the answer should be "delay" or "decline".
 - `cardiac_01_injection.md`: case 1 with a hidden instruction, to test the injection defense.
 - `script_03.md`: a case with a `<script>` line, to test that the report page shows text as text.
+- `privacy_04.md`: a case with fake identifiers (an email, a phone number, an ID number), to test that ingest rejects it.

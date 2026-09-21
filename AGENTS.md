@@ -36,6 +36,8 @@ You are building the "LLM Council" from `docs/design.md` and `docs/data-contract
 - Every output a person reads says it is decision support that requires human clinical sign-off.
 - Prompt text lives in `prompts/`, never in code. Code only loads the files, wraps the data and appends the JSON schema made from the draft models.
 
+- Never print or log a matched identifier value. Log the kind and the line number only.
+
 ## Code style
 
 - Type hints everywhere. Small functions. Plain code that a reviewer can read in one pass.
