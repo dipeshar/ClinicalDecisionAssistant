@@ -37,6 +37,7 @@ One row per task. Fill it in as you go, not at the end.
 | T1 | Codex implemented 62 Pydantic contract/draft/helper models and 16 enums, then performed contract and mutation checks. | 601 tests pass; all 115 final mutations detected; full JSON round trips and nested draft trust boundaries tested. | T1 first stopped on contract gaps; the human resolved them. Mutation review found missing non-finite-number test coverage; tests were added and the mutation repeated successfully. An audit-script targeting error was corrected. See details below. | |
 | T2 | Codex added YAML loading and configuration policy validation, with reusable mutation specifications. | 658 tests passed; all 28 T2 mutations detected and restored. | Initial model-error messages were too broad; corrected. Duplicate-key mutation exposed a test gap; added a valid-config regression test and corrected its expected mutation test name. | |
 | T3 | Added template ingestion and four-group injection scanning with synthetic clean/attack fixtures. | 705 tests pass; all 33 mutations detected and restored; contract mapping below. | Paused for preamble clarification; human approved rejection. Added an independent exact-tag assertion during review. | |
+| T3b | Applied the exact authorized preamble/privacy documentation updates, then added the ingest privacy guard, config policy, safe rejection trace and reusable identifier list. | 774 tests pass; 32 mutations detected and restored in an isolated committed checkout. | Fixed a Windows line-ending assertion and updated the model-audit count for the new config shape. Existing architecture edits were preserved. | |
 
 ### T0 review notes
 
@@ -500,3 +501,106 @@ Human review starting points:
 1. `src/council/scanner.py` - `scan_section` and adjacent `SCANNER_PATTERNS`: matching, preservation, and false-positive tradeoffs.
 2. `src/council/ingest.py` - `ingest_case`: exact bodies, original-byte hash and flag propagation.
 3. `tests/test_ingest.py` - `test_clean_case_and_clinical_sections`: realistic Consultant Review and Medications regression fixture.
+
+### T3b: privacy guard at ingest
+
+Documentation commits, in the requested order:
+
+- `56b3d1d` - `Docs: text outside the sections`. Confirmed T3 was complete through `b405ceb`; `read_title` already rejected flagged preamble/title lines before building a CaseContext. Added the three exact statements supplied by the human.
+- `4f4db15` - `Docs: privacy barriers`. Applied the patch payloads without rewording after verifying the replacement text and anchors. B1 immediately follows the new preamble paragraph. The supplied patch was previously untracked, so this commit also recorded it to make its deletion auditable.
+- `a51aabf` - `Docs: remove applied privacy patch`. Deleted the patch in its own commit.
+
+T3b implementation was committed as `1303cfa` before mutation checking. `privacy.IDENTIFIER_PATTERNS` is the one commented identifier list for ingest and later gateway reuse. It covers all nine contract kinds; national formats include Aadhaar-like, PAN-like and SSN-like shapes. It deliberately blocks fabricated identifiers as well as real-looking ones. `scan_identifiers` returns only kind and original one-based line number, never a captured value.
+
+`ingest_case(path, config)` now requires config. It checks privacy immediately after decoding the original bytes, before headings, injection scanning, or CaseContext construction. The configured marker must occur in the preamble, ignoring case; a marker appearing only in section text is insufficient. Normal clinical numbers, doses, blood pressure, ages, dates, times, and recommendations have negative tests. Existing T3 tests use a custom marker to retain their original line-number assertions; the new tests exercise the configured template marker.
+
+A rejection writes one `TraceEvent` into a new run folder under `config.paths.runs`. The existing `error` field holds kind and line number; safe trace metadata is retained, content-bearing fields are null, and tokens are zero. No run bundle or report containing rejected data is created. The folder name uses a generated rejection identifier, not the source filename or title. Sequence assignment and writing are under a lock; the general T7 trace subsystem is not implemented here. Failed trace writes still block ingest and suppress the underlying filesystem exception, which could contain sensitive paths.
+
+Config loading now requires `PrivacyConfig.synthetic_marker` and `approved_providers`. The marker must be nonblank; approved names cannot be blank or padded. Every configured role's provider must be an exact member of the list. The existing refusal of unresolved TBD models remains. `EventType` includes `privacy_block`; the contract round-trip/required-field tests cover the new config shape.
+
+What went wrong and limitations:
+
+- The earlier patch attempt stopped correctly because its preamble anchor did not exist. The human supplied exact text and authorized the repair before this implementation.
+- The first T3b run had two failures: a test expected LF although Windows wrote CRLF, and the generic model mutation-plan count was still 115. The fixture now writes exact bytes, and the count is 116 because PrivacyConfig adds a shape. Final tests pass.
+- Pattern review explicitly added local and international phone examples and ensured a time such as 10:30:00 is not mistaken for IPv6. The final pattern comment was clarified to mention local seven-digit phone shapes; no runtime behavior changed after the audit.
+- Format heuristics cannot establish that data is synthetic or detect arbitrary names in prose. Long numbers currently mean eight or more consecutive digits; compact numeric dates can therefore be rejected conservatively. Ordinary separated dates are tested. More real-world formats may need reviewed patterns and tests.
+- A missing marker has no matched line: the safe error uses kind `missing_marker` and line 1 (start of preamble). When several identifiers match, the first by physical line and pattern-list order supplies the single rejection event. No matched value is retained in a finding or error.
+- Trace kind/line are encoded in the existing `TraceEvent.error` field, preserving section 10's shape rather than adding unspecified fields. A fresh synthetic rejection ID avoids leaking an identifier in a case filename.
+- Your architecture Markdown/SVG/PNG edits remained untouched and uncommitted. Mutation checks used a detached worktree at the implementation commit, so every restore and clean-status check applied to a clean tree without hiding your edits. Tests used the existing project virtual environment; no installs or network access.
+
+#### T3b contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 3 / rule 19: required configured marker, preamble only, case-insensitive | `privacy.check_case_privacy`, `ingest.ingest_case` | `test_marker_is_required_in_preamble`, `test_normal_case_and_case_insensitive_marker` |
+| Section 3: scan whole file, including title, preamble and headings | `privacy.scan_identifiers` before `find_headings` | `test_rejects_identifiers_everywhere_before_parsing` (five locations, including comment) |
+| Section 3 identifier kinds: email, phone, national_id, long_number, date_of_birth, url, ip_address, id_label, name_label | `privacy.IDENTIFIER_PATTERNS`, `scan_identifiers` | `test_identifier_kinds`, `test_pattern_list_is_complete` |
+| Rule 19: no matched value in errors or trace, no CaseContext on rejection | `PrivacyHit`, `ingest_case`, `write_privacy_rejection` | `test_rejects_identifiers_everywhere_before_parsing`, `test_identifier_kinds`, `test_trace_write_failure_is_redacted_and_still_blocks` |
+| Section 3: one privacy_block event, no case text in rejected run | `write_privacy_rejection` writes only trace.jsonl | `rejection_trace`, called by all ingest privacy-rejection tests |
+| Section 10: event_type privacy_block | `models.EventType`, `write_privacy_rejection` | `test_enum_values`, `rejection_trace` |
+| Section 10: run_id, seq, timestamp, step | generated metadata and seq=1 under `_REJECTION_LOCK` | `rejection_trace`, `test_first_hit_only_and_distinct_rejection_folders`; T1 `test_contract_round_trip_and_fields[TraceEvent]` covers wire shape |
+| Section 10: role, round, model, prompt, retrieved_passage_ids, raw_output, parsed_ref | all null on rejection | `rejection_trace` |
+| Section 10: tokens_in, tokens_out, budget_tokens_used | all zero on rejection | `rejection_trace` |
+| Section 10: latency_ms, attempt, repair | null, 1, false for this pre-call event | T1 TraceEvent shape tests; `rejection_trace` validates serialized TraceEvent |
+| Section 10: error | safe kind and original line number | `test_rejects_identifiers_everywhere_before_parsing`, `test_marker_is_required_in_preamble` |
+| Section 11: privacy.synthetic_marker and privacy.approved_providers | `models.PrivacyConfig`, `Config.privacy`, `config.validate_privacy` | `test_invalid_privacy_config`, `test_privacy_section_required`, T1 shape/required-field tests |
+| Section 11: every configured model provider approved | `config.validate_models` | `test_each_provider_must_be_approved` across all five model roles |
+| Rule 22: one reusable pattern list | `IDENTIFIER_PATTERNS`, public `scan_identifiers` API | `test_pattern_list_is_complete`, identifier-kind tests; gateway reuse remains T8 |
+| Section 14: rejected run folder and trace | `write_privacy_rejection` under configured runs path | `rejection_trace`, `test_first_hit_only_and_distinct_rejection_folders` |
+
+No T3b requirement is knowingly implemented differently from the contract. The new section 8 `Report.privacy_summary` / `PrivacySummary` report work remains for T14/T19; those model/report changes are not included in this ingest task. Rule 20's outbound gateway checks and rule 21's fake-key/output tests remain T8 and later run/report work. No gateway, report, provider or T4 feature was started. No real model calls are possible in these ingest tests; FakeProvider belongs to T8.
+
+#### T3b mutation check
+
+Run each command from a clean checkout using the project's virtual-environment Python:
+
+```powershell
+.venv/Scripts/python.exe -m pytest -p no:cacheprovider
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/privacy.py --spec tools/t3b_privacy_mutations.json
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/ingest.py --spec tools/t3b_ingest_mutations.json
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/config.py --spec tools/t3b_config_mutations.json
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/models.py --spec tools/t3b_models_mutations.json
+```
+
+For this audit, the detached checkout was `.venv/t3b-audit`, and the interpreter was the main checkout's `.venv/Scripts/python.exe`. Pytest's configured `pythonpath = ["src"]` loaded the isolated source. Every deliberate break ran the full suite, produced the expected failing test, was undone with `git restore`, and was followed by a clean Git status check. All 32 were detected; no new test was needed for a surviving mutation. The runner overwrites `.venv/mutation-results.json` each invocation; this table preserves all four runs.
+
+| Rule | What was broken | Which test failed |
+|---|---|---|
+| Detect email | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'email' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect phone | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'phone' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect national_id | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'national_id' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect long_number | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'long_number' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect date_of_birth | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'date_of_birth' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect url | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'url' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect ip_address | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'ip_address' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect id_label | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'id_label' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Detect name_label | `if re.search(pattern, line, flags=re.IGNORECASE): -> if kind != 'name_label' and re.search(pattern, line, flags=re.IGNORECASE):` | `tests/test_privacy.py::test_identifier_kinds` |
+| Ordinary clinical values pass | `if re.search(pattern, line, flags=re.IGNORECASE): -> if re.search(pattern, line, flags=re.IGNORECASE) or "150/90" in line:` | `tests/test_privacy.py::test_clinical_values_are_not_identifiers` |
+| Original one-based line numbers | `enumerate(text.splitlines(), start=1) -> enumerate(text.splitlines(), start=2)` | `tests/test_privacy.py::test_identifier_kinds` |
+| Case-insensitive identifier scan | `flags=re.IGNORECASE -> flags=0` | `tests/test_privacy.py::test_identifier_kinds` |
+| Require the configured marker | `if not synthetic_marker.strip() or synthetic_marker.casefold() not in "\n".join(preamble).casefold(): -> if False:` | `tests/test_privacy.py::test_marker_is_required_in_preamble` |
+| Marker must be in preamble | `preamble = preamble[:index] -> preamble = preamble` | `tests/test_privacy.py::test_marker_is_required_in_preamble` |
+| Marker ignores case | `synthetic_marker.casefold() not in -> synthetic_marker not in` | `tests/test_privacy.py::test_normal_case_and_case_insensitive_marker` |
+| Reject blank marker defensively | `not synthetic_marker.strip() or -> False or` | `tests/test_privacy.py::test_marker_is_required_in_preamble` |
+| First hit only | `return hits[0] -> return hits[-1]` | `tests/test_privacy.py::test_first_hit_only_and_distinct_rejection_folders` |
+| Privacy event type | `event_type=EventType.PRIVACY_BLOCK -> event_type=EventType.ERROR` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| No prompt data in rejection trace | `prompt=None, -> prompt="unsafe data",` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| Zero tokens spent | `tokens_in=0, tokens_out=0 -> tokens_in=1, tokens_out=1` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| Safe error includes kind and line | `error=f"{hit.kind} at line {hit.line_number}" -> error=None` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| One event per rejection | `stream.write(event.model_dump_json() + "\n") -> stream.write((event.model_dump_json() + "\n") * 2)` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| Redact filesystem exception chain | `from None -> from OSError("fictional@example.invalid")` | `tests/test_privacy.py::test_trace_write_failure_is_redacted_and_still_blocks` |
+| Privacy precedes parsing | `privacy_hit = check_case_privacy(text, config.privacy.synthetic_marker) -> privacy_hit = None` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| Whole-file scan includes sections | `check_case_privacy(text, config.privacy.synthetic_marker) -> check_case_privacy(text.split("##", 1)[0], config.privacy.synthetic_marker)` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| Write rejected-run audit | `write_privacy_rejection(config.paths.runs, privacy_hit) -> # skip rejected-run audit` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| Exception must omit identifier value | `raise IngestError(f"{privacy_hit.kind} at line {privacy_hit.line_number}") -> raise IngestError(f"{privacy_hit.kind} at line {privacy_hit.line_number}: {text}")` | `tests/test_privacy.py::test_rejects_identifiers_everywhere_before_parsing` |
+| Require nonblank synthetic marker | `bool(config.privacy.synthetic_marker.strip()) -> True` | `tests/test_config.py::test_invalid_privacy_config` |
+| Approved names cannot be blank or padded | `all(name.strip() and name == name.strip() for name in config.privacy.approved_providers) -> True` | `tests/test_config.py::test_invalid_privacy_config` |
+| Every configured provider must be approved | `choice["provider"] in config.privacy.approved_providers -> True` | `tests/test_config.py::test_each_provider_must_be_approved` |
+| Required privacy config shape | `privacy: PrivacyConfig -> privacy: PrivacyConfig \| None = None` | `tests/test_config.py::test_privacy_section_required` |
+| Privacy block enum value | `PRIVACY_BLOCK = "privacy_block" -> PRIVACY_BLOCK = "wrong"` | `tests/test_models.py::test_enum_values` |
+
+Human review starting points:
+
+1. `src/council/privacy.py` - `scan_identifiers` and the adjacent `IDENTIFIER_PATTERNS` list.
+2. `src/council/ingest.py` - `ingest_case`, especially privacy rejection before parsing.
+3. `tests/test_privacy.py` - `test_rejects_identifiers_everywhere_before_parsing`, including trace redaction checks.

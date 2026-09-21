@@ -16,7 +16,7 @@ from council.models import EventType, Step, TraceEvent
 
 # HUMAN REVIEW: the single identifier pattern list for ingest and the future gateway.
 # National formats are shapes, not checksum validation: fake identifiers also block.
-# Phone patterns require 10+ digits; DOB needs a birth label. Ordinary dates, ages,
+# Phone shapes include local seven-digit numbers; DOB needs a birth label. Ordinary dates, ages,
 # blood pressure and decimal lab/dose values should not look like identifiers.
 IDENTIFIER_PATTERNS: Final[dict[str, str]] = {
     "email": r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b",
