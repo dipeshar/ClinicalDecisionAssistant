@@ -1,0 +1,6 @@
+[
+  {"rule": "Unique mutation target", "old": "if source.count(row[\"old\"]) != 1:", "new": "if False:", "test": "test_spec_requires_one_exact_match"},
+  {"rule": "Clean readable working tree", "old": "if status.stdout.strip() or status.stderr.strip():", "new": "if False:", "test": "test_dirty_or_unreadable_tree_refused"},
+  {"rule": "Collection errors do not count as detected mutations", "old": "killed = run.returncode == 1 and any(expected in line for line in failed)", "new": "killed = run.returncode != 0 and any(expected in line for line in failed)", "test": "test_restore_after_every_outcome"},
+  {"rule": "Restore after every outcome", "old": "subprocess.run([\"git\", \"restore\", \"--\", relative], cwd=root, check=True)", "new": "subprocess.run([\"git\", \"status\", \"--porcelain\"], cwd=root, check=True)", "test": "test_restore_after_every_outcome"}
+]

@@ -299,3 +299,10 @@ Each row is a separately tested mutation of committed `src/council/models.py`. A
 3. `tests/test_models.py` — `test_drafts_reject_code_owned_fields`: attempts to inject code-owned fields into each draft.
 
 For a short manual mutation spot-check, change the rating lower bound from `ge=1` to `ge=0` and run the suite; `test_rating_bounds_and_integer_type` must fail. Restore `src/council/models.py` afterwards, and fill in the human-verification column yourself.
+
+### Mutation-tool cleanup (before T2)
+
+- Promoted `.venv/t1_mutation_check.py` to tracked `tools/mutation_check.py`; removed the old copy and deleted `.venv/t1_write_log.py` as requested.
+- Re-run the complete T1 audit from the repository root with `.venv/Scripts/python.exe tools/mutation_check.py`. Add `--list` to preview, or `--start 79 --end 80` to run just the non-finite-number check. The working tree must be committed and clean.
+- Later tasks can reuse the runner with `--target src/council/<file>.py --spec tools/<task>_mutations.json`. Each JSON entry has `rule`, `old`, `new`, and `test` strings; the old text must match exactly once. Results are written to ignored `.venv/mutation-results.json` for the current invocation. A baseline test failure stops the audit before mutation; every mutation is restored with `git restore` even on timeout.
+- Tests: 609 passed. The sandbox blocked pytest's temporary-directory setup; rerunning with filesystem approval passed. A PowerShell quoting error in the promotion command was corrected before any source file was generated. Contract impact: none; this is developer tooling, not council behavior.
