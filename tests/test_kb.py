@@ -200,7 +200,10 @@ def test_ties_repeatably_sort_by_id_not_file_order(tmp_path: Path) -> None:
 def test_round1_query_uses_only_keywords_and_configured_sections(case: CaseContext, config: Config) -> None:
     config.roles[Role.SURG].keywords = ["operative risk", "kidney"]
     config.retrieval.case_sections = ["CASE-tests", "CASE-absent"]
-    query = build_query(Role.SURG, 1, case, config, [argument()], [judge_score("R1-SURG")])
+    own = argument()
+    own.claims = [claim("R1-SURG-C1", "not-query-flagged-claim")]
+    query = build_query(Role.SURG, 1, case, config, [own, argument(Role.PHYS)],
+                        [judge_score("R1-SURG", "R1-SURG-C1")])
     assert query == "operative risk kidney\n" + CLINICAL
 
 
