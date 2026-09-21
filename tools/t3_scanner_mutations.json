@@ -1,0 +1,86 @@
+[
+  {
+    "rule": "Detect instruction_override",
+    "old": "    for name, pattern in SCANNER_PATTERNS.items():",
+    "new": "    for name, pattern in SCANNER_PATTERNS.items():\n        if name == 'instruction_override':\n            continue",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Detect role_spoofing",
+    "old": "    for name, pattern in SCANNER_PATTERNS.items():",
+    "new": "    for name, pattern in SCANNER_PATTERNS.items():\n        if name == 'role_spoofing':\n            continue",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Detect answer_manipulation",
+    "old": "    for name, pattern in SCANNER_PATTERNS.items():",
+    "new": "    for name, pattern in SCANNER_PATTERNS.items():\n        if name == 'answer_manipulation':\n            continue",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Detect hidden_text",
+    "old": "    for name, pattern in SCANNER_PATTERNS.items():",
+    "new": "    for name, pattern in SCANNER_PATTERNS.items():\n        if name == 'hidden_text':\n            continue",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Normal clinical language is not flagged",
+    "old": "for match in re.finditer(pattern, text,",
+    "new": "for match in re.finditer(pattern + r'|recommend', text,",
+    "test": "test_clinical_language_not_flagged"
+  },
+  {
+    "rule": "Case insensitive matching",
+    "old": "flags=re.IGNORECASE | re.MULTILINE",
+    "new": "flags=re.MULTILINE",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "One tag per flagged line",
+    "old": "lines[index] = FLAG_TAG + \" \" + lines[index]",
+    "new": "lines[index] = lines[index]",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Preserve original line endings",
+    "old": "text.splitlines(keepends=True)",
+    "new": "text.splitlines(keepends=False)",
+    "test": "test_multiline_hidden_text_and_original_line_numbers"
+  },
+  {
+    "rule": "Flag every line in a hidden span",
+    "old": "range(first, last + 1)",
+    "new": "range(first, first + 1)",
+    "test": "test_multiline_hidden_text_and_original_line_numbers"
+  },
+  {
+    "rule": "Deduplicate group on each line",
+    "old": "if name not in reasons:",
+    "new": "if True:",
+    "test": "test_split_instruction_and_multiple_reasons"
+  },
+  {
+    "rule": "Flag original line number",
+    "old": "line_number=start_line + index",
+    "new": "line_number=start_line + index + 1",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Flag section ID",
+    "old": "section_id=section_id",
+    "new": "section_id='CASE-profile'",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Flag pattern name",
+    "old": "matched_pattern=name",
+    "new": "matched_pattern='wrong'",
+    "test": "test_attack_groups"
+  },
+  {
+    "rule": "Require one-based offsets",
+    "old": "if start_line < 1:",
+    "new": "if False:",
+    "test": "test_empty_text_and_line_number_validation"
+  }
+]

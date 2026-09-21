@@ -1,0 +1,110 @@
+[
+  {
+    "rule": "Fixed section IDs",
+    "old": "\"Patient Profile\": \"CASE-profile\"",
+    "new": "\"Patient Profile\": \"CASE-wrong\"",
+    "test": "test_clean_case_and_clinical_sections"
+  },
+  {
+    "rule": "Preserve section heading",
+    "old": "id=section_id, heading=heading",
+    "new": "id=section_id, heading='wrong'",
+    "test": "test_clean_case_and_clinical_sections"
+  },
+  {
+    "rule": "Case ID is file stem",
+    "old": "case_id=source.stem",
+    "new": "case_id=source.name",
+    "test": "test_clean_case_and_clinical_sections"
+  },
+  {
+    "rule": "Source file path",
+    "old": "source_file=str(source)",
+    "new": "source_file=source.name",
+    "test": "test_clean_case_and_clinical_sections"
+  },
+  {
+    "rule": "Title from preamble",
+    "old": "title=title,",
+    "new": "title='wrong',",
+    "test": "test_clean_case_and_clinical_sections"
+  },
+  {
+    "rule": "Hash original bytes",
+    "old": "sha256(raw).hexdigest()",
+    "new": "sha256(text.encode()).hexdigest()",
+    "test": "test_byte_hash_and_text_preservation"
+  },
+  {
+    "rule": "Exact section body",
+    "old": "lines[index + 1:end]",
+    "new": "lines[index:end]",
+    "test": "test_missing_sections_and_empty_existing_section"
+  },
+  {
+    "rule": "Missing headings list",
+    "old": "if heading not in present",
+    "new": "if False",
+    "test": "test_missing_sections_and_empty_existing_section"
+  },
+  {
+    "rule": "Code-owned flagged marker",
+    "old": "flagged=bool(section_flags)",
+    "new": "flagged=False",
+    "test": "test_injection_case_preserves_and_tags_evidence"
+  },
+  {
+    "rule": "Section flag reasons",
+    "old": "list(dict.fromkeys(flag.matched_pattern for flag in section_flags))",
+    "new": "[]",
+    "test": "test_injection_case_preserves_and_tags_evidence"
+  },
+  {
+    "rule": "Context injection flags",
+    "old": "flags.extend(section_flags)",
+    "new": "flags.extend([])",
+    "test": "test_injection_case_preserves_and_tags_evidence"
+  },
+  {
+    "rule": "Absolute original line offsets",
+    "old": "start_line=index + 2",
+    "new": "start_line=index + 1",
+    "test": "test_injection_case_preserves_and_tags_evidence"
+  },
+  {
+    "rule": "Reject suspicious preamble",
+    "old": "if flags:",
+    "new": "if False:",
+    "test": "test_suspicious_preamble_rejected"
+  },
+  {
+    "rule": "Reject unknown headings",
+    "old": "if heading not in CASE_HEADINGS:",
+    "new": "if False:",
+    "test": "test_ambiguous_headings_rejected"
+  },
+  {
+    "rule": "Reject duplicate headings",
+    "old": "if heading in seen:",
+    "new": "if False:",
+    "test": "test_ambiguous_headings_rejected"
+  },
+  {
+    "rule": "Require template heading order",
+    "old": "if headings and order.index(heading) < order.index(headings[-1][1]):",
+    "new": "if False:",
+    "test": "test_ambiguous_headings_rejected"
+  },
+  {
+    "rule": "Require title",
+    "old": "if not first_line.startswith(\"# Case:\") or not first_line.removeprefix(\"# Case:\").strip():",
+    "new": "if False:",
+    "test": "test_unreadable_invalid_utf8_and_missing_title"
+  },
+  {
+    "rule": "Reject invalid UTF-8",
+    "old": "raw.decode(\"utf-8-sig\")",
+    "new": "raw.decode(\"utf-8-sig\", errors=\"replace\")",
+    "test": "test_unreadable_invalid_utf8_and_missing_title"
+  }
+]
