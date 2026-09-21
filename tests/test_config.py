@@ -55,6 +55,14 @@ def test_missing_file(tmp_path: Path) -> None:
         load_config(tmp_path / "missing.yaml")
 
 
+def test_duplicate_key_in_valid_config(tmp_path: Path, valid_data: dict[str, Any]) -> None:
+    path = write_config(tmp_path, valid_data)
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(yaml.safe_dump({"paths": valid_data["paths"]}))
+    with pytest.raises(ConfigError, match="duplicate YAML setting"):
+        load_config(path)
+
+
 @pytest.mark.parametrize("path,value", [
     ("budget.max_calls", "40"), ("budget.max_calls", True), ("budget.max_calls", 1.5),
     ("budget.max_calls", 0), ("budget.max_seconds_total", -1), ("budget.max_total_tokens", 0),
