@@ -35,6 +35,7 @@ One row per task. Fill it in as you go, not at the end.
 |---|---|---|---|---|
 | T0 | Codex read the instructions and design/contracts/tasks, then created package metadata, the src-layout council package, minimal CLI help, and three CLI tests. | `.venv/Scripts/python.exe -m pytest`: 3 passed. From `src/`, `../.venv/Scripts/python.exe -m council --help` exited 0 and displayed the decision-support, human-sign-off and synthetic-data disclaimer. No model calls. | Initially stopped because setuptools was missing; the human installed it. Pytest passed with a cache-write permission warning in the sandbox. Nothing was downloaded or installed by Codex. | |
 | T1 | Codex implemented 62 Pydantic contract/draft/helper models and 16 enums, then performed contract and mutation checks. | 601 tests pass; all 115 final mutations detected; full JSON round trips and nested draft trust boundaries tested. | T1 first stopped on contract gaps; the human resolved them. Mutation review found missing non-finite-number test coverage; tests were added and the mutation repeated successfully. An audit-script targeting error was corrected. See details below. | |
+| T2 | Codex added YAML loading and configuration policy validation, with reusable mutation specifications. | 658 tests passed; all 28 T2 mutations detected and restored. | Initial model-error messages were too broad; corrected. Duplicate-key mutation exposed a test gap; added a valid-config regression test and corrected its expected mutation test name. | |
 
 ### T0 review notes
 
@@ -315,3 +316,90 @@ For a short manual mutation spot-check, change the rating lower bound from `ge=1
 | Always restore | Replaced restore with status | `test_restore_after_every_outcome` |
 
 All four mutations were detected on committed code and restored with clean status between checks. Re-run with `.venv/Scripts/python.exe tools/mutation_check.py --target tools/mutation_check.py --spec tools/cleanup_mutations.json`. No human verification is claimed.
+
+
+### T2 configuration and audit
+
+Decision support only; requires human clinical sign-off; synthetic data only.
+
+- Added `src/council/config.py`: safe YAML reading, duplicate-key rejection, strict validation against T1's existing Config model, field-specific ConfigError messages, and the code constant `MAX_ROUNDS = 2`. No new contract shapes were added and the T1 models were not changed.
+- Implementation commit: `5ca88b6`. Additional duplicate-key test: `fe0d3ad`; corrected mutation test reference: `cb191b9`. Tool cleanup was committed first as `427f9e0` and `9737143`.
+- Tests: `.venv/Scripts/python.exe -m pytest -p no:cacheprovider` reports **658 passed**, including after restoring all mutations. Filesystem approval was needed for pytest's temporary directory; no package installation, network access, credentials, or provider calls were used. `git diff --check` passed.
+- What went wrong: two initial tests expected the exact model field name, but relationship errors named only the parent object. Messages now name `models.chair.model`/`provider` or `models.judge_b.model`/`provider`. An instance-level Pydantic metadata access in a test was also corrected to avoid a deprecation warning.
+- Mutation review found a real gap: the original duplicate-key input was otherwise invalid, so removing duplicate detection still raised an unrelated configuration error. `test_duplicate_key_in_valid_config` now duplicates a key in an otherwise valid file and requires the duplicate-specific error. Its first audit rerun still referenced the old test; the runner refused to count that unexpected failure, so the JSON specification was corrected and the full audit repeated. All 28 final checks detected their mutations.
+- `config.yaml` still has the human's `TBD` model/provider placeholders. Loading it deliberately raises a clear error naming the setting to fill. Tests use synthetic model names; no real providers were chosen. The only change to config.yaml is a comment documenting this behavior.
+- Budget totals, positive output caps/reserves, temperatures and retry wait can be tuned within validation bounds. The current contract's explicit retry counts, top-five retrieval, quote boundaries and judge limits/gap are enforced at their specified values. Provider-specific temperature limits belong with later adapters; T2 rejects negative/non-finite temperatures without inventing a provider-specific upper bound.
+- Resource paths and text are preserved; prompts/KB files are not opened or required to exist yet. No runtime budget accounting, retrieval, model calls, or T3 work was implemented. The human-verification column remains empty.
+
+Re-run T2's complete mutation audit from the repository root:
+
+```powershell
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/config.py --spec tools/t2_mutations.json
+```
+
+The runner requires a committed, clean, readable working tree and passing baseline tests. It changes only the target file, requires the expected failing test with pytest exit code 1, restores with `git restore`, and checks clean status after each mutation. It writes the current invocation's evidence to `.venv/mutation-results.json`; add `--list` to preview or `--start N --end M` for a subset.
+
+#### T2 contract check
+
+All implementation functions below are in `src/council/config.py`; tests are in `tests/test_config.py`. Data-contract shapes remain in the T1 models. These checks validate configuration, not the downstream behavior that consumes it.
+
+| Contract rule/field | Implementation | Tests |
+|---|---|---|
+| Section 11 `max_rounds` | `MAX_ROUNDS`, `load_config`: constant 2, reject a YAML setting even when its value is 2 | `test_load_config`, `test_max_rounds_is_not_a_setting` |
+| Section 11 configuration structure/types | `load_config` uses safe YAML, rejects duplicates/non-mappings, validates required/extra fields and strict types; reports ConfigError | `test_load_config`, `test_invalid_yaml`, `test_missing_file`, `test_duplicate_key_in_valid_config`, `test_bad_value_has_field_path` |
+| `max_total_tokens`, `max_calls`, `max_seconds_total` | `validate_budget`: positive totals, starting values preserved in config.yaml | `test_bad_value_has_field_path`, `test_tunable_values_and_missing_resource_files` |
+| `max_tokens_per_call`: specialist, judge, red_team, chair | `validate_budget`: positive output caps | `test_bad_value_has_field_path`, `test_load_config` |
+| `chair_reserve`: tokens, seconds, calls | `validate_budget`: positive, smaller than corresponding total; token reserve covers chair output cap | `test_bad_value_has_field_path` |
+| `max_repair_retries_per_turn`, `max_api_attempts` | `validate_limits`: 1 repair and 2 API attempts; config.yaml retry wait must be nonnegative | `test_bad_value_has_field_path` |
+| `retrieval_top_k`; section 2 IDs; config.yaml `retrieval.case_sections` | `validate_limits`: top_k=5 and nonempty selection of known CASE section IDs | `test_bad_value_has_field_path`, `test_load_config` |
+| `quote_words` / section 13 rule 4 | `validate_limits`: min 4, max 40; actual quote matching remains T5 | `test_bad_value_has_field_path` |
+| `judge_disagreement_gap`, `judge_feedback` | `validate_limits`: gap 2, max 5 notes, max 40 words; scoring/truncation remain T6/T11 | `test_bad_value_has_field_path` |
+| `temperature`: specialist, judge, red_team, chair | `validate_limits` and Config's finite-number validation: nonnegative finite values; retain configured values | `test_bad_value_has_field_path`, `test_tunable_values_and_missing_resource_files` |
+| `models`: specialist/chair share one; judges share a different one | `validate_models`: configured nonblank provider/model identities, reject TBD, compare both provider and model | `test_bad_value_has_field_path`, `test_judges_differ_from_specialists`, `test_checked_in_placeholders_explain_what_to_fill` |
+| Section 1 role codes; config.yaml `roles` | `validate_roles`: exactly SURG, PHYS, ANAES, ADMIN, RED, nonblank name/KB/keywords, specialist persona filename | `test_required_roles`, `test_unknown_role`, `test_bad_value_has_field_path` |
+| config.yaml `paths.cases`, `paths.runs`, `paths.prompts` | `validate_roles`: nonblank path text; no filesystem existence requirement at this stage | `test_bad_value_has_field_path`, `test_tunable_values_and_missing_resource_files` |
+| Section 13 rules 10 and 12 | Only validates budget/reserve settings here; gateway enforcement and locks remain T7/T8 | No claim of runtime enforcement in T2 |
+
+No contract changes were made. The checked-in placeholder configuration is intentionally not ready for a live run. Human review should confirm the model selections before later provider work and review the fixed-limit versus tunable-budget policy above.
+
+#### T2 mutation table
+
+Each row below ran against committed `src/council/config.py`, triggered a test failure, and was restored with clean Git status before the next mutation. Parameterized failures are listed by test function for readability.
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Exactly two rounds | `MAX_ROUNDS: Final = 2 -> MAX_ROUNDS: Final = 3` | `test_load_config` |
+| Reject duplicate YAML keys | `if duplicate: -> if False:` | `test_duplicate_key_in_valid_config` |
+| Strict setting types | `Config.model_validate(data, strict=True) -> Config.model_validate(data, strict=False)` | `test_bad_value_has_field_path` |
+| Validate loaded policy | `validate_config(config) -> # skipped policy validation` | `test_bad_value_has_field_path` |
+| Positive budgets | `getattr(budget, field) > 0 -> True` | `test_bad_value_has_field_path` |
+| Positive output caps | `require(cap > 0, -> require(True,` | `test_bad_value_has_field_path` |
+| Reserve within budget | `0 < reserve < total -> True` | `test_bad_value_has_field_path` |
+| Reserve covers chair cap | `budget.chair_reserve.tokens >= budget.max_tokens_per_call.chair -> True` | `test_bad_value_has_field_path` |
+| Fixed retries.max_repair_retries_per_turn | `"retries.max_repair_retries_per_turn": (config.retries.max_repair_retries_per_turn, 1), -> # removed retries.max_repair_retries_per_turn` | `test_bad_value_has_field_path` |
+| Fixed retries.max_api_attempts | `"retries.max_api_attempts": (config.retries.max_api_attempts, 2), -> # removed retries.max_api_attempts` | `test_bad_value_has_field_path` |
+| Fixed retrieval.top_k | `"retrieval.top_k": (config.retrieval.top_k, 5), -> # removed retrieval.top_k` | `test_bad_value_has_field_path` |
+| Fixed grounding.quote_words_min | `"grounding.quote_words_min": (config.grounding.quote_words_min, 4), -> # removed grounding.quote_words_min` | `test_bad_value_has_field_path` |
+| Fixed grounding.quote_words_max | `"grounding.quote_words_max": (config.grounding.quote_words_max, 40), -> # removed grounding.quote_words_max` | `test_bad_value_has_field_path` |
+| Fixed judging.disagreement_gap | `"judging.disagreement_gap": (config.judging.disagreement_gap, 2), -> # removed judging.disagreement_gap` | `test_bad_value_has_field_path` |
+| Fixed judging.feedback_max_notes | `"judging.feedback_max_notes": (config.judging.feedback_max_notes, 5), -> # removed judging.feedback_max_notes` | `test_bad_value_has_field_path` |
+| Fixed judging.feedback_max_words | `"judging.feedback_max_words": (config.judging.feedback_max_words, 40), -> # removed judging.feedback_max_words` | `test_bad_value_has_field_path` |
+| Nonnegative retry wait | `config.retries.api_retry_wait_seconds >= 0 -> True` | `test_bad_value_has_field_path` |
+| Nonnegative temperature | `temperature >= 0 -> True` | `test_bad_value_has_field_path` |
+| Known retrieval sections | `bool(config.retrieval.case_sections) and set(config.retrieval.case_sections) <= CASE_SECTIONS -> True` | `test_bad_value_has_field_path` |
+| Required council roles | `set(config.roles) == SPECIALISTS \| {Role.RED} -> True` | `test_required_roles` |
+| Nonblank resource paths | `bool(path.strip()) -> True` | `test_bad_value_has_field_path` |
+| Nonblank role fields | `bool(getattr(settings, field).strip()) -> True` | `test_bad_value_has_field_path` |
+| Role keywords | `bool(settings.keywords) and all(word.strip() for word in settings.keywords) -> True` | `test_bad_value_has_field_path` |
+| Specialist persona | `bool(settings.persona_prompt and settings.persona_prompt.strip()) -> True` | `test_bad_value_has_field_path` |
+| Configured model identities | `bool(value.strip()) and value.strip().upper() != "TBD" -> True` | `test_bad_value_has_field_path` |
+| Chair shares specialist model | `getattr(models.chair, field) == getattr(models.specialist, field) -> True` | `test_bad_value_has_field_path` |
+| Judges share their model | `getattr(models.judge_a, field) == getattr(models.judge_b, field) -> True` | `test_bad_value_has_field_path` |
+| Judges differ from specialists | `models.judge_a != models.specialist -> True` | `test_judges_differ_from_specialists` |
+
+
+Human review starting points:
+
+1. `src/council/config.py` - `load_config`: safe loading and actionable errors.
+2. `src/council/config.py` - `validate_limits`: the fixed contract values.
+3. `tests/test_config.py` - `test_bad_value_has_field_path`: rejected settings and their error messages.
