@@ -6,7 +6,7 @@ Copy `TEMPLATE.md` and fill it in. Rules:
 2. Text before the first `##` is not a section and cannot be cited.
 3. Keep each section short. Agents cite quotes of 4 to 40 words, so write clear, quotable sentences.
 4. A missing heading is recorded as missing, not ignored.
-5. Do not use HTML comments or hidden text in a real case. The scanner flags them.
+5. Do not use HTML comments or hidden text in a real case. The scanner flags them, and a flagged line outside the sections rejects the whole case.
 6. Synthetic data only. No real patient data and no real clinician names.
 
 Files in this folder:

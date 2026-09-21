@@ -56,6 +56,8 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | missing_sections | list[str] | CODE | Expected headings not found |
 | injection_flags | list[InjectionFlag] | CODE | `section_id`, `line_number`, `matched_pattern` |
 
+**Text outside the sections.** The title line and anything before the first `##` heading are scanned too. If the scanner flags a line there, ingest rejects the whole case with an error that names the line number, and no `CaseContext` is built. Only section text is ever sent to the agents. The title and preamble never are.
+
 ## 4. Knowledge base and retrieval
 
 **Passage**

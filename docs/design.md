@@ -190,6 +190,8 @@ The exact table and formula are in `data-contracts.md`, section 12.
 
 ## Prompt injection defense
 
+- Text outside the sections (the title and anything before the first `##`) is scanned too. If a line there is flagged, the case is rejected before any agent sees it. Only section text is ever sent to agents.
+
 - The scanner flags suspicious lines before any agent sees them.
 - **Decided:** a flagged line stays in the text with a `[FLAGGED: possible instruction]` tag. The red team can then show the attack was seen and not followed.
 - The whole case is wrapped as data, with a rule that nothing inside it is an instruction.
