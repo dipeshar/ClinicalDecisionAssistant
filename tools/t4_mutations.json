@@ -1,0 +1,254 @@
+[
+  {
+    "rule": "Passage ID shape",
+    "old": "if not re.fullmatch(r\"(?:SURG|PHYS|ANAES|ADMIN|RED)-KB-[0-9]{2}\", passage_id):",
+    "new": "if False:",
+    "test": "test_wrong_prefix_and_malformed_ids"
+  },
+  {
+    "rule": "IDs globally unique",
+    "old": "if passage_id in seen:",
+    "new": "if False:",
+    "test": "test_duplicate_ids_rejected_globally"
+  },
+  {
+    "rule": "Correct role prefix",
+    "old": "if not passage_id.startswith(role.value + \"-KB-\"):",
+    "new": "if False:",
+    "test": "test_wrong_prefix_and_malformed_ids"
+  },
+  {
+    "rule": "Passage privacy scan",
+    "old": "if scan_identifiers(body) or scan_identifiers(titles[0]):",
+    "new": "if scan_identifiers(titles[0]):",
+    "test": "test_privacy_rejection_contains_only_safe_location"
+  },
+  {
+    "rule": "Title privacy scan",
+    "old": "if scan_identifiers(body) or scan_identifiers(titles[0]):",
+    "new": "if scan_identifiers(body):",
+    "test": "test_privacy_rejection_contains_only_safe_location"
+  },
+  {
+    "rule": "No identifier in rejection message",
+    "old": "raise KBError(f\"KB privacy rejection: {label}: {passage_id}\")",
+    "new": "raise KBError(f\"KB privacy rejection: {label}: {passage_id}: {body}\")",
+    "test": "test_privacy_rejection_contains_only_safe_location"
+  },
+  {
+    "rule": "Sensitive filename redaction",
+    "old": "return \"[redacted filename]\" if scan_identifiers(str(path)) else str(path)",
+    "new": "return str(path)",
+    "test": "test_privacy_rejection_contains_only_safe_location"
+  },
+  {
+    "rule": "Length warning lower bound",
+    "old": "not 40 <= count <= 150",
+    "new": "not 39 <= count <= 150",
+    "test": "test_length_is_warning_only_with_exact_bounds"
+  },
+  {
+    "rule": "Length warning upper bound",
+    "old": "not 40 <= count <= 150",
+    "new": "not 40 <= count <= 151",
+    "test": "test_length_is_warning_only_with_exact_bounds"
+  },
+  {
+    "rule": "Length is warning not error",
+    "old": "warnings.warn(f\"passage outside 40 to 150 words: {label}: {passage_id}\",\n                          PassageLengthWarning, stacklevel=2)",
+    "new": "raise KBError(\"length is fatal\")",
+    "test": "test_length_is_warning_only_with_exact_bounds"
+  },
+  {
+    "rule": "Exact passage text",
+    "old": "body = \"\".join(lines[index + 1:end])",
+    "new": "body = \"\".join(lines[index + 1:end]).strip()",
+    "test": "test_load_exact_passages_and_role_fields"
+  },
+  {
+    "rule": "Passage KB role",
+    "old": "kb=role.value,",
+    "new": "kb=\"wrong\",",
+    "test": "test_load_exact_passages_and_role_fields"
+  },
+  {
+    "rule": "Source title",
+    "old": "source_title=titles[0]",
+    "new": "source_title=\"wrong\"",
+    "test": "test_load_exact_passages_and_role_fields"
+  },
+  {
+    "rule": "Title and headings required",
+    "old": "if not titles or not titles[0] or not headings:",
+    "new": "if False:",
+    "test": "test_unreadable_empty_or_malformed_kb"
+  },
+  {
+    "rule": "Only KB roles",
+    "old": "if role not in KB_ROLES:",
+    "new": "if False:",
+    "test": "test_unreadable_empty_or_malformed_kb"
+  },
+  {
+    "rule": "Tokenizer case folding",
+    "old": "text.casefold()",
+    "new": "text",
+    "test": "test_tokenizer_is_simple"
+  },
+  {
+    "rule": "Same corpus tokenizer",
+    "old": "corpus = [tokenize(p.text) for p in passages]",
+    "new": "corpus = [p.text.split() for p in passages]",
+    "test": "test_same_tokenizer_for_corpus_and_query"
+  },
+  {
+    "rule": "Same query tokenizer",
+    "old": "index.get_scores(tokenize(query))",
+    "new": "index.get_scores(query.split())",
+    "test": "test_same_tokenizer_for_corpus_and_query"
+  },
+  {
+    "rule": "Top five",
+    "old": "TOP_K = 5",
+    "new": "TOP_K = 4",
+    "test": "test_bm25_ranking_scores_and_role_isolation"
+  },
+  {
+    "rule": "Descending BM25 scores",
+    "old": "(-float(pair[1]), pair[0].id)",
+    "new": "(float(pair[1]), pair[0].id)",
+    "test": "test_bm25_ranking_scores_and_role_isolation"
+  },
+  {
+    "rule": "Ties by passage ID",
+    "old": "(-float(pair[1]), pair[0].id)",
+    "new": "(-float(pair[1]),)",
+    "test": "test_ties_repeatably_sort_by_id_not_file_order"
+  },
+  {
+    "rule": "Scores aligned with passages",
+    "old": "scores=[float(score) for _, score in ranked]",
+    "new": "scores=[0.0 for _, score in ranked]",
+    "test": "test_bm25_ranking_scores_and_role_isolation"
+  },
+  {
+    "rule": "Role isolation",
+    "old": "passages = self.passages[role]",
+    "new": "passages = self.passages[Role.PHYS]",
+    "test": "test_bm25_ranking_scores_and_role_isolation"
+  },
+  {
+    "rule": "Empty passage still retrievable",
+    "old": "BM25Okapi(corpus) if any(corpus) else None",
+    "new": "BM25Okapi(corpus)",
+    "test": "test_length_is_warning_only_with_exact_bounds"
+  },
+  {
+    "rule": "Role keyword query",
+    "old": "parts = [\" \".join(config.roles[role].keywords)]",
+    "new": "parts = [\"\"]",
+    "test": "test_round1_query_uses_only_keywords_and_configured_sections"
+  },
+  {
+    "rule": "Configured sections only",
+    "old": "parts.extend(sections[id] for id in config.retrieval.case_sections if id in sections)",
+    "new": "parts.extend(sections.values())",
+    "test": "test_round1_query_uses_only_keywords_and_configured_sections"
+  },
+  {
+    "rule": "Round 1 excludes peer and judge context",
+    "old": "if round == 2:",
+    "new": "if True:",
+    "test": "test_round1_query_uses_only_keywords_and_configured_sections"
+  },
+  {
+    "rule": "Round 2 uses only Round 1 arguments",
+    "old": "a for a in arguments if a.round == 1",
+    "new": "a for a in arguments",
+    "test": "test_round2_query_adds_peer_summaries_and_flagged_own_claims"
+  },
+  {
+    "rule": "Other roles summaries only",
+    "old": "if a.role != role",
+    "new": "if True",
+    "test": "test_round2_query_adds_peer_summaries_and_flagged_own_claims"
+  },
+  {
+    "rule": "Only own Round 1 judge flags",
+    "old": "if score.round == 1 and score.argument_id == own[0].argument_id:",
+    "new": "if True:",
+    "test": "test_round2_query_adds_peer_summaries_and_flagged_own_claims"
+  },
+  {
+    "rule": "Untraceable claim flags",
+    "old": "flagged.update(note.claim_id for note in score.untraceable_claims)",
+    "new": "# omit untraceable claims",
+    "test": "test_round2_query_adds_peer_summaries_and_flagged_own_claims"
+  },
+  {
+    "rule": "Feedback claim flags",
+    "old": "flagged.update(note.claim_id for note in score.feedback if note.claim_id is not None)",
+    "new": "# omit feedback claims",
+    "test": "test_round2_query_adds_peer_summaries_and_flagged_own_claims"
+  },
+  {
+    "rule": "Only flagged claim text",
+    "old": "if claim.claim_id in flagged",
+    "new": "if True",
+    "test": "test_round2_query_adds_peer_summaries_and_flagged_own_claims"
+  },
+  {
+    "rule": "Successful own Round 1 needed",
+    "old": "if len(own) != 1 or own[0].status == \"failed\":",
+    "new": "if False:",
+    "test": "test_invalid_round_and_failed_own_argument"
+  },
+  {
+    "rule": "Carry cited passages into Round 2",
+    "old": "shown.setdefault(id, available[id])",
+    "new": "pass",
+    "test": "test_round2_carries_cited_passages_without_changing_top_five"
+  },
+  {
+    "rule": "Carryover only for correct role and round",
+    "old": "if result.round != 2 or own.round != 1 or own.role != result.role or own.status == \"failed\":",
+    "new": "if False:",
+    "test": "test_round2_carries_cited_passages_without_changing_top_five"
+  },
+  {
+    "rule": "RetrievalResult.role",
+    "old": "RetrievalResult(role=role, round=round, query=query,",
+    "new": "RetrievalResult(role=Role.RED, round=round, query=query,",
+    "test": "test_bm25_ranking_scores_and_role_isolation"
+  },
+  {
+    "rule": "RetrievalResult.round",
+    "old": "RetrievalResult(role=role, round=round, query=query,",
+    "new": "RetrievalResult(role=role, round=2, query=query,",
+    "test": "test_bm25_ranking_scores_and_role_isolation"
+  },
+  {
+    "rule": "RetrievalResult.query",
+    "old": "RetrievalResult(role=role, round=round, query=query,",
+    "new": "RetrievalResult(role=role, round=round, query=\"wrong\",",
+    "test": "test_bm25_ranking_scores_and_role_isolation"
+  },
+  {
+    "rule": "Passage.id from heading",
+    "old": "Passage(id=passage_id,",
+    "new": "Passage(id=\"SURG-KB-99\",",
+    "test": "test_load_exact_passages_and_role_fields"
+  },
+  {
+    "rule": "Only two rounds in query",
+    "old": "    if round not in (1, 2):\n        raise KBError",
+    "new": "    if False:\n        raise KBError",
+    "test": "test_invalid_round_and_failed_own_argument"
+  },
+  {
+    "rule": "Only two rounds in retrieval",
+    "old": "        if round not in (1, 2):\n            raise KBError",
+    "new": "        if False:\n            raise KBError",
+    "test": "test_invalid_round_and_failed_own_argument"
+  }
+]
