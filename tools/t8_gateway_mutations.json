@@ -1,0 +1,146 @@
+[
+  {
+    "rule": "Provider approval checked before any attempt",
+    "old": "if provider not in self._config.privacy.approved_providers:",
+    "new": "if False:",
+    "test": "test_privacy_blocks_unapproved_provider_before_any_attempt"
+  },
+  {
+    "rule": "Identifier scan actually runs on the prompt",
+    "old": "hits = scan_identifiers(prompt)",
+    "new": "hits = []",
+    "test": "test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it"
+  },
+  {
+    "rule": "Privacy block never records the prompt",
+    "old": "event_type=EventType.PRIVACY_BLOCK,\n            role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,",
+    "new": "event_type=EventType.PRIVACY_BLOCK,\n            role=role, round=round_number, model=model_label, prompt=prompt, retrieved_passage_ids=None,",
+    "test": "test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it"
+  },
+  {
+    "rule": "Privacy refusal is actually raised",
+    "old": "raise GatewayRefusal(reason)\n\n    def _reserve_or_refuse",
+    "new": "pass\n\n    def _reserve_or_refuse",
+    "test": "test_privacy_blocks_unapproved_provider_before_any_attempt"
+  },
+  {
+    "rule": "Budget exhaustion is caught and converted to a refusal",
+    "old": "except BudgetExhausted as error:",
+    "new": "except TypeError as error:",
+    "test": "test_tiny_budget_refuses_the_call_and_writes_one_budget_event"
+  },
+  {
+    "rule": "Budget refusal never records the prompt",
+    "old": "event_type=EventType.BUDGET,\n                role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,",
+    "new": "event_type=EventType.BUDGET,\n                role=role, round=round_number, model=model_label, prompt=\"leaked\", retrieved_passage_ids=None,",
+    "test": "test_tiny_budget_refuses_the_call_and_writes_one_budget_event"
+  },
+  {
+    "rule": "Budget refusal is actually raised",
+    "old": "raise GatewayRefusal(str(error)) from error",
+    "new": "pass",
+    "test": "test_tiny_budget_refuses_the_call_and_writes_one_budget_event"
+  },
+  {
+    "rule": "Retry is limited to retryable error types",
+    "old": "if isinstance(error, RETRYABLE_ERRORS) and attempt < max_attempts:",
+    "new": "if True and attempt < max_attempts:",
+    "test": "test_non_timeout_provider_error_does_not_retry"
+  },
+  {
+    "rule": "A retryable error actually retries instead of refusing immediately",
+    "old": "self._sleep(self._config.retries.api_retry_wait_seconds)\n                    continue",
+    "new": "self._sleep(self._config.retries.api_retry_wait_seconds)",
+    "test": "test_timeout_retries_once_then_succeeds"
+  },
+  {
+    "rule": "Settlement uses the actual response tokens, not zero",
+    "old": "state = self._budget.complete(reservation, response.tokens_in, response.tokens_out)",
+    "new": "state = self._budget.complete(reservation, 0, 0)",
+    "test": "test_successful_call_returns_output_and_writes_one_llm_call_event"
+  },
+  {
+    "rule": "Successful trace event records the actual tokens_in",
+    "old": "parsed_ref=None, tokens_in=response.tokens_in, tokens_out=response.tokens_out,",
+    "new": "parsed_ref=None, tokens_in=0, tokens_out=response.tokens_out,",
+    "test": "test_successful_call_returns_output_and_writes_one_llm_call_event"
+  },
+  {
+    "rule": "Successful trace event records the actual tokens_out",
+    "old": "parsed_ref=None, tokens_in=response.tokens_in, tokens_out=response.tokens_out,",
+    "new": "parsed_ref=None, tokens_in=response.tokens_in, tokens_out=0,",
+    "test": "test_successful_call_returns_output_and_writes_one_llm_call_event"
+  },
+  {
+    "rule": "GatewayResult carries the provider's actual latency",
+    "old": "return GatewayResult(response.raw_output, response.tokens_in, response.tokens_out,\n                                     model_label, latency_ms)",
+    "new": "return GatewayResult(response.raw_output, response.tokens_in, response.tokens_out,\n                                     model_label, 0)",
+    "test": "test_successful_call_returns_output_and_writes_one_llm_call_event"
+  },
+  {
+    "rule": "Model choice: specialist roles use models.specialist",
+    "old": "def model_choice_for(config: Config, role: Role) -> ModelChoice:\n    if role in SPECIALIST_ROLES:\n        return config.models.specialist",
+    "new": "def model_choice_for(config: Config, role: Role) -> ModelChoice:\n    if role in SPECIALIST_ROLES:\n        return config.models.chair",
+    "test": "test_model_choice_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Model choice: chair uses models.chair",
+    "old": "if role is Role.CHAIR:\n        return config.models.chair",
+    "new": "if role is Role.CHAIR:\n        return config.models.red_team",
+    "test": "test_model_choice_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Model choice: red team uses models.red_team",
+    "old": "if role is Role.RED:\n        return config.models.red_team",
+    "new": "if role is Role.RED:\n        return config.models.chair",
+    "test": "test_model_choice_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Model choice: judge A and judge B are not interchangeable",
+    "old": "return config.models.judge_a if role is Role.JUDGE_A else config.models.judge_b",
+    "new": "return config.models.judge_b if role is Role.JUDGE_A else config.models.judge_a",
+    "test": "test_model_choice_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Temperature: specialist roles use temperature.specialist",
+    "old": "def temperature_for(config: Config, role: Role) -> float:\n    if role in SPECIALIST_ROLES:\n        return config.temperature.specialist",
+    "new": "def temperature_for(config: Config, role: Role) -> float:\n    if role in SPECIALIST_ROLES:\n        return config.temperature.chair",
+    "test": "test_temperature_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Temperature: judges use temperature.judge",
+    "old": "if role in JUDGE_ROLES:\n        return config.temperature.judge",
+    "new": "if role in JUDGE_ROLES:\n        return config.temperature.red_team",
+    "test": "test_temperature_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Temperature: red team uses temperature.red_team",
+    "old": "if role is Role.RED:\n        return config.temperature.red_team",
+    "new": "if role is Role.RED:\n        return config.temperature.judge",
+    "test": "test_temperature_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Temperature: chair uses temperature.chair",
+    "old": "if role is Role.CHAIR:\n        return config.temperature.chair",
+    "new": "if role is Role.CHAIR:\n        return config.temperature.specialist",
+    "test": "test_temperature_for_maps_each_role_to_its_own_config_field"
+  },
+  {
+    "rule": "Construction requires a registered provider for every configured role",
+    "old": "if choice[\"provider\"] not in providers:",
+    "new": "if False:",
+    "test": "test_gateway_construction_requires_a_provider_for_every_configured_role"
+  },
+  {
+    "rule": "The role's budget output cap sizes the provider call, not an arbitrary value",
+    "old": "cap = self._budget.output_cap(role)",
+    "new": "cap = 1",
+    "test": "test_successful_call_returns_output_and_writes_one_llm_call_event"
+  },
+  {
+    "rule": "The reservation uses the token estimate, not a hardcoded value",
+    "old": "tokens_in = estimate_tokens_in(prompt)",
+    "new": "tokens_in = 0",
+    "test": "test_tiny_budget_refuses_the_call_and_writes_one_budget_event"
+  }
+]

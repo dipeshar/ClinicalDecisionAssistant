@@ -1,0 +1,38 @@
+[
+  {
+    "rule": "Script advances one outcome per call",
+    "old": "outcome = self._script[self._index]\n            self._index += 1",
+    "new": "outcome = self._script[self._index]",
+    "test": "test_script_replays_in_order_one_outcome_per_call"
+  },
+  {
+    "rule": "Script exhaustion raises ProviderError",
+    "old": "if self._index >= len(self._script):\n                raise ProviderError(f\"{self.name}: fake provider script exhausted\")",
+    "new": "if False:\n                raise ProviderError(f\"{self.name}: fake provider script exhausted\")",
+    "test": "test_script_exhaustion_raises_provider_error"
+  },
+  {
+    "rule": "Reserved output cap is enforced",
+    "old": "if outcome.tokens_out > max_tokens:\n            raise ProviderError(f\"{self.name}: scripted output exceeds the reserved cap\")",
+    "new": "if False:\n            raise ProviderError(f\"{self.name}: scripted output exceeds the reserved cap\")",
+    "test": "test_output_exceeding_the_reserved_cap_is_a_provider_error"
+  },
+  {
+    "rule": "A scripted exception type is actually raised",
+    "old": "if isinstance(outcome, type) and issubclass(outcome, BaseException):\n            raise outcome(f\"{self.name}: scripted failure\")",
+    "new": "if False:\n            raise outcome(f\"{self.name}: scripted failure\")",
+    "test": "test_scripted_timeout_is_raised"
+  },
+  {
+    "rule": "An empty script is rejected at construction",
+    "old": "if not script:\n            raise ValueError(\"a fake provider needs at least one scripted outcome\")",
+    "new": "if False:\n            raise ValueError(\"a fake provider needs at least one scripted outcome\")",
+    "test": "test_empty_script_is_rejected_at_construction"
+  },
+  {
+    "rule": "calls_made reflects the real call count",
+    "old": "def calls_made(self) -> int:\n        with self._lock:\n            return self._index",
+    "new": "def calls_made(self) -> int:\n        with self._lock:\n            return 0",
+    "test": "test_script_replays_in_order_one_outcome_per_call"
+  }
+]
