@@ -1,0 +1,272 @@
+[
+  {
+    "rule": "Proceed accepts for only",
+    "old": "Recommendation.PROCEED: frozenset({Stance.FOR})",
+    "new": "Recommendation.PROCEED: frozenset({Stance.FOR, Stance.CONDITIONAL})",
+    "test": "test_stance_table"
+  },
+  {
+    "rule": "Modifications accepts conditional",
+    "old": "Recommendation.PROCEED_WITH_MODIFICATIONS: frozenset({Stance.FOR, Stance.CONDITIONAL})",
+    "new": "Recommendation.PROCEED_WITH_MODIFICATIONS: frozenset({Stance.FOR})",
+    "test": "test_stance_table"
+  },
+  {
+    "rule": "Delay accepts against",
+    "old": "Recommendation.DELAY_PENDING_INVESTIGATION: frozenset({Stance.CONDITIONAL, Stance.AGAINST})",
+    "new": "Recommendation.DELAY_PENDING_INVESTIGATION: frozenset({Stance.CONDITIONAL})",
+    "test": "test_stance_table"
+  },
+  {
+    "rule": "Decline accepts against only",
+    "old": "Recommendation.DECLINE: frozenset({Stance.AGAINST})",
+    "new": "Recommendation.DECLINE: frozenset({Stance.AGAINST, Stance.FOR})",
+    "test": "test_stance_table"
+  },
+  {
+    "rule": "Count specialists only",
+    "old": "(Role.SURG, Role.PHYS, Role.ANAES, Role.ADMIN)",
+    "new": "(Role.SURG, Role.PHYS, Role.ANAES, Role.ADMIN, Role.CHAIR)",
+    "test": "test_final_round_selection_and_failed_specialists"
+  },
+  {
+    "rule": "Failed Round 1 stays failed",
+    "old": "first is None or first.status == TurnStatus.FAILED",
+    "new": "first is None",
+    "test": "test_final_round_selection_and_failed_specialists"
+  },
+  {
+    "rule": "Successful Round 2 supersedes Round 1",
+    "old": "final.append(second if second is not None and second.status == TurnStatus.OK else first)",
+    "new": "final.append(first)",
+    "test": "test_final_round_selection_and_failed_specialists"
+  },
+  {
+    "rule": "Failed Round 2 uses Round 1",
+    "old": "second is not None and second.status == TurnStatus.OK",
+    "new": "second is not None",
+    "test": "test_round2_failed_or_skipped_falls_back"
+  },
+  {
+    "rule": "Skipped Round 2 uses Round 1",
+    "old": "second = turns.get((role, 2))",
+    "new": "second = turns.get((role, 2))\n        if second is None:\n            continue",
+    "test": "test_round2_failed_or_skipped_falls_back"
+  },
+  {
+    "rule": "Dissent note copied exactly",
+    "old": "note=role_notes[argument.role]",
+    "new": "note=\"Changed note\"",
+    "test": "test_stance_table"
+  },
+  {
+    "rule": "Dissent carries final argument ID",
+    "old": "argument_id=argument.argument_id, note=",
+    "new": "argument_id=\"R1-ADMIN\", note=",
+    "test": "test_stance_table"
+  },
+  {
+    "rule": "Only unaccepted positions dissent",
+    "old": "if argument.stance not in ACCEPTED_STANCES[recommendation]",
+    "new": "if argument.stance in ACCEPTED_STANCES[recommendation]",
+    "test": "test_stance_table"
+  },
+  {
+    "rule": "Warning requires more than half",
+    "old": "if dissenters > len(final) / 2:",
+    "new": "if dissenters >= len(final) / 2:",
+    "test": "test_warning_requires_strict_majority"
+  },
+  {
+    "rule": "Warning denominator excludes failed specialists",
+    "old": "if dissenters > len(final) / 2:",
+    "new": "if dissenters > 4 / 2:",
+    "test": "test_warning_requires_strict_majority"
+  },
+  {
+    "rule": "Prefer latest judged round",
+    "old": "for round_number in (2, 1):",
+    "new": "for round_number in (1, 2):",
+    "test": "test_judge_round2_preferred_and_all_values_weighted_equally"
+  },
+  {
+    "rule": "Round 1 scores remain fallback",
+    "old": "for round_number in (2, 1):",
+    "new": "for round_number in (2,):",
+    "test": "test_judge_round1_fallback_even_when_round2_arguments_exist"
+  },
+  {
+    "rule": "Average all judges arguments and criteria",
+    "old": "mean(values) - 1",
+    "new": "mean(values[:4]) - 1",
+    "test": "test_judge_round2_preferred_and_all_values_weighted_equally"
+  },
+  {
+    "rule": "Exclude null Round 1 counterarguments",
+    "old": "if (value := getattr(score, criterion.value)) is not None",
+    "new": "if (value := (getattr(score, criterion.value) or 0)) is not None",
+    "test": "test_judge_round1_fallback_even_when_round2_arguments_exist"
+  },
+  {
+    "rule": "Judge scale subtracts one",
+    "old": "(mean(values) - 1) / 4 * 100",
+    "new": "mean(values) / 4 * 100",
+    "test": "test_judge_round1_fallback_even_when_round2_arguments_exist"
+  },
+  {
+    "rule": "Judge scale divides by four",
+    "old": "(mean(values) - 1) / 4 * 100",
+    "new": "(mean(values) - 1) / 5 * 100",
+    "test": "test_judge_round1_fallback_even_when_round2_arguments_exist"
+  },
+  {
+    "rule": "No scores means zero and null round",
+    "old": "return 0.0, None",
+    "new": "return 100.0, 1",
+    "test": "test_no_judges_and_failed_turns_lower_confidence"
+  },
+  {
+    "rule": "Only final arguments incur disagreements",
+    "old": "if score.argument_id == argument.argument_id",
+    "new": "if score.argument_id.endswith(argument.role.value)",
+    "test": "test_final_penalties_ignore_fixed_and_dropped_round1_claims"
+  },
+  {
+    "rule": "One judge has zero disagreements",
+    "old": "if len(judges) != 2:\n            continue",
+    "new": "if len(judges) != 2:\n            count += 1\n            continue",
+    "test": "test_disagreements_absolute_per_criterion_and_one_judge_zero"
+  },
+  {
+    "rule": "Disagreement gap includes two",
+    "old": "abs(left - right) >= 2",
+    "new": "abs(left - right) > 2",
+    "test": "test_disagreements_absolute_per_criterion_and_one_judge_zero"
+  },
+  {
+    "rule": "Disagreement gap is absolute",
+    "old": "abs(left - right) >= 2",
+    "new": "(left - right) >= 2",
+    "test": "test_disagreements_absolute_per_criterion_and_one_judge_zero"
+  },
+  {
+    "rule": "Rebuttal claims also counted",
+    "old": "if argument.rebuttal is not None:",
+    "new": "if False:",
+    "test": "test_rebuttal_claims_count_once_by_id"
+  },
+  {
+    "rule": "Only code-ungrounded claims penalized",
+    "old": "claim.grounding_status == GroundingStatus.UNGROUNDED",
+    "new": "True",
+    "test": "test_final_penalties_ignore_fixed_and_dropped_round1_claims"
+  },
+  {
+    "rule": "Final claims only, per role fallback",
+    "old": "ungrounded = ungrounded_count(final)",
+    "new": "ungrounded = ungrounded_count(arguments)",
+    "test": "test_penalties_fall_back_per_role_not_per_judged_round"
+  },
+  {
+    "rule": "All specialists failed means null confidence",
+    "old": "if not final:\n        return None",
+    "new": "if False:\n        return None",
+    "test": "test_no_working_final_argument_has_no_confidence"
+  },
+  {
+    "rule": "Agreement uses nonfailed denominator",
+    "old": "agreement_part = accepting / len(final) * 100",
+    "new": "agreement_part = accepting / 4 * 100",
+    "test": "test_no_judges_and_failed_turns_lower_confidence"
+  },
+  {
+    "rule": "Base gives equal weight to judges and agreement",
+    "old": "base = 0.5 * judge_part + 0.5 * agreement_part",
+    "new": "base = 0.6 * judge_part + 0.4 * agreement_part",
+    "test": "test_no_judges_and_failed_turns_lower_confidence"
+  },
+  {
+    "rule": "Only high findings penalized",
+    "old": "finding.severity == Level.HIGH",
+    "new": "finding.severity != Level.LOW",
+    "test": "test_high_findings_penalty_rate_and_cap"
+  },
+  {
+    "rule": "Ungrounded rate",
+    "old": "5 * ungrounded",
+    "new": "4 * ungrounded",
+    "test": "test_ungrounded_penalty_rate_and_cap"
+  },
+  {
+    "rule": "Ungrounded cap",
+    "old": "min(20, 5 * ungrounded)",
+    "new": "min(25, 5 * ungrounded)",
+    "test": "test_ungrounded_penalty_rate_and_cap"
+  },
+  {
+    "rule": "Finding rate",
+    "old": "10 * high",
+    "new": "5 * high",
+    "test": "test_high_findings_penalty_rate_and_cap"
+  },
+  {
+    "rule": "Finding cap",
+    "old": "min(20, 10 * high)",
+    "new": "min(30, 10 * high)",
+    "test": "test_high_findings_penalty_rate_and_cap"
+  },
+  {
+    "rule": "Disagreement rate",
+    "old": "5 * disagreements",
+    "new": "4 * disagreements",
+    "test": "test_disagreement_penalty_rate_and_cap"
+  },
+  {
+    "rule": "Disagreement cap",
+    "old": "min(10, 5 * disagreements)",
+    "new": "min(15, 5 * disagreements)",
+    "test": "test_disagreement_penalty_rate_and_cap"
+  },
+  {
+    "rule": "Sum all penalties",
+    "old": "ungrounded_penalty.penalty + high_penalty.penalty + disagreement_penalty.penalty",
+    "new": "ungrounded_penalty.penalty + high_penalty.penalty",
+    "test": "test_combined_penalties_and_lower_clamping"
+  },
+  {
+    "rule": "Subtract penalties",
+    "old": "clamp_score(base - total)",
+    "new": "clamp_score(base + total)",
+    "test": "test_combined_penalties_and_lower_clamping"
+  },
+  {
+    "rule": "Clamp below zero",
+    "old": "max(0.0, score)",
+    "new": "score",
+    "test": "test_clamping"
+  },
+  {
+    "rule": "Clamp above 100",
+    "old": "min(100.0, max(0.0, score))",
+    "new": "max(0.0, score)",
+    "test": "test_clamping"
+  },
+  {
+    "rule": "High includes 70",
+    "old": "if score >= 70:",
+    "new": "if score > 70:",
+    "test": "test_level_boundaries"
+  },
+  {
+    "rule": "Medium includes 40",
+    "old": "if score >= 40:",
+    "new": "if score > 40:",
+    "test": "test_level_boundaries"
+  },
+  {
+    "rule": "Count repeated claim IDs only once",
+    "old": "claims.update((claim.claim_id, claim) for claim in argument.rebuttal.response_claims)",
+    "new": "claims.update((claim.claim_id + \"-duplicate\", claim) for claim in argument.rebuttal.response_claims)",
+    "test": "test_rebuttal_claims_count_once_by_id"
+  }
+]
