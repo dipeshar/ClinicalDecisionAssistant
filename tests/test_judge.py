@@ -68,13 +68,17 @@ def make_gateway(config: Config, tmp_path: Path, script: list) -> tuple[LLMGatew
     return LLMGateway(config, budget, trace, {"fake": provider}, sleep_fn=lambda seconds: None), trace_path
 
 
+def trace_events(trace_path: Path) -> list[dict]:
+    return [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines()]
+
+
 def reverse_shuffle(items: list) -> None:
     items.reverse()
 
 
 def test_one_call_scores_every_non_failed_argument_of_the_round(config: Config, tmp_path: Path) -> None:
     args = [argument(Role.SURG), argument(Role.PHYS)]
-    gateway, _ = make_gateway(config, tmp_path, [Scripted(raw_output=score_json(2), tokens_in=5, tokens_out=5)])
+    gateway, trace_path = make_gateway(config, tmp_path, [Scripted(raw_output=score_json(2), tokens_in=5, tokens_out=5)])
 
     scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
                                         REAL_PROMPTS, shuffle=lambda items: None)
@@ -85,6 +89,10 @@ def test_one_call_scores_every_non_failed_argument_of_the_round(config: Config, 
     assert {score.argument_id for score in scores} == {"R1-SURG", "R1-PHYS"}
     assert all(score.judge == "JUDGE_A" and score.round == 1 for score in scores)
     assert all(score.model == "fake/judge" for score in scores)
+    prompt = trace_events(trace_path)[0]["prompt"]
+    assert "Creatinine 1.1 mg/dL, eGFR 78." in prompt
+    assert "R1-SURG" in prompt and "R1-PHYS" in prompt
+    assert PASSAGE_SOURCES["SURG-KB-01"] in prompt
 
 
 def test_shuffled_order_is_recorded_and_matches_what_was_scored(config: Config, tmp_path: Path) -> None:
@@ -97,12 +105,12 @@ def test_shuffled_order_is_recorded_and_matches_what_was_scored(config: Config, 
     assert failed is False
     assert order == ["R1-ANAES", "R1-PHYS", "R1-SURG"]
     assert [score.argument_id for score in scores] == order
-    events = json.loads(Path(trace_path).read_text(encoding="utf-8").splitlines()[0])
-    assert events["prompt"].index("R1-ANAES") < events["prompt"].index("R1-PHYS") < events["prompt"].index("R1-SURG")
+    prompt = trace_events(trace_path)[0]["prompt"]
+    assert prompt.index("R1-ANAES") < prompt.index("R1-PHYS") < prompt.index("R1-SURG")
 
 
-def test_failed_arguments_are_skipped(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG), argument(Role.PHYS, status="failed")]
+def test_failed_and_wrong_round_arguments_are_skipped(config: Config, tmp_path: Path) -> None:
+    args = [argument(Role.SURG), argument(Role.PHYS, status="failed"), argument(Role.ANAES, round_number=2)]
     gateway, _ = make_gateway(config, tmp_path, [Scripted(raw_output=score_json(1), tokens_in=5, tokens_out=5)])
 
     scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
