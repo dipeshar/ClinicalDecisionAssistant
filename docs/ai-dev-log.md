@@ -48,6 +48,7 @@ One row per task. Fill it in as you go, not at the end.
 | T9 addendum | The human replaced `repair.md` with two human-authored files, `repair_intro.md` and `repair_fix.md`, and asked for the generated problem list to sit between them instead of after a single file. Updated `repair_prompt` to load both and join them as `[original_body, intro, format_issues(issues), fix]`; updated `docs/tasks.md`'s prompt file table (two rows replacing one) and the missing-file tests (a repair call now requires both files). | 994 tests pass; all 25 committed-code mutations detected and restored (22 -> 25: three of the old repair mutations were superseded by five new ones for the two-file load and the four-way join order). | Neither new file was written by this session — the human supplied their exact text and I wrote them verbatim, per AGENTS.md ("Not yours to write... The human owns them"). `repair_fix.md`'s own wording ("the problems above") only makes sense with the list immediately before it, confirming the requested ordering was necessary, not just requested. |
 | T9 cleanup | `format_issues` no longer prepends its own `## What was wrong` heading, since `repair_intro.md` already ends with that heading and its lead-in sentence; the generated block is now just the numbered list. | 994 tests pass; all 26 committed-code mutations detected and restored (25 -> 26: one new mutation reintroducing the removed heading). | See the writeup below: a duplicate-heading regression is now caught directly by a `prompt.count(...) == 1` assertion, not only by relative ordering. |
 | T10 | Implemented `agents/specialist.py`: builds the Round 1 retrieval query, retrieves the specialist's own KB passages, assembles the prompt (case + retrieved passages as data blocks), calls the gateway, parses the response against `ArgumentDraft`, grounds every claim, and runs the one shared repair retry (rule 1) for either bad JSON or any citation that failed. | 1006 tests pass; all 20 committed-code mutations detected and restored; contract mapping below. Covers all four scenarios the task line names (good output, bad JSON then fixed, bad JSON twice, bad citation twice) plus zero-citation claims, a case-section citation, and both gateway-refusal points. | The shared retry helper (`call_and_parse_with_repair`) takes a `find_issues` callback so the same one-call-then-maybe-one-repair shape can be reused by T12's Round 2 specialist and, later, judges/chair/red team, without hardcoding what "an issue" means to this task's `ArgumentDraft` case. Citation problems and JSON parse problems are deliberately funneled into the *same* single repair attempt, never two separate ones, matching rule 1's "shared by bad JSON and bad citations." A claim with zero citations is treated as needing repair exactly like a claim with a citation that fails verification — both end up `ungrounded` via the same `grounding.ground_claim` path, so no separate "missing citation" code path was needed. |
+| T11 | Implemented `agents/judge.py`: one call per judge per round, scoring every non-failed argument of that round at once, with each citation's actual source text shown alongside it. Generalized T10's `call_and_parse_with_repair`/`parse_draft` (`specialist.py`) to accept a `TypeAdapter` as well as a draft model class, so judges reuse the same shared-repair shape for their `list[ScoreDraft]` response instead of a second copy of it. | 1018 tests pass; all 19 committed-code mutations detected and restored (one initially survived — see below); T10's own 20 re-confirmed unaffected by the generalization. Covers shuffled-order tracking, skipped failed/wrong-round arguments, feedback truncation, forced Round 1/Round 2 field overrides, array-length-mismatch repair, missing-counterarguments repair, and both classes of call failure (bad JSON twice, gateway refusal). | `ScoreDraft`'s response is a JSON *array*, one entry per argument shown, matched back to arguments purely by position (the shuffled presentation order) — the contracts don't specify this correspondence explicitly, since `Score` has no LLM-writable field naming which argument it's for; position-matching is the only way the model could tell the judge which score belongs to which argument. `judge.md` supports this reading ("the order you were given them in is randomized on purpose"). Flagging this as a judgment call worth double-checking, the same way earlier tasks flagged theirs. |
 
 ### T0 review notes
 
@@ -1387,3 +1388,64 @@ Implementation in `src/council/agents/specialist.py`; tests in `tests/test_speci
 | The prompt includes the retrieved-passages data block | drop the `("Retrieved passages", ...)` block | test_good_output_produces_a_grounded_ok_argument |
 
 All 20 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
+
+## T11: judges
+
+`run_judge` (`src/council/agents/judge.py`) is one judge's call for one round: filter `arguments` to those of `round_number` with `status != "failed"` (design.md: "That argument is not judged"); shuffle them with an injectable `shuffle` function (default `random.shuffle`, so tests can pin the order); render the case plus one block per shown argument — each argument's claims *and* the actual source text of everything they cite, per judge.md ("the actual text of those passages, not just their IDs"); call the gateway once via `judge_body`/`JUDGE_SCHEMA` (`TypeAdapter(list[ScoreDraft])`); and turn each `ScoreDraft` into a CODE-owned `Score`, matched to its argument purely by position in the shuffled list.
+
+`call_and_parse_with_repair` (generalized from T10, see the task-table row above) handles the shared repair retry for two judge-specific problem classes via its `find_issues` callback: the response array not having exactly one entry per argument shown, and — Round 2 only — a `ScoreDraft` missing its required `counterarguments` score. `build_score` then forces the two round-dependent fields regardless of what the model actually wrote, rather than trusting it or repairing over something safely correctable: `counterarguments` is always `None` in Round 1, and `feedback` is always `[]` in Round 2 (contracts section 6's `Score.check_round` validator would otherwise reject the object outright — dropping an errant field the model shouldn't have produced is not the same as manufacturing a missing one, which the repair path handles instead). Round 1 feedback is separately truncated to `config.judging.feedback_max_notes`/`feedback_max_words` (extra notes cut, each kept note's text cut to the word limit).
+
+What went wrong / limits:
+
+- One mutation initially survived: hardcoding `groundedness=1` in `build_score` wasn't caught, because no test asserted the actual scored value, only structural fields (`judge`, `round`, `model`, `argument_id`). Added the assertion (`test_one_call_scores_every_non_failed_argument_of_the_round`) and corrected the mutation's rule label, which had been written for a different (later-abandoned) mutation idea and no longer matched what the row actually tested. Re-ran the full 19-mutation audit after the fix: all killed.
+- The response-array-to-argument correspondence is positional, not ID-based — flagged above as a judgment call, since `ScoreDraft` has no field of its own naming which argument a score is for.
+- `Scorecard` assembly (the full `presented_order` dict across all four judge/round combinations, `skipped_arguments`, `failed_judge_calls`, `per_argument` summaries, `round_comparison`) is not built here. `run_judge` returns just what one call produced — its scores, its own presented order, and whether the call failed — for an orchestrator (T15) to aggregate across both judges and both rounds. `compute_dissent`/`compute_confidence` (T6, `scoring.py`) already consume raw `Score` lists directly and don't need the aggregate `Scorecard` shape either.
+- No real provider or model call was made; `judges call real models starting at T17, not here` was followed exactly — every test scripts `FakeProvider`.
+
+#### T11 contract check
+
+Implementation in `src/council/agents/judge.py`; tests in `tests/test_judge.py`.
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| tasks.md T11: one call per judge per round | `run_judge` makes exactly one `call_and_parse_with_repair` call (plus its internal repair) per invocation | test_one_call_scores_every_non_failed_argument_of_the_round |
+| design.md: "Code shuffles the argument order for each judge and round, and records the order" | `shuffle(shown)`, `presented_order` | test_shuffled_order_is_recorded_and_matches_what_was_scored |
+| design.md: "That argument is not judged" (a failed specialist turn) | `eligible` filter's `status != "failed"` | test_failed_and_wrong_round_arguments_are_skipped |
+| design.md/contracts rule 6: judges score only the arguments of the round they were asked to score | `eligible` filter's `round == round_number` | test_failed_and_wrong_round_arguments_are_skipped |
+| judge.md: "each with the passages it cited — the actual text of those passages" | `render_argument`'s per-citation `source: {source_text}` | test_render_argument_shows_citation_source_text, prompt-content assertions in test_one_call_scores_every_non_failed_argument_of_the_round |
+| Section 11 config: `judge_feedback` max 5 notes, 40 words each, extra notes cut by code | `truncate_feedback` | test_feedback_is_cut_to_the_configured_limits |
+| Section 6 `Score.check_round`: Round 1 counterarguments null, Round 2 counterarguments required, Round 2 feedback empty | `build_score`'s forced overrides; `find_issues`' Round 2 counterarguments check | test_round1_counterarguments_is_forced_null, test_round2_feedback_is_forced_empty, test_round2_missing_counterarguments_triggers_repair |
+| Section 13 rule 1: bad JSON gets the shared repair retry | `call_and_parse_with_repair` (T10, generalized) via the array-length `find_issues` check | test_array_length_mismatch_triggers_repair, test_bad_json_twice_fails_the_call |
+| Section 13 rule 18: a judge call that still fails after repair continues the run with the other judge | `run_judge` returns `([], [], True)` rather than raising | test_bad_json_twice_fails_the_call, test_gateway_refusal_fails_the_call |
+| Section 6 `Score.judge`, `.argument_id`, `.model`, `.round` (CODE-owned) | `build_score` | test_one_call_scores_every_non_failed_argument_of_the_round |
+| tasks.md T8/gateway: agents never import a provider | `judge.py` imports only `council.gateway`/`council.agents.specialist`, never `council.providers.*` | Covered by T8's `test_no_module_outside_providers_imports_a_provider_sdk` |
+
+#### T11 mutation audit
+
+```powershell
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/agents/judge.py --spec tools/t11_judge_mutations.json
+```
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| render_argument includes the source text for each citation | drop `— source: {source_text}` | test_render_argument_shows_citation_source_text |
+| truncate_feedback caps the number of notes | `[:max_notes]` -> no limit | test_feedback_is_cut_to_the_configured_limits |
+| truncate_feedback caps each note's word count | `.split()[:max_words]` -> no limit | test_feedback_is_cut_to_the_configured_limits |
+| Round 1 counterarguments is forced null regardless of the model's answer | `None if round_number == 1 else ...` -> always `draft.counterarguments` | test_round1_counterarguments_is_forced_null |
+| Round 2 feedback is forced empty regardless of the model's answer | `[] if round_number == 2 else ...` -> always truncate_feedback | test_round2_feedback_is_forced_empty |
+| build_score passes through the model's actual groundedness rating | `groundedness=draft.groundedness` -> hardcoded `1` | test_one_call_scores_every_non_failed_argument_of_the_round |
+| Only arguments of the requested round are eligible | drop the `round == round_number` half of the filter | test_failed_and_wrong_round_arguments_are_skipped |
+| Failed arguments are not eligible | drop the `status != "failed"` half of the filter | test_failed_and_wrong_round_arguments_are_skipped |
+| No eligible arguments means no gateway call and no failure | `return [], [], False` -> `return [], [], True` | test_no_eligible_arguments_makes_no_gateway_call |
+| The arguments are actually shuffled before presenting | drop the `shuffle(shown)` call | test_shuffled_order_is_recorded_and_matches_what_was_scored |
+| presented_order reflects the shuffled order, not the original order | build it from `eligible` instead of `shown` | test_shuffled_order_is_recorded_and_matches_what_was_scored |
+| Each shown argument's own passages are added to the sources shown to the judge | drop `sources.update(passage_sources)` | test_one_call_scores_every_non_failed_argument_of_the_round |
+| The case is included in the judge's prompt | `data_blocks = []` | test_one_call_scores_every_non_failed_argument_of_the_round |
+| Every shown argument is included in the judge's prompt | drop the `data_blocks.extend(...)` call | test_one_call_scores_every_non_failed_argument_of_the_round |
+| A response with the wrong number of scores is treated as an issue needing repair | `if len(scores) != len(shown):` -> `if False:` | test_array_length_mismatch_triggers_repair |
+| Round 2 requires a counterarguments score from every argument | `if round_number == 2:` -> `if round_number == 1:` | test_one_call_scores_every_non_failed_argument_of_the_round |
+| A missing counterarguments score is actually detected | `is None` -> `is not None` | test_round2_missing_counterarguments_triggers_repair |
+| A call that never produced a draft is reported as failed | `return [], [], True` -> `return [], [], False` | test_bad_json_twice_fails_the_call |
+| Scores are matched to the shuffled argument order, not the original order | `zip(shown, draft)` -> `zip(reversed(shown), draft)` | test_shuffled_order_is_recorded_and_matches_what_was_scored |
+
+All 19 mutations were detected by their named tests (one required a test fix first; see "What went wrong" above). Committed code was restored and the audit worktree was clean after every mutation.
