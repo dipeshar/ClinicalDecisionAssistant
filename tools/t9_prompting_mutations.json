@@ -117,18 +117,36 @@
     "rule": "format_issues numbers from 1",
     "old": "enumerate(issues, start=1)",
     "new": "enumerate(issues, start=0)",
-    "test": "test_repair_prompt_appends_repair_instructions_then_issue_list"
+    "test": "test_repair_prompt_puts_the_issue_list_between_intro_and_fix"
   },
   {
-    "rule": "Repair body appends repair.md before the issue list",
-    "old": "body = \"\\n\\n\".join([original_body.strip(), repair_instructions, format_issues(issues)])",
-    "new": "body = \"\\n\\n\".join([original_body.strip(), format_issues(issues), repair_instructions])",
-    "test": "test_repair_prompt_appends_repair_instructions_then_issue_list"
+    "rule": "Repair prompt loads repair_intro.md",
+    "old": "intro = load_prompt(\"repair_intro.md\", prompts_dir)",
+    "new": "intro = load_prompt(\"repair_fix.md\", prompts_dir)",
+    "test": "test_repair_prompt_puts_the_issue_list_between_intro_and_fix"
   },
   {
-    "rule": "Repair prompt keeps the original body first",
-    "old": "body = \"\\n\\n\".join([original_body.strip(), repair_instructions, format_issues(issues)])",
-    "new": "body = \"\\n\\n\".join([repair_instructions, original_body.strip(), format_issues(issues)])",
-    "test": "test_repair_prompt_appends_repair_instructions_then_issue_list"
+    "rule": "Repair prompt loads repair_fix.md",
+    "old": "fix = load_prompt(\"repair_fix.md\", prompts_dir)",
+    "new": "fix = load_prompt(\"repair_intro.md\", prompts_dir)",
+    "test": "test_repair_prompt_puts_the_issue_list_between_intro_and_fix"
+  },
+  {
+    "rule": "Repair body keeps the original body first",
+    "old": "body = \"\\n\\n\".join([original_body.strip(), intro, format_issues(issues), fix])",
+    "new": "body = \"\\n\\n\".join([intro, original_body.strip(), format_issues(issues), fix])",
+    "test": "test_repair_prompt_puts_the_issue_list_between_intro_and_fix"
+  },
+  {
+    "rule": "Repair body puts the issue list between intro and fix, not after both",
+    "old": "body = \"\\n\\n\".join([original_body.strip(), intro, format_issues(issues), fix])",
+    "new": "body = \"\\n\\n\".join([original_body.strip(), intro, fix, format_issues(issues)])",
+    "test": "test_repair_prompt_puts_the_issue_list_between_intro_and_fix"
+  },
+  {
+    "rule": "Repair body loads intro before fix",
+    "old": "body = \"\\n\\n\".join([original_body.strip(), intro, format_issues(issues), fix])",
+    "new": "body = \"\\n\\n\".join([original_body.strip(), fix, format_issues(issues), intro])",
+    "test": "test_repair_prompt_puts_the_issue_list_between_intro_and_fix"
   }
 ]
