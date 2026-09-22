@@ -41,6 +41,7 @@ One row per task. Fill it in as you go, not at the end.
 | T4 | Built KB validation, shared privacy scanning, deterministic BM25 retrieval and Round 1/2 query construction using synthetic test fixtures only. | 808 tests pass; all 42 final mutations detected and restored. Clinical demonstration passed; added email was rejected without exposing it. | The Round 1 isolation mutation initially failed a different test than expected; strengthened its regression fixture and repeated successfully. | |
 | T5 | Implemented isolated quote normalization, source/turn checks, citation verification and current claim grounding checks. | 838 tests pass; all 33 mutations detected and restored. Every requested quote rule has a separate named test. | No test failures or surviving mutations during implementation/audit. The requested quote rule is rule 4 in section 13, rather than section 4. | |
 | T6 | Implemented final-argument selection, dissent, strict-majority warning and confidence formula. | 892 tests pass; all 45 committed-code mutations detected and restored; contract mapping below. | Initially stopped on two contract gaps, resolved by the human. Discarded stale doc edits only with explicit authorization. Corrected one test fixture arithmetic error. | |
+| T7 | Reviewed a prior session's unfinished draft of `budget.py`/`trace.py` as a pull request against the contracts, then ran the tests and the full end-of-task routine myself (nothing from the draft was assumed correct). | 929 tests pass; all 44 committed-code mutations (33 budget, 11 trace) detected and restored; contract mapping below. The existing race test (32 threads, configurable `--race-iterations`, default 25) was re-run at 300 iterations/thread (9600 calls) to confirm the concurrency requirement holds at a meaningful scale, not just the default. | The draft had no dev-log entry, no mutation run, and the mutation spec/test files were still untracked, so the mutation tool's clean-tree/`git restore` check could not run until the code and specs were committed first (matching the T6 precedent of committing the spec file before auditing). No code changes were needed; the draft matched the contracts. | |
 
 ### T0 review notes
 
@@ -936,3 +937,98 @@ The existing runner executes the full suite for each mutation, requires the name
 
 
 All 45 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
+
+### T7: budget and trace
+
+`src/council/budget.py`, `src/council/trace.py`, `tests/test_budget.py`, `tests/test_trace.py` and the `tests/conftest.py` `--race-iterations` option were already present, untracked, at the start of this session, along with draft mutation specs in `tools/t7_budget_mutations.json` and `tools/t7_trace_mutations.json`. Nothing had been committed, tested against the contracts, mutation-checked or logged, so this was treated as an unreviewed pull request rather than finished work.
+
+Review against `data-contracts.md` section 11 (Budget and config) and section 10 (Trace event), plus section 13 rules 10 and 12: `Budget` holds `BudgetState` (`tokens_used`, `calls_used`, `started_at`, `exhausted`, `reason`) behind one `Lock`, takes a conservative reservation (input tokens plus the role's output cap) at admission time and settles actual usage once, so concurrent attempts cannot spend the same remaining room twice. Only `Role.CHAIR` is exempt from `chair_reserve` (tokens, calls, seconds); every other role is capped at the maximum minus the reserve, and only the chair can still be admitted once the non-chair ceiling is exhausted. `TraceWriter` creates the trace file exclusively (never overwrites a prior run's trace), overwrites `run_id`, `seq` and `timestamp` on every event under its own `Lock`, and stops permanently after any write failure rather than silently losing events. Both locks were exercised together in `test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps` (32 threads interleaving admission, settlement and trace writes) with no lost tokens and no sequence gaps.
+
+What went wrong / limits:
+
+- No contract or code defect was found in the draft; the review changed nothing in `budget.py` or `trace.py`.
+- The mutation tool (`tools/mutation_check.py`) refuses to run against a dirty working tree and restores the target file with `git restore`, which only works on tracked files. The draft's own code, tests and mutation specs were all untracked, so nothing could be audited until it was committed. Followed the T6 precedent: committed the code and tests first (`T7: budget and trace with tests`), then the mutation spec JSON files (`T7: mutation audit specs for budget and trace`), then ran the audit.
+- The reservation system (holding pending input+output tokens between admission and settlement) and the "never overwrite an existing trace file" rule are not literally specified in the contracts; they are sound implementation choices for the concurrency guarantee the task requires (no lost tokens, no sequence gaps under many parallel threads) and do not conflict with anything in `design.md` or `data-contracts.md`.
+- T7 implements accounting and the audit log only; it does not call the gateway's privacy check, API retry or model dispatch, which are T8's scope.
+
+#### T7 contract check
+
+Implementations are in `src/council/budget.py` and `src/council/trace.py`; tests are in `tests/test_budget.py` and `tests/test_trace.py`.
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 11 BudgetState: tokens_used, calls_used, started_at, exhausted, reason | `Budget.__init__`, `Budget.snapshot` | test_initial_state_config_and_snapshot_are_isolated |
+| Section 11 max_tokens_per_call per role (specialist/judge/red_team/chair) | `Budget.output_cap`, enforced in `check_and_reserve` | test_role_output_caps |
+| Section 11 max_total_tokens, max_calls, max_seconds_total | `check_and_reserve` token/call/time limits | test_pending_reservations_prevent_oversubscription, test_call_limit_counts_every_attempt_even_zero_usage_failures, test_time_limits_and_chair_reserve_use_elapsed_time |
+| Section 11 chair_reserve (tokens, calls, seconds); design.md "only the chair can spend it, others stop at max minus reserve" | `check_and_reserve` reserve subtraction gated on `role == Role.CHAIR` | test_only_chair_can_spend_token_reserve, test_call_limit_counts_every_attempt_even_zero_usage_failures, test_time_limits_and_chair_reserve_use_elapsed_time |
+| Section 13 rule 10: budget checked before every call; refuse when exhausted | `check_and_reserve` raises `BudgetExhausted` and records `exhausted`/`reason` | test_exhaustion_stays_visible_and_stops_other_roles |
+| Section 13 rule 12 / section 11: budget counter and trace seq guarded by a lock | `Budget._lock`, `TraceWriter._lock` | test_budget_operations_wait_for_shared_lock, test_trace_write_waits_for_shared_lock, test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
+| Section 10 TraceEvent: run_id, seq, timestamp assigned by the writer, not the caller | `TraceWriter.write` overwrites these three fields | test_trace_jsonl_preserves_fields_and_owns_order_and_time |
+| Section 10 "seq is assigned under a lock"; gapless, increasing across threads | `TraceWriter.write` seq increment inside `_lock` | test_trace_jsonl_preserves_fields_and_owns_order_and_time, test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
+| Section 14 trace.jsonl: one append-only file per run | `TraceWriter.__init__` opens with `xb` (exclusive create), writes append with `ab` | test_existing_trace_is_never_overwritten |
+| Tasks.md T7: "Trace lines get unique, increasing seq under many parallel threads" | Combined budget+trace race test, 32 threads | test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps (re-run at 300 iterations/thread = 9600 calls during this review, beyond the default 25) |
+
+#### T7 mutation audit
+
+Re-run from a clean checkout with the project virtual environment, after committing the code, tests and mutation specs:
+
+```powershell
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/budget.py --spec tools/t7_budget_mutations.json
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/trace.py --spec tools/t7_trace_mutations.json
+```
+
+**budget.py (33 mutations)**
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Private config snapshot | `self._config = config.model_copy(deep=True)` -> `self._config = config` | test_initial_state_config_and_snapshot_are_isolated |
+| Detached state snapshot | `return self._state.model_copy(deep=True)` -> `return self._state` | test_initial_state_config_and_snapshot_are_isolated |
+| Snapshot guarded by shared lock | `with self._lock:` (snapshot) -> `nullcontext()` | test_budget_operations_wait_for_shared_lock |
+| Admission guarded by shared lock | `with self._lock:` (check_and_reserve) -> `nullcontext()` | test_budget_operations_wait_for_shared_lock |
+| Settlement guarded by shared lock | `with self._lock:` (complete) -> `nullcontext()` | test_budget_operations_wait_for_shared_lock |
+| Identity-based reservation ownership | `@dataclass(frozen=True, eq=False)` -> `@dataclass(frozen=True)` | test_settlement_rejects_unknown_duplicate_and_over_bound_usage |
+| Nonnegative integer accounting | `type(value) is not int or value < 0` -> `False` | test_invalid_token_counts_never_change_state |
+| Output cap specialist | `max_tokens_per_call.specialist` -> `+ 1` | test_role_output_caps |
+| Output cap judge | `max_tokens_per_call.judge` -> `+ 1` | test_role_output_caps |
+| Output cap red_team | `max_tokens_per_call.red_team` -> `+ 1` | test_role_output_caps |
+| Output cap chair | `max_tokens_per_call.chair` -> `+ 1` | test_role_output_caps |
+| Requested output respects cap | `if output > cap:` -> `if False:` | test_role_output_caps |
+| Only chair spends reserve | `chair = role == Role.CHAIR` -> `chair = True` | test_only_chair_can_spend_token_reserve |
+| Exhaustion stops non-chair attempts | `if self._state.exhausted and not chair:` -> `if False:` | test_exhaustion_stays_visible_and_stops_other_roles |
+| Token reserve withheld | `(0 if chair else chair_reserve.tokens)` -> `0` | test_only_chair_can_spend_token_reserve |
+| Call reserve withheld | `(0 if chair else chair_reserve.calls)` -> `0` | test_call_limit_counts_every_attempt_even_zero_usage_failures |
+| Time reserve withheld | `(0 if chair else chair_reserve.seconds)` -> `0` | test_time_limits_and_chair_reserve_use_elapsed_time |
+| Elapsed time measured from start | `(clock() - started_at)` -> `clock()` | test_time_limits_and_chair_reserve_use_elapsed_time |
+| Input tokens reserved | `total = tokens_in + output` -> `total = output` | test_pending_reservations_prevent_oversubscription |
+| Output tokens reserved | `total = tokens_in + output` -> `total = tokens_in` | test_pending_reservations_prevent_oversubscription |
+| Pending tokens count against limit | `sum(self._pending.values())` -> `0` | test_pending_reservations_prevent_oversubscription |
+| Exact token limit is usable | `+ total > token_limit:` -> `>= token_limit:` | test_only_chair_can_spend_token_reserve |
+| Call cap cannot be exceeded | `calls_used >= call_limit` -> `> call_limit` | test_call_limit_counts_every_attempt_even_zero_usage_failures |
+| Time deadline rejects at boundary | `elif remaining <= 0:` -> `< 0:` | test_time_limits_and_chair_reserve_use_elapsed_time |
+| Exhausted flag recorded | `self._state.exhausted = True` -> `False` | test_pending_reservations_prevent_oversubscription |
+| Exhaustion reason recorded | `self._state.reason = reason` -> `None` | test_pending_reservations_prevent_oversubscription |
+| Every admitted attempt counted once | `calls_used += 1` -> `+= 2` | test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
+| Actual input bound checked | drop the `tokens_in > reservation.tokens_in` half | test_settlement_rejects_unknown_duplicate_and_over_bound_usage |
+| Actual output bound checked | drop the `tokens_out > reservation.max_tokens_out` half | test_settlement_rejects_unknown_duplicate_and_over_bound_usage |
+| Actual input tokens counted | `tokens_used += tokens_in + tokens_out` -> `+= tokens_out` | test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
+| Actual output tokens counted | `tokens_used += tokens_in + tokens_out` -> `+= tokens_in` | test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
+| Settlement releases reservation exactly once | `del self._pending[reservation]` -> `pass` | test_parallel_same_reservation_is_settled_once |
+| Returned settlement snapshot cannot alter budget | `return self._state.model_copy(deep=True)` -> `return self._state` | test_settlement_releases_unused_room_and_counts_both_token_directions |
+
+**trace.py (11 mutations)**
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Existing trace never overwritten | `self._path.open("xb")` -> `"wb"` | test_existing_trace_is_never_overwritten |
+| Sequence and write share a lock | `with self._lock:` -> `nullcontext()` | test_trace_write_waits_for_shared_lock |
+| Writer owns run ID | `run_id=self._run_id` -> `run_id=event.run_id` | test_trace_jsonl_preserves_fields_and_owns_order_and_time |
+| Gapless incrementing sequence | `seq=self._seq + 1` -> `+ 2` | test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
+| Writer owns timestamp | `timestamp=datetime.now(...)` -> `timestamp=event.timestamp` | test_trace_jsonl_preserves_fields_and_owns_order_and_time |
+| Full event data preserved | inject `data["raw_output"] = None` | test_trace_jsonl_preserves_fields_and_owns_order_and_time |
+| JSON lines separated | drop the trailing `"\n"` | test_trace_jsonl_preserves_fields_and_owns_order_and_time |
+| Append never truncates existing events | `self._path.open("ab")` -> `"wb"` | test_trace_jsonl_preserves_fields_and_owns_order_and_time |
+| Short write treated as failure | `if written != len(payload):` -> `if False:` | test_short_write_stops_writer |
+| Failed writer remains stopped | `self._failed = True` -> `False` | test_write_failure_is_explicit_and_writer_stops |
+| Advance sequence after successful write | `self._seq = recorded.seq` -> `= 0` | test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
+
+All 44 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
