@@ -117,12 +117,13 @@ def test_repair_prompt_puts_the_issue_list_between_intro_and_fix() -> None:
     intro_text = p.load_prompt("repair_intro.md", REAL_PROMPTS)
     fix_text = p.load_prompt("repair_fix.md", REAL_PROMPTS)
     assert prompt.startswith(body)
-    # The generated list's own heading is the second "## What was wrong": the first is
-    # repair_intro.md's own section introducing it. Locate the list's heading strictly
-    # after the intro file ends, so this doesn't just match the intro's heading.
-    list_heading = prompt.index("## What was wrong", prompt.index(intro_text) + len(intro_text))
-    assert prompt.index(body) < prompt.index(intro_text) < list_heading < prompt.index(fix_text)
-    assert "1. Citation R1-SURG-C1 (passage ANAES-KB-04): quote not found in passage" in prompt
+    # The list carries no heading of its own: repair_intro.md already ends with
+    # "## What was wrong" and its lead-in sentence, so that heading appears exactly
+    # once, and the list's first line follows directly beneath it.
+    assert prompt.count("## What was wrong") == 1
+    first_item = "1. Citation R1-SURG-C1 (passage ANAES-KB-04): quote not found in passage"
+    assert prompt.index(body) < prompt.index(intro_text) < prompt.index(first_item) < prompt.index(fix_text)
+    assert first_item in prompt
     assert "2. Claim R1-SURG-C2: cites passage SURG-KB-99, which was not shown this turn" in prompt
     assert json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]) == ArgumentDraft.model_json_schema()
 

@@ -160,11 +160,15 @@ class RepairIssue:
 
 
 def format_issues(issues: Sequence[RepairIssue]) -> str:
-    """A fixed, readable, numbered list: what failed and why, one per line."""
+    """A fixed, readable, numbered list: what failed and why, one per line.
+
+    No heading of its own: repair_intro.md already ends with "## What was
+    wrong" and its lead-in sentence, so the list slots in right beneath it.
+    """
     if not issues:
         raise ValueError("a repair prompt needs at least one issue")
     lines = [f"{index}. {issue.location}: {issue.reason}" for index, issue in enumerate(issues, start=1)]
-    return "## What was wrong\n\n" + "\n".join(lines)
+    return "\n".join(lines)
 
 
 def repair_prompt(original_body: str, issues: Sequence[RepairIssue], schema_source: SchemaSource,
