@@ -17,11 +17,14 @@ what precedes it (`grep -n "above" prompts/*.md`):
 - `chair.md` and `red_team.md` stand alone: neither references another
   prompt file's content, only "the schema provided after this prompt" (the
   JSON schema this module appends at the end, not a preceding file).
-- A repair call is the original assembled body, then `repair.md`, then a
-  code-generated list of what failed: repair.md says "the same instructions,
-  rules, and schema you were given for your original task", and our
-  providers are single-shot (one prompt in, one completion out, no
-  conversation history), so that original context has to be resent.
+- A repair call is the original assembled body, then `repair_intro.md`, then
+  a code-generated list of what failed, then `repair_fix.md`: the intro says
+  the list is "listed below" and the fix file refers back to "the problems
+  above", so the list has to sit between the two files. repair_fix.md says
+  "the same instructions, rules, and schema you were given for your
+  original task", and our providers are single-shot (one prompt in, one
+  completion out, no conversation history), so that original context has
+  to be resent.
 """
 
 from dataclasses import dataclass
@@ -166,13 +169,17 @@ def format_issues(issues: Sequence[RepairIssue]) -> str:
 
 def repair_prompt(original_body: str, issues: Sequence[RepairIssue], schema_source: SchemaSource,
                   prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    """The original assembled body, then repair.md, then the code-generated issue list.
+    """The original assembled body, then repair_intro.md, the issue list, then repair_fix.md.
 
     `original_body` is whatever `compose_body`/`*_body` produced for the turn being
-    repaired (no schema attached yet); repair.md itself says the model needs "the
-    same instructions, rules, and schema you were given for your original task",
-    and providers are single-shot, so that context has to be resent in full.
+    repaired (no schema attached yet). repair_intro.md introduces the problem list
+    ("listed below"); repair_fix.md refers back to it ("the problems above"), so the
+    list has to sit between the two files, not after both. repair_fix.md itself says
+    the model needs "the same instructions, rules, and schema you were given for your
+    original task", and providers are single-shot, so that context has to be resent
+    in full.
     """
-    repair_instructions = load_prompt("repair.md", prompts_dir)
-    body = "\n\n".join([original_body.strip(), repair_instructions, format_issues(issues)])
+    intro = load_prompt("repair_intro.md", prompts_dir)
+    fix = load_prompt("repair_fix.md", prompts_dir)
+    body = "\n\n".join([original_body.strip(), intro, format_issues(issues), fix])
     return render(body, schema_source)

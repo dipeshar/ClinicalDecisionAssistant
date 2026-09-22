@@ -107,16 +107,21 @@ def test_red_team_prompt_stands_alone() -> None:
     assert json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]) == RedTeamReportDraft.model_json_schema()
 
 
-def test_repair_prompt_appends_repair_instructions_then_issue_list() -> None:
+def test_repair_prompt_puts_the_issue_list_between_intro_and_fix() -> None:
     body = p.specialist_body(Role.SURG, 1, [("Case", "Synthetic case text")], REAL_PROMPTS)
     issues = [
         p.RepairIssue("Citation R1-SURG-C1 (passage ANAES-KB-04)", "quote not found in passage"),
         p.RepairIssue("Claim R1-SURG-C2", "cites passage SURG-KB-99, which was not shown this turn"),
     ]
     prompt = p.repair_prompt(body, issues, ArgumentDraft, REAL_PROMPTS)
-    repair_text = p.load_prompt("repair.md", REAL_PROMPTS)
+    intro_text = p.load_prompt("repair_intro.md", REAL_PROMPTS)
+    fix_text = p.load_prompt("repair_fix.md", REAL_PROMPTS)
     assert prompt.startswith(body)
-    assert prompt.index(body) < prompt.index(repair_text) < prompt.index("## What was wrong")
+    # The generated list's own heading is the second "## What was wrong": the first is
+    # repair_intro.md's own section introducing it. Locate the list's heading strictly
+    # after the intro file ends, so this doesn't just match the intro's heading.
+    list_heading = prompt.index("## What was wrong", prompt.index(intro_text) + len(intro_text))
+    assert prompt.index(body) < prompt.index(intro_text) < list_heading < prompt.index(fix_text)
     assert "1. Citation R1-SURG-C1 (passage ANAES-KB-04): quote not found in passage" in prompt
     assert "2. Claim R1-SURG-C2: cites passage SURG-KB-99, which was not shown this turn" in prompt
     assert json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]) == ArgumentDraft.model_json_schema()
@@ -135,7 +140,7 @@ def test_format_issues_requires_at_least_one_issue() -> None:
 def test_missing_prompt_file_fails_the_whole_assembly_loudly(tmp_path: Path) -> None:
     """A partial prompt must never be sent: one missing file fails the whole call."""
     for name in ["persona_surg.md", "specialist_round1.md", "rubric.md", "judge.md",
-                "chair.md", "red_team.md", "repair.md"]:
+                "chair.md", "red_team.md", "repair_intro.md", "repair_fix.md"]:
         (tmp_path / name).write_text(f"# {name}\ncontent", encoding="utf-8")
     (tmp_path / "specialist_round1.md").unlink()
 
@@ -145,12 +150,22 @@ def test_missing_prompt_file_fails_the_whole_assembly_loudly(tmp_path: Path) -> 
     p.judge_prompt([("Case", "text")], tmp_path)
     p.chair_prompt([("Case", "text")], tmp_path)
     p.red_team_prompt([("Case", "text")], tmp_path)
+    p.repair_prompt("BODY", [p.RepairIssue("X", "Y")], ArgumentDraft, tmp_path)
 
 
 def test_missing_persona_file_fails_loudly(tmp_path: Path) -> None:
     (tmp_path / "specialist_round1.md").write_text("# round1\ncontent", encoding="utf-8")
     with pytest.raises(p.PromptFileMissing, match="persona_surg.md"):
         p.specialist_prompt(Role.SURG, 1, [("Case", "text")], tmp_path)
+
+
+@pytest.mark.parametrize("missing", ["repair_intro.md", "repair_fix.md"])
+def test_missing_repair_file_fails_loudly(tmp_path: Path, missing: str) -> None:
+    """A repair call now needs both repair_intro.md and repair_fix.md; either can be missing."""
+    present = "repair_fix.md" if missing == "repair_intro.md" else "repair_intro.md"
+    (tmp_path / present).write_text(f"# {present}\ncontent", encoding="utf-8")
+    with pytest.raises(p.PromptFileMissing, match=missing):
+        p.repair_prompt("BODY", [p.RepairIssue("X", "Y")], ArgumentDraft, tmp_path)
 
 
 def test_all_real_prompt_files_assemble_without_error() -> None:

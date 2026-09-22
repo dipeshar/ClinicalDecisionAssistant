@@ -73,7 +73,8 @@ The code loads these, wraps the data and appends the JSON schema. Prompts hold o
 | `rubric.md` | The four criteria, with what a 1, a 3 and a 5 mean for each |
 | `red_team.md` | The five attack categories and the injection check |
 | `chair.md` | Pick a recommendation, cite claim IDs only, one note per specialist, never add claims |
-| `repair.md` | The one repair retry: what was wrong and how to fix it |
+| `repair_intro.md` | The one repair retry: introduces the problem list that code inserts right after it |
+| `repair_fix.md` | How to fix the listed problems and the output rule, referring back to the list above it |
 
 ## 4. Tasks
 
