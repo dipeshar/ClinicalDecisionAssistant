@@ -38,6 +38,7 @@ One row per task. Fill it in as you go, not at the end.
 | T2 | Codex added YAML loading and configuration policy validation, with reusable mutation specifications. | 658 tests passed; all 28 T2 mutations detected and restored. | Initial model-error messages were too broad; corrected. Duplicate-key mutation exposed a test gap; added a valid-config regression test and corrected its expected mutation test name. | |
 | T3 | Added template ingestion and four-group injection scanning with synthetic clean/attack fixtures. | 705 tests pass; all 33 mutations detected and restored; contract mapping below. | Paused for preamble clarification; human approved rejection. Added an independent exact-tag assertion during review. | |
 | T3b | Applied the exact authorized preamble/privacy documentation updates, then added the ingest privacy guard, config policy, safe rejection trace and reusable identifier list. | 774 tests pass; 32 mutations detected and restored in an isolated committed checkout. | Fixed a Windows line-ending assertion and updated the model-audit count for the new config shape. Existing architecture edits were preserved. | |
+| T4 | Built KB validation, shared privacy scanning, deterministic BM25 retrieval and Round 1/2 query construction using synthetic test fixtures only. | 808 tests pass; all 42 final mutations detected and restored. Clinical demonstration passed; added email was rejected without exposing it. | The Round 1 isolation mutation initially failed a different test than expected; strengthened its regression fixture and repeated successfully. | |
 
 ### T0 review notes
 
@@ -604,3 +605,123 @@ Human review starting points:
 1. `src/council/privacy.py` - `scan_identifiers` and the adjacent `IDENTIFIER_PATTERNS` list.
 2. `src/council/ingest.py` - `ingest_case`, especially privacy rejection before parsing.
 3. `tests/test_privacy.py` - `test_rejects_identifiers_everywhere_before_parsing`, including trace redaction checks.
+
+### T4: KB loading and retrieval
+
+Demonstration before any T4 edits (no files written):
+
+```text
+Clinical case: PASS; 8 sections; 0 injection flags.
+Same case plus email: REJECTED: email at line 19
+Address absent from rejection message and trace: confirmed.
+```
+
+The clinical section contained exactly: `BP 150/90, creatinine 2.4 mg/dL, eGFR 38, surgery on 14 March 2026, ICD-10 I25.1, heparin 5000 units`. The real `ingest_case` and rejection writer ran with file reads and directory/trace writes intercepted in memory; Python bytecode writing was disabled. The configured synthetic marker was present. All nine examples and exclusions in the plain-language identifier table were also checked against the actual patterns without writing files.
+
+Implementation: `src/council/kb.py` loads all supplied role folders before exposing a searchable KB. It rejects duplicate IDs across files/folders, malformed IDs and wrong prefixes. It preserves passage bodies exactly, including whitespace and line endings, and uses the first level-one heading as source title. The shared identifier scanner checks every passage and its source title before length warnings or indexing. Privacy errors contain only a fixed explanation, file and valid passage ID; a sensitive filename is redacted, and malformed IDs are not echoed. No matched value appears in errors.
+
+Lengths outside 40 through 150 whitespace-separated words produce `PassageLengthWarning`, not a loader error. Even an empty passage remains loadable with a warning; an entirely empty-token corpus receives zero retrieval scores rather than crashing BM25. Missing/empty folders, unreadable files and missing source titles produce explicit errors.
+
+`tokenize` is the single tokenizer for documents and queries: Unicode casefold followed by alphanumeric tokens, splitting punctuation and underscores. BM25Okapi uses the installed rank-bm25 defaults. Results sort by descending score, then ascending passage ID, returning five or all available passages when fewer exist. IDs are sorted before index construction as well. Scores remain aligned with their passages, and retrieval only uses the requested role's KB.
+
+`build_query` uses configured role keywords plus configured case-section bodies, never the case title or preamble. Round 2 additionally uses other roles' Round 1 summaries, then the text of own claims named by Round 1 judge untraceable-claim or claim-specific feedback entries. General notes, judge reasons, numeric scores, own summary and Round 2 arguments do not enter this query. Peer order is stable and flagged claims are deduplicated in original claim order. A successful own Round 1 argument is required for Round 2 retrieval.
+
+`KnowledgeBase.round2_passages` provides the top-five results plus previously cited available passages from the same role's KB, without duplicates or changing RetrievalResult's scored top five. Case sections remain available separately via CaseContext. Unknown/foreign citation IDs name no available own-KB passage; they remain unchanged on the original claim for later grounding/repair and are not shown as evidence. This helper is ready for T12 prompt assembly; no prompting or grounding feature was implemented here.
+
+Only `tests/fixtures/kb/` contains new KB Markdown (six surgeon passages and one physician passage). Additional malformed and boundary fixtures are generated by tests in temporary directories. No file under the real `kb/` was created or changed. The T4 task row was extended with the requested privacy-at-load rule and the other user constraints.
+
+What went wrong / limits:
+
+- Initial implementation tests passed. During mutations, forcing Round 2 context into Round 1 was caught by the Round 2 test, but not the named Round 1 regression. Its original inputs contained no peer summary or flagged claim, so they could not expose that mistake. Strengthened those inputs, committed `041f0c0`, then repeated that mutation and completed the audit. The production implementation did not need a change.
+- Loader errors propagate as KBError; orchestration/trace integration belongs to later tasks. No real model/provider calls occur in this task, and no dependencies were installed.
+- BM25 is lexical retrieval, not a relevance or clinical-correctness guarantee. The identifier scanner retains its documented format-only limitations. Passage word counts use whitespace splitting; retrieval tokens deliberately use the separate documented alphanumeric tokenizer.
+- Your pre-existing architecture Markdown/SVG/PNG edits remained untouched. A detached audit checkout preserved them while allowing clean-status checks after every mutation.
+
+#### T4 contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 1: ROLE-KB-nn IDs, including RED | `read_passages` full-match and prefix checks | `test_wrong_prefix_and_malformed_ids`, `test_all_role_prefixes` |
+| Task KB format: globally unique IDs | shared seen set in `load_kb` / `read_passages` | `test_duplicate_ids_rejected_globally` across same file, other files and roles |
+| Passage.id | heading ID in `read_passages` | `test_load_exact_passages_and_role_fields` |
+| Passage.kb | owning role code in `read_passages` | `test_load_exact_passages_and_role_fields`, `test_all_role_prefixes` |
+| Passage.source_title | first level-one heading in `read_passages` | `test_load_exact_passages_and_role_fields` |
+| Passage.text: exact original body | splitlines with endings retained; no strip/normalization | `test_load_exact_passages_and_role_fields`, `test_length_is_warning_only_with_exact_bounds` |
+| RetrievalResult.role | `KnowledgeBase.retrieve` requested role and role index | `test_bm25_ranking_scores_and_role_isolation` |
+| RetrievalResult.round | `retrieve` permits only 1 or 2 | `test_bm25_ranking_scores_and_role_isolation`, `test_invalid_round_and_failed_own_argument` |
+| RetrievalResult.query; config role keywords and selected sections | `build_query`, preserved by `retrieve` | `test_round1_query_uses_only_keywords_and_configured_sections`, ranking test |
+| Section 4 Round 2 query: peer summaries and own judge-flagged claim text | `build_query` | `test_round2_query_adds_peer_summaries_and_flagged_own_claims` |
+| Query inputs: Argument.argument_id, role, round, status, summary; Claim.claim_id and text; Score.argument_id, round, untraceable_claims.claim_id and feedback.claim_id | Round 1/own-role filtering and claim-ID selection in `build_query` | Round 2 query test, invalid/failed-own-argument test |
+| Section 3: title/preamble never sent to agents | only CaseContext.sections contribute to query | exact query assertion in `test_round1_query_uses_only_keywords_and_configured_sections` |
+| RetrievalResult.passages; section 11 top five | `KnowledgeBase.retrieve`, TOP_K=5 | ranking test, length test for fewer than five, deterministic tie test |
+| RetrievalResult.scores: BM25 score for each passage | single sorted passage/score pairs in `retrieve` | manual expected BM25 value and JSON round trip in ranking test |
+| Section 4 / rule 3: Round 1 cited passages available again in Round 2 | `round2_passages` reads Claim.citations.passage_id and unions known own-KB passages | `test_round2_carries_cited_passages_without_changing_top_five` |
+| Rule 16: failed Round 1 argument does not proceed to Round 2 | query/carryover preconditions | `test_invalid_round_and_failed_own_argument`, carryover test |
+| Rule 22 shared identifier list; user extension to KB load | existing `privacy.scan_identifiers`, called by loader | `test_shared_scan_is_used_on_every_passage`, privacy-rejection test, clinical-demo-text test |
+| User: 40 to 150 words is warning only | `PassageLengthWarning` before indexing | boundary tests at 0, 39, 40, 150, 151 |
+| User: deterministic ties and one simple tokenizer | `tokenize`, stable index order and score/ID sorting | `test_tokenizer_is_simple`, `test_same_tokenizer_for_corpus_and_query`, `test_ties_repeatably_sort_by_id_not_file_order` |
+| User: privacy errors give file and passage ID only, never value | `safe_file_label`, safe loader errors without chained read exceptions | `test_privacy_rejection_contains_only_safe_location` |
+
+No T4 contract field was knowingly implemented differently from its written requirement. The top-five RetrievalResult and the additional shown-passage union are kept separate; T12 must use the union when building Round 2 prompts. Quote verification remains T5; retrieval trace events remain later trace/orchestrator integration. No T5 work was started.
+
+#### T4 mutation check
+
+Re-run in a clean checkout with the project environment:
+
+```powershell
+.venv/Scripts/python.exe -m pytest -p no:cacheprovider
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/kb.py --spec tools/t4_mutations.json
+```
+
+The audit used `.venv/t4-audit` and the main checkout's virtual-environment interpreter. Pytest's configured src path loaded the isolated source. Mutations 0-25 passed on `156dab9`; after the stronger regression test commit, mutation 26 was repeated and 26-41 passed on `041f0c0`. Each break ran the full suite, produced the named test failure, was undone with `git restore`, and was followed by a clean Git status check. All 42 final checks detected the break. The table preserves results across the runner's per-invocation output overwrite.
+
+| Rule | What was broken | Which test failed |
+|---|---|---|
+| Passage ID shape | `if not re.fullmatch(r"(?:SURG\|PHYS\|ANAES\|ADMIN\|RED)-KB-[0-9]{2}", passage_id): -> if False:` | `tests/test_kb.py::test_wrong_prefix_and_malformed_ids` |
+| IDs globally unique | `if passage_id in seen: -> if False:` | `tests/test_kb.py::test_duplicate_ids_rejected_globally` |
+| Correct role prefix | `if not passage_id.startswith(role.value + "-KB-"): -> if False:` | `tests/test_kb.py::test_wrong_prefix_and_malformed_ids` |
+| Passage privacy scan | `if scan_identifiers(body) or scan_identifiers(titles[0]): -> if scan_identifiers(titles[0]):` | `tests/test_kb.py::test_privacy_rejection_contains_only_safe_location` |
+| Title privacy scan | `if scan_identifiers(body) or scan_identifiers(titles[0]): -> if scan_identifiers(body):` | `tests/test_kb.py::test_privacy_rejection_contains_only_safe_location` |
+| No identifier in rejection message | `raise KBError(f"KB privacy rejection: {label}: {passage_id}") -> raise KBError(f"KB privacy rejection: {label}: {passage_id}: {body}")` | `tests/test_kb.py::test_privacy_rejection_contains_only_safe_location` |
+| Sensitive filename redaction | `return "[redacted filename]" if scan_identifiers(str(path)) else str(path) -> return str(path)` | `tests/test_kb.py::test_privacy_rejection_contains_only_safe_location` |
+| Length warning lower bound | `not 40 <= count <= 150 -> not 39 <= count <= 150` | `tests/test_kb.py::test_length_is_warning_only_with_exact_bounds` |
+| Length warning upper bound | `not 40 <= count <= 150 -> not 40 <= count <= 151` | `tests/test_kb.py::test_length_is_warning_only_with_exact_bounds` |
+| Length is warning not error | `warnings.warn(f"passage outside 40 to 150 words: {label}: {passage_id}", /                           PassageLengthWarning, stacklevel=2) -> raise KBError("length is fatal")` | `tests/test_kb.py::test_length_is_warning_only_with_exact_bounds` |
+| Exact passage text | `body = "".join(lines[index + 1:end]) -> body = "".join(lines[index + 1:end]).strip()` | `tests/test_kb.py::test_load_exact_passages_and_role_fields` |
+| Passage KB role | `kb=role.value, -> kb="wrong",` | `tests/test_kb.py::test_load_exact_passages_and_role_fields` |
+| Source title | `source_title=titles[0] -> source_title="wrong"` | `tests/test_kb.py::test_load_exact_passages_and_role_fields` |
+| Title and headings required | `if not titles or not titles[0] or not headings: -> if False:` | `tests/test_kb.py::test_unreadable_empty_or_malformed_kb` |
+| Only KB roles | `if role not in KB_ROLES: -> if False:` | `tests/test_kb.py::test_unreadable_empty_or_malformed_kb` |
+| Tokenizer case folding | `text.casefold() -> text` | `tests/test_kb.py::test_tokenizer_is_simple` |
+| Same corpus tokenizer | `corpus = [tokenize(p.text) for p in passages] -> corpus = [p.text.split() for p in passages]` | `tests/test_kb.py::test_same_tokenizer_for_corpus_and_query` |
+| Same query tokenizer | `index.get_scores(tokenize(query)) -> index.get_scores(query.split())` | `tests/test_kb.py::test_same_tokenizer_for_corpus_and_query` |
+| Top five | `TOP_K = 5 -> TOP_K = 4` | `tests/test_kb.py::test_bm25_ranking_scores_and_role_isolation` |
+| Descending BM25 scores | `(-float(pair[1]), pair[0].id) -> (float(pair[1]), pair[0].id)` | `tests/test_kb.py::test_bm25_ranking_scores_and_role_isolation` |
+| Ties by passage ID | `(-float(pair[1]), pair[0].id) -> (-float(pair[1]),)` | `tests/test_kb.py::test_ties_repeatably_sort_by_id_not_file_order` |
+| Scores aligned with passages | `scores=[float(score) for _, score in ranked] -> scores=[0.0 for _, score in ranked]` | `tests/test_kb.py::test_bm25_ranking_scores_and_role_isolation` |
+| Role isolation | `passages = self.passages[role] -> passages = self.passages[Role.PHYS]` | `tests/test_kb.py::test_bm25_ranking_scores_and_role_isolation` |
+| Empty passage still retrievable | `BM25Okapi(corpus) if any(corpus) else None -> BM25Okapi(corpus)` | `tests/test_kb.py::test_length_is_warning_only_with_exact_bounds` |
+| Role keyword query | `parts = [" ".join(config.roles[role].keywords)] -> parts = [""]` | `tests/test_kb.py::test_round1_query_uses_only_keywords_and_configured_sections` |
+| Configured sections only | `parts.extend(sections[id] for id in config.retrieval.case_sections if id in sections) -> parts.extend(sections.values())` | `tests/test_kb.py::test_round1_query_uses_only_keywords_and_configured_sections` |
+| Round 1 excludes peer and judge context | `if round == 2: -> if True:` | `tests/test_kb.py::test_round1_query_uses_only_keywords_and_configured_sections` |
+| Round 2 uses only Round 1 arguments | `a for a in arguments if a.round == 1 -> a for a in arguments` | `tests/test_kb.py::test_round2_query_adds_peer_summaries_and_flagged_own_claims` |
+| Other roles summaries only | `if a.role != role -> if True` | `tests/test_kb.py::test_round2_query_adds_peer_summaries_and_flagged_own_claims` |
+| Only own Round 1 judge flags | `if score.round == 1 and score.argument_id == own[0].argument_id: -> if True:` | `tests/test_kb.py::test_round2_query_adds_peer_summaries_and_flagged_own_claims` |
+| Untraceable claim flags | `flagged.update(note.claim_id for note in score.untraceable_claims) -> # omit untraceable claims` | `tests/test_kb.py::test_round2_query_adds_peer_summaries_and_flagged_own_claims` |
+| Feedback claim flags | `flagged.update(note.claim_id for note in score.feedback if note.claim_id is not None) -> # omit feedback claims` | `tests/test_kb.py::test_round2_query_adds_peer_summaries_and_flagged_own_claims` |
+| Only flagged claim text | `if claim.claim_id in flagged -> if True` | `tests/test_kb.py::test_round2_query_adds_peer_summaries_and_flagged_own_claims` |
+| Successful own Round 1 needed | `if len(own) != 1 or own[0].status == "failed": -> if False:` | `tests/test_kb.py::test_invalid_round_and_failed_own_argument` |
+| Carry cited passages into Round 2 | `shown.setdefault(id, available[id]) -> pass` | `tests/test_kb.py::test_round2_carries_cited_passages_without_changing_top_five` |
+| Carryover only for correct role and round | `if result.round != 2 or own.round != 1 or own.role != result.role or own.status == "failed": -> if False:` | `tests/test_kb.py::test_round2_carries_cited_passages_without_changing_top_five` |
+| RetrievalResult.role | `RetrievalResult(role=role, round=round, query=query, -> RetrievalResult(role=Role.RED, round=round, query=query,` | `tests/test_kb.py::test_bm25_ranking_scores_and_role_isolation` |
+| RetrievalResult.round | `RetrievalResult(role=role, round=round, query=query, -> RetrievalResult(role=role, round=2, query=query,` | `tests/test_kb.py::test_bm25_ranking_scores_and_role_isolation` |
+| RetrievalResult.query | `RetrievalResult(role=role, round=round, query=query, -> RetrievalResult(role=role, round=round, query="wrong",` | `tests/test_kb.py::test_bm25_ranking_scores_and_role_isolation` |
+| Passage.id from heading | `Passage(id=passage_id, -> Passage(id="SURG-KB-99",` | `tests/test_kb.py::test_load_exact_passages_and_role_fields` |
+| Only two rounds in query | `if round not in (1, 2): /         raise KBError -> if False: /         raise KBError` | `tests/test_kb.py::test_invalid_round_and_failed_own_argument` |
+| Only two rounds in retrieval | `if round not in (1, 2): /             raise KBError -> if False: /             raise KBError` | `tests/test_kb.py::test_invalid_round_and_failed_own_argument` |
+
+Human review starting points:
+
+1. `src/council/kb.py` - `load_kb` / `read_passages`: global IDs, exact text, privacy and warnings.
+2. `src/council/kb.py` - `build_query`: Round 1 and Round 2 inputs.
+3. `src/council/kb.py` - `KnowledgeBase.retrieve`: BM25 scores, role isolation and ID tie-breaking.
