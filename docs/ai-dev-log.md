@@ -45,6 +45,7 @@ One row per task. Fill it in as you go, not at the end.
 | T8 | Implemented `gateway.py` (`LLMGateway`) and `providers/base.py`/`providers/fake.py`, plus the four extra rules requested: privacy check before the budget check, an import-graph test restricting provider SDKs to `providers/`, an API-key-leak test, and a scripted `FakeProvider`. | 956 tests pass; all 30 committed-code mutations (24 gateway, 6 fake provider) detected and restored; contract mapping below. | A crude tokens-in estimate (`len(prompt) // 4`) let real usage exceed the budget reservation and crash `Budget.complete`; switched to `len(prompt)` (a safe upper bound, since no tokenizer produces more tokens than characters) so the reservation can never be undersized. The first version of the tiny-budget mutation test didn't discriminate a `tokens_in`-zeroing mutation, because the output cap alone already exceeded that budget's limit; added a budget sized so the cap fits alone but not with a long prompt, and updated the mutation spec to point at it before re-auditing. Retry now also covers rate limits (`ProviderRateLimit`), not just timeouts, matching design.md's "timeouts and rate limits" wording; the original draft-style plan only had a timeout subtype. | |
 | T1 addendum | Checkpoint A found `Report` was missing the `privacy_summary: PrivacySummary` field that `data-contracts.md` section 8 requires (added to the contracts by `4f4db15`, after T1 was first committed, and never picked up since). Added the `PrivacySummary` model and the `Report` field, following the same pattern as `JudgeSummary`/`ConfidenceInputs`. | 965 tests pass. Re-running the full built-in T1 mutation plan (117 rules; bumped from 116, pinned by `test_mutation_check.py::test_t1_plan`) first found a genuine tool bug: 2 real kills (`Exact enum Role`, `Shape Argument`) scored `SURVIVED/ERROR` because both crash pytest collection rather than producing an ordinary `FAILED` test, which the tool didn't recognize as a kill. Fixed the tool (`tools/mutation_check.py`, commit `27aadb7`) to treat any nonzero pytest exit code as a kill, added a self-test, then re-ran: **117 / 117 `KILLED`**, entirely by the tool itself. | See the tool-bug writeup below: the bug could only undercount kills, never overcount, so no earlier task's reported mutation numbers need re-checking. |
 | T9 | Implemented `agents/prompting.py`: loads prompt files as plain text (never edited or templated), wraps case text/passages/arguments/judge notes as delimited data blocks, appends a JSON schema built from the relevant draft model, and assembles the repair prompt (original body + `repair.md` + a code-generated, numbered issue list). | 992 tests pass; all 22 committed-code mutations detected and restored; contract mapping below. `grep -n "above" prompts/*.md` confirmed every file combination against what the prompt files themselves reference: persona before the round file, rubric before judge.md, chair/red_team standalone, no mismatches found. | Providers are single-shot (one prompt string in, one completion out, no conversation history — confirmed against `providers/base.py`'s `Provider.complete` signature from T8), so a repair call has to resend the entire original body, not just the delta; `repair_prompt` takes the caller's already-composed `*_body` output for exactly this reason. A judge scores every non-failed argument of a round in one call (design.md), so its response schema is `list[ScoreDraft]` via a Pydantic `TypeAdapter`, not a single `ScoreDraft`; `schema_block` accepts either a draft model class or a `TypeAdapter`. Agents that decide what data to show (which passages, which other arguments, which notes) are T10–T14's job; this module only composes and wraps whatever the caller already decided to include. |
+| T9 addendum | The human replaced `repair.md` with two human-authored files, `repair_intro.md` and `repair_fix.md`, and asked for the generated problem list to sit between them instead of after a single file. Updated `repair_prompt` to load both and join them as `[original_body, intro, format_issues(issues), fix]`; updated `docs/tasks.md`'s prompt file table (two rows replacing one) and the missing-file tests (a repair call now requires both files). | 994 tests pass; all 25 committed-code mutations detected and restored (22 -> 25: three of the old repair mutations were superseded by five new ones for the two-file load and the four-way join order). | Neither new file was written by this session — the human supplied their exact text and I wrote them verbatim, per AGENTS.md ("Not yours to write... The human owns them"). `repair_fix.md`'s own wording ("the problems above") only makes sense with the list immediately before it, confirming the requested ordering was necessary, not just requested. |
 
 ### T0 review notes
 
@@ -1260,3 +1261,61 @@ What went wrong / limits:
 | Repair prompt keeps the original body first | move `repair_instructions` before `original_body` | test_repair_prompt_appends_repair_instructions_then_issue_list |
 
 All 22 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
+
+## T9 addendum: repair.md split into repair_intro.md and repair_fix.md
+
+The human deleted `prompts/repair.md` and supplied two replacement files, `repair_intro.md` (the same opening section: what went wrong, why this is the one chance to fix it) and `repair_fix.md` (what to do, what the listed problems might include, the output rule). Both were written verbatim from the human's exact text, not by this session — matching AGENTS.md's rule that `prompts/` is human-owned. `repair_fix.md`'s own wording changed too: it now says "the problems above" (twice) instead of "the problems ... listed below" (originally in the single `repair.md`), which only reads correctly if the generated list sits between the two files rather than after both — the file's own text confirms the requested ordering was necessary, not just a stylistic ask.
+
+`repair_prompt` (`src/council/agents/prompting.py`) now loads both files and joins them as `[original_body, intro, format_issues(issues), fix]` — the generated list sits between `repair_intro.md` and `repair_fix.md`, in its own block, exactly the way it previously sat after the single `repair.md`; neither file's own text is edited or spliced into. `format_issues` itself is unchanged.
+
+Assembled example, for a fake bad-citation case (`role=SURG`, one issue: a citation whose quote wasn't found), the repair-relevant tail (after the specialist's persona/instructions/data, before the JSON schema):
+
+```
+# Repair instructions
+
+Your previous response for this task could not be used. This is your one chance to fix it...
+
+## What was wrong
+
+The specific problems with your last response are listed below, each naming exactly what failed and why. Read every one of them.
+
+## What was wrong
+
+1. Citation R1-SURG-C1 (passage SURG-KB-01): quote not found in passage
+
+## What to do
+
+Produce a corrected response that fixes every problem listed above...
+...
+
+## Output
+
+Respond only with corrected JSON matching the schema provided after this prompt. No text outside the JSON, and no explanation of what you changed — the correction is the response itself.
+```
+followed by the `## Response schema` block. `repair_intro.md`'s own "## What was wrong" section (describing that a list follows) and the generated list's own "## What was wrong" heading (holding the concrete instance) are two separate headings by design — `format_issues` was left unchanged, so this reads exactly as it did when the list sat after the single `repair.md`, just relocated.
+
+#### T9 addendum contract check
+
+| Rule or reference | Implementation | Test |
+|---|---|---|
+| AGENTS.md: "Not yours to write: everything in `prompts/`... The human owns them" | `repair_intro.md`/`repair_fix.md` written verbatim from the human's supplied text | N/A — a human-authored file, not asserted by a test, same as every other prompt file |
+| tasks.md T9: fails loudly on a missing file | `repair_prompt` loads `repair_intro.md` then `repair_fix.md`; either missing raises `PromptFileMissing` before any partial prompt is built | `test_missing_repair_file_fails_loudly` (parametrized over both files), `test_missing_prompt_file_fails_the_whole_assembly_loudly` (repair unaffected when only an unrelated file is missing) |
+| Requested ordering: generated list between `repair_intro.md` and `repair_fix.md`, not after both | `repair_prompt`'s join order `[original_body, intro, format_issues(issues), fix]` | `test_repair_prompt_puts_the_issue_list_between_intro_and_fix` |
+| Neither file is edited or templated; the list is its own block | `intro`/`fix` are `load_prompt` output used unmodified; `format_issues(issues)` is a separate list element in the `"\n\n".join([...])` call | `test_repair_prompt_puts_the_issue_list_between_intro_and_fix` (asserts the loaded file text appears verbatim, and the list's own heading is located strictly between them) |
+| docs/tasks.md section 3 prompt file table reflects the two files | Replaced the single `repair.md` row with `repair_intro.md`/`repair_fix.md` rows | Not code-tested; a docs-only table, reviewed by hand |
+
+#### T9 addendum mutation audit
+
+```powershell
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/agents/prompting.py --spec tools/t9_prompting_mutations.json
+```
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Repair prompt loads repair_intro.md | load `repair_fix.md` instead | test_repair_prompt_puts_the_issue_list_between_intro_and_fix |
+| Repair prompt loads repair_fix.md | load `repair_intro.md` instead | test_repair_prompt_puts_the_issue_list_between_intro_and_fix |
+| Repair body keeps the original body first | move `intro` before `original_body` | test_repair_prompt_puts_the_issue_list_between_intro_and_fix |
+| Repair body puts the issue list between intro and fix, not after both | move the issue list to the end, after `fix` (the old, pre-addendum behavior) | test_repair_prompt_puts_the_issue_list_between_intro_and_fix |
+| Repair body loads intro before fix | swap `intro` and `fix` in the join | test_repair_prompt_puts_the_issue_list_between_intro_and_fix |
+
+All other 20 mutations (file loading, data wrapping, schema, specialist/judge/chair/red_team assembly, `format_issues`) are unchanged from the original T9 audit and were re-confirmed `KILLED` in the same run. 25 of 25 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
