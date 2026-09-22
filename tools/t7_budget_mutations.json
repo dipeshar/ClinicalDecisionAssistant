@@ -1,0 +1,200 @@
+[
+  {
+    "rule": "Private config snapshot",
+    "old": "self._config = config.model_copy(deep=True)",
+    "new": "self._config = config",
+    "test": "test_initial_state_config_and_snapshot_are_isolated"
+  },
+  {
+    "rule": "Detached state snapshot",
+    "old": "return self._state.model_copy(deep=True)\n\n    def output_cap",
+    "new": "return self._state\n\n    def output_cap",
+    "test": "test_initial_state_config_and_snapshot_are_isolated"
+  },
+  {
+    "rule": "Snapshot guarded by shared lock",
+    "old": "with self._lock:\n            return self._state.model_copy",
+    "new": "with __import__(\"contextlib\").nullcontext():\n            return self._state.model_copy",
+    "test": "test_budget_operations_wait_for_shared_lock"
+  },
+  {
+    "rule": "Admission guarded by shared lock",
+    "old": "with self._lock:\n            config = self._config",
+    "new": "with __import__(\"contextlib\").nullcontext():\n            config = self._config",
+    "test": "test_budget_operations_wait_for_shared_lock"
+  },
+  {
+    "rule": "Settlement guarded by shared lock",
+    "old": "with self._lock:\n            if reservation not in self._pending:",
+    "new": "with __import__(\"contextlib\").nullcontext():\n            if reservation not in self._pending:",
+    "test": "test_budget_operations_wait_for_shared_lock"
+  },
+  {
+    "rule": "Identity-based reservation ownership",
+    "old": "@dataclass(frozen=True, eq=False)",
+    "new": "@dataclass(frozen=True)",
+    "test": "test_settlement_rejects_unknown_duplicate_and_over_bound_usage"
+  },
+  {
+    "rule": "Nonnegative integer accounting",
+    "old": "if type(value) is not int or value < 0:",
+    "new": "if False:",
+    "test": "test_invalid_token_counts_never_change_state"
+  },
+  {
+    "rule": "Output cap specialist",
+    "old": "return self._config.max_tokens_per_call.specialist",
+    "new": "return self._config.max_tokens_per_call.specialist + 1",
+    "test": "test_role_output_caps"
+  },
+  {
+    "rule": "Output cap judge",
+    "old": "return self._config.max_tokens_per_call.judge",
+    "new": "return self._config.max_tokens_per_call.judge + 1",
+    "test": "test_role_output_caps"
+  },
+  {
+    "rule": "Output cap red_team",
+    "old": "return self._config.max_tokens_per_call.red_team",
+    "new": "return self._config.max_tokens_per_call.red_team + 1",
+    "test": "test_role_output_caps"
+  },
+  {
+    "rule": "Output cap chair",
+    "old": "return self._config.max_tokens_per_call.chair",
+    "new": "return self._config.max_tokens_per_call.chair + 1",
+    "test": "test_role_output_caps"
+  },
+  {
+    "rule": "Requested output respects cap",
+    "old": "if output > cap:",
+    "new": "if False:",
+    "test": "test_role_output_caps"
+  },
+  {
+    "rule": "Only chair spends reserve",
+    "old": "chair = role == Role.CHAIR",
+    "new": "chair = True",
+    "test": "test_only_chair_can_spend_token_reserve"
+  },
+  {
+    "rule": "Exhaustion stops non-chair attempts",
+    "old": "if self._state.exhausted and not chair:",
+    "new": "if False:",
+    "test": "test_exhaustion_stays_visible_and_stops_other_roles"
+  },
+  {
+    "rule": "Token reserve withheld",
+    "old": "(0 if chair else config.chair_reserve.tokens)",
+    "new": "0",
+    "test": "test_only_chair_can_spend_token_reserve"
+  },
+  {
+    "rule": "Call reserve withheld",
+    "old": "(0 if chair else config.chair_reserve.calls)",
+    "new": "0",
+    "test": "test_call_limit_counts_every_attempt_even_zero_usage_failures"
+  },
+  {
+    "rule": "Time reserve withheld",
+    "old": "(0 if chair else config.chair_reserve.seconds)",
+    "new": "0",
+    "test": "test_time_limits_and_chair_reserve_use_elapsed_time"
+  },
+  {
+    "rule": "Elapsed time measured from start",
+    "old": "(self._clock() - self._state.started_at)",
+    "new": "self._clock()",
+    "test": "test_time_limits_and_chair_reserve_use_elapsed_time"
+  },
+  {
+    "rule": "Input tokens reserved",
+    "old": "total = tokens_in + output",
+    "new": "total = output",
+    "test": "test_pending_reservations_prevent_oversubscription"
+  },
+  {
+    "rule": "Output tokens reserved",
+    "old": "total = tokens_in + output",
+    "new": "total = tokens_in",
+    "test": "test_pending_reservations_prevent_oversubscription"
+  },
+  {
+    "rule": "Pending tokens count against limit",
+    "old": "sum(self._pending.values())",
+    "new": "0",
+    "test": "test_pending_reservations_prevent_oversubscription"
+  },
+  {
+    "rule": "Exact token limit is usable",
+    "old": "+ total > token_limit:",
+    "new": "+ total >= token_limit:",
+    "test": "test_only_chair_can_spend_token_reserve"
+  },
+  {
+    "rule": "Call cap cannot be exceeded",
+    "old": "self._state.calls_used >= call_limit",
+    "new": "self._state.calls_used > call_limit",
+    "test": "test_call_limit_counts_every_attempt_even_zero_usage_failures"
+  },
+  {
+    "rule": "Time deadline rejects at boundary",
+    "old": "elif remaining <= 0:",
+    "new": "elif remaining < 0:",
+    "test": "test_time_limits_and_chair_reserve_use_elapsed_time"
+  },
+  {
+    "rule": "Exhausted flag recorded",
+    "old": "self._state.exhausted = True",
+    "new": "self._state.exhausted = False",
+    "test": "test_pending_reservations_prevent_oversubscription"
+  },
+  {
+    "rule": "Exhaustion reason recorded",
+    "old": "self._state.reason = reason",
+    "new": "self._state.reason = None",
+    "test": "test_pending_reservations_prevent_oversubscription"
+  },
+  {
+    "rule": "Every admitted attempt counted once",
+    "old": "self._state.calls_used += 1",
+    "new": "self._state.calls_used += 2",
+    "test": "test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps"
+  },
+  {
+    "rule": "Actual input bound checked",
+    "old": "tokens_in > reservation.tokens_in or tokens_out > reservation.max_tokens_out",
+    "new": "tokens_out > reservation.max_tokens_out",
+    "test": "test_settlement_rejects_unknown_duplicate_and_over_bound_usage"
+  },
+  {
+    "rule": "Actual output bound checked",
+    "old": "tokens_in > reservation.tokens_in or tokens_out > reservation.max_tokens_out",
+    "new": "tokens_in > reservation.tokens_in",
+    "test": "test_settlement_rejects_unknown_duplicate_and_over_bound_usage"
+  },
+  {
+    "rule": "Actual input tokens counted",
+    "old": "self._state.tokens_used += tokens_in + tokens_out",
+    "new": "self._state.tokens_used += tokens_out",
+    "test": "test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps"
+  },
+  {
+    "rule": "Actual output tokens counted",
+    "old": "self._state.tokens_used += tokens_in + tokens_out",
+    "new": "self._state.tokens_used += tokens_in",
+    "test": "test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps"
+  },
+  {
+    "rule": "Settlement releases reservation exactly once",
+    "old": "del self._pending[reservation]",
+    "new": "pass  # deliberately retain reservation",
+    "test": "test_parallel_same_reservation_is_settled_once"
+  },
+  {
+    "rule": "Returned settlement snapshot cannot alter budget",
+    "old": "del self._pending[reservation]\n            return self._state.model_copy(deep=True)",
+    "new": "del self._pending[reservation]\n            return self._state",
+    "test": "test_settlement_releases_unused_room_and_counts_both_token_directions"
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "rule": "Existing trace never overwritten",
+    "old": "self._path.open(\"xb\")",
+    "new": "self._path.open(\"wb\")",
+    "test": "test_existing_trace_is_never_overwritten"
+  },
+  {
+    "rule": "Sequence and write share a lock",
+    "old": "with self._lock:",
+    "new": "with __import__(\"contextlib\").nullcontext():",
+    "test": "test_trace_write_waits_for_shared_lock"
+  },
+  {
+    "rule": "Writer owns run ID",
+    "old": "run_id=self._run_id, seq=",
+    "new": "run_id=event.run_id, seq=",
+    "test": "test_trace_jsonl_preserves_fields_and_owns_order_and_time"
+  },
+  {
+    "rule": "Gapless incrementing sequence",
+    "old": "seq=self._seq + 1",
+    "new": "seq=self._seq + 2",
+    "test": "test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps"
+  },
+  {
+    "rule": "Writer owns timestamp",
+    "old": "timestamp=datetime.now(timezone.utc).isoformat()",
+    "new": "timestamp=event.timestamp",
+    "test": "test_trace_jsonl_preserves_fields_and_owns_order_and_time"
+  },
+  {
+    "rule": "Full event data preserved",
+    "old": "data = event.model_dump()",
+    "new": "data = event.model_dump()\n            data[\"raw_output\"] = None",
+    "test": "test_trace_jsonl_preserves_fields_and_owns_order_and_time"
+  },
+  {
+    "rule": "JSON lines separated",
+    "old": "recorded.model_dump_json() + \"\\n\"",
+    "new": "recorded.model_dump_json()",
+    "test": "test_trace_jsonl_preserves_fields_and_owns_order_and_time"
+  },
+  {
+    "rule": "Append never truncates existing events",
+    "old": "self._path.open(\"ab\")",
+    "new": "self._path.open(\"wb\")",
+    "test": "test_trace_jsonl_preserves_fields_and_owns_order_and_time"
+  },
+  {
+    "rule": "Short write treated as failure",
+    "old": "if written != len(payload):",
+    "new": "if False:",
+    "test": "test_short_write_stops_writer"
+  },
+  {
+    "rule": "Failed writer remains stopped",
+    "old": "self._failed = True",
+    "new": "self._failed = False",
+    "test": "test_write_failure_is_explicit_and_writer_stops"
+  },
+  {
+    "rule": "Advance sequence after successful write",
+    "old": "self._seq = recorded.seq",
+    "new": "self._seq = 0",
+    "test": "test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps"
+  }
+]
