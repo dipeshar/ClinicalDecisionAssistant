@@ -42,6 +42,7 @@ One row per task. Fill it in as you go, not at the end.
 | T5 | Implemented isolated quote normalization, source/turn checks, citation verification and current claim grounding checks. | 838 tests pass; all 33 mutations detected and restored. Every requested quote rule has a separate named test. | No test failures or surviving mutations during implementation/audit. The requested quote rule is rule 4 in section 13, rather than section 4. | |
 | T6 | Implemented final-argument selection, dissent, strict-majority warning and confidence formula. | 892 tests pass; all 45 committed-code mutations detected and restored; contract mapping below. | Initially stopped on two contract gaps, resolved by the human. Discarded stale doc edits only with explicit authorization. Corrected one test fixture arithmetic error. | |
 | T7 | Reviewed a prior session's unfinished draft of `budget.py`/`trace.py` as a pull request against the contracts, then ran the tests and the full end-of-task routine myself (nothing from the draft was assumed correct). | 929 tests pass; all 44 committed-code mutations (33 budget, 11 trace) detected and restored; contract mapping below. The existing race test (32 threads, configurable `--race-iterations`, default 25) was re-run at 300 iterations/thread (9600 calls) to confirm the concurrency requirement holds at a meaningful scale, not just the default. | The draft had no dev-log entry, no mutation run, and the mutation spec/test files were still untracked, so the mutation tool's clean-tree/`git restore` check could not run until the code and specs were committed first (matching the T6 precedent of committing the spec file before auditing). No code changes were needed; the draft matched the contracts. | |
+| T8 | Implemented `gateway.py` (`LLMGateway`) and `providers/base.py`/`providers/fake.py`, plus the four extra rules requested: privacy check before the budget check, an import-graph test restricting provider SDKs to `providers/`, an API-key-leak test, and a scripted `FakeProvider`. | 956 tests pass; all 30 committed-code mutations (24 gateway, 6 fake provider) detected and restored; contract mapping below. | A crude tokens-in estimate (`len(prompt) // 4`) let real usage exceed the budget reservation and crash `Budget.complete`; switched to `len(prompt)` (a safe upper bound, since no tokenizer produces more tokens than characters) so the reservation can never be undersized. The first version of the tiny-budget mutation test didn't discriminate a `tokens_in`-zeroing mutation, because the output cap alone already exceeded that budget's limit; added a budget sized so the cap fits alone but not with a long prompt, and updated the mutation spec to point at it before re-auditing. Retry now also covers rate limits (`ProviderRateLimit`), not just timeouts, matching design.md's "timeouts and rate limits" wording; the original draft-style plan only had a timeout subtype. | |
 
 ### T0 review notes
 
@@ -1032,3 +1033,93 @@ Re-run from a clean checkout with the project virtual environment, after committ
 | Advance sequence after successful write | `self._seq = recorded.seq` -> `= 0` | test_parallel_budget_and_trace_no_lost_tokens_or_sequence_gaps |
 
 All 44 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
+
+### T8: gateway and fake provider
+
+`LLMGateway.call()` is the one path from agent code to a model. Per call it: runs the privacy check (contracts rule 20 — provider must be in `privacy.approved_providers`, and the prompt must match none of `privacy.py`'s shared `IDENTIFIER_PATTERNS` via `scan_identifiers`, reused rather than duplicated); then loops over up to `retries.max_api_attempts` (2) attempts, each one reserving budget room through `Budget.check_and_reserve` before calling the provider, retrying only `ProviderTimeout`/`ProviderRateLimit` with a configured wait, and writing exactly one `TraceEvent` per attempt (plus one `privacy_block` or `budget` event for a refusal, before any attempt is made, with `prompt` left null so nothing sent is ever recorded for a call that never went out). `model_choice_for`/`temperature_for` select the model and temperature per role from config (specialists share one model, judges another, matching design.md). Bad JSON is returned as plain text, untouched — parsing and repair remain later tasks' job.
+
+`providers/base.py` defines `Provider` (one `complete` method) and `ProviderError`/`ProviderTimeout`/`ProviderRateLimit`; `providers/fake.py`'s `FakeProvider` replays a fixed script of `Scripted` outcomes or exception types, one per call, under its own lock, so a test can drive an exact sequence (good output, bad JSON text, a timeout, a rate limit) without a real model or network call.
+
+What went wrong / limits:
+
+- The first `estimate_tokens_in` used `len(prompt) // 4` chars-per-token, a plausible average but not a bound: a real successful call reporting `tokens_in` above that estimate made `Budget.complete` raise (`"actual usage exceeds the reserved bounds"`), since T7's `Budget.complete` requires settled usage to fall inside the reservation. Switched to `len(prompt)` itself: since no realistic tokenizer produces more tokens than there are characters in its input, that is a genuine upper bound, not just a typical one. The reservation over-reserves briefly; `Budget.complete` releases the unused room once real usage is known, so nothing is wasted long-term.
+- The first tiny-budget mutation test (rule: "the reservation uses the token estimate, not a hardcoded value") survived its own mutation check: the budget's output cap alone already exceeded its limit (because of the chair-reserve subtraction), so forcing `tokens_in = 0` didn't change the outcome. Added `test_reservation_accounts_for_prompt_length_not_just_the_output_cap`, with a budget sized so the cap fits by itself but not with a 10-character prompt added, then re-pointed the mutation spec at it and re-ran the full audit (all 24 gateway mutations killed).
+- Retrying only `ProviderTimeout` would have missed design.md's explicit "Retry API errors (timeouts, rate limits)" wording, so added `ProviderRateLimit` as a second retryable subtype of `ProviderError` and a `RETRYABLE_ERRORS` tuple, with its own test (`test_rate_limit_retries_once_then_succeeds`).
+- The API-key test (`test_api_keys_never_appear_in_trace_or_run_bundle`) is necessarily a stand-in: no real provider adapter exists yet (that's T17, after live keys exist), so it uses a test-only `KeyHoldingProvider` that holds a fake key from an env var the way a real T17 adapter will, and asserts the key never appears in the written trace file or in a `{config_snapshot, trace_events}` bundle shaped like the relevant parts of `run.json` (which itself isn't assembled until T14/T15). This pins the invariant now; it cannot prove a not-yet-written real adapter will honor it, only that nothing in the gateway/trace path does anything with a key it is handed.
+- Repair retries (separate from API retries, contracts section 13 rule 1) are not implemented here; `call()` accepts and records a `repair` flag on the trace event, but driving the one-repair-per-turn loop is T10's job, layered on top of the gateway.
+- No real provider SDK is installed or imported anywhere (AGENTS.md: no network, minimum dependencies); `providers/base.py`/`fake.py` are the only files in the package today, and the import-graph test (`test_no_module_outside_providers_imports_a_provider_sdk`) enforces that anything beyond the stdlib and the project's declared dependencies (`pydantic`, `yaml`, `rank_bm25`) stays inside `providers/`, so a future real adapter cannot leak its SDK import elsewhere without failing this test.
+
+#### T8 contract check
+
+Implementations are in `src/council/gateway.py` and `src/council/providers/`; tests are in `tests/test_gateway.py` and `tests/test_providers.py`.
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| design.md gateway step 1 / contracts rule 20: privacy checked before the budget check | `LLMGateway.call` calls `_refuse_if_privacy_blocked` before the budget/attempt loop | test_privacy_check_runs_before_the_budget_check |
+| Contracts rule 20: provider must be in `privacy.approved_providers` | `_refuse_if_privacy_blocked` | test_privacy_blocks_unapproved_provider_before_any_attempt |
+| Contracts rule 20: prompt must match no identifier pattern (shared list, not duplicated) | `_refuse_if_privacy_blocked` calls `council.privacy.scan_identifiers` | test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it |
+| Contracts rule 20 / design.md: a hit writes one `privacy_block` event with the kind only, never the value or the prompt | `_refuse_if_privacy_blocked` trace write: `error=reason` (kind text only), `prompt=None` | test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it |
+| Contracts rule 10 / design.md gateway step 2: budget checked before every call, refused when exhausted | `_reserve_or_refuse` via `Budget.check_and_reserve` | test_tiny_budget_refuses_the_call_and_writes_one_budget_event, test_reservation_accounts_for_prompt_length_not_just_the_output_cap |
+| A budget refusal also writes one event and never records the prompt | `_reserve_or_refuse` trace write, `event_type=EventType.BUDGET`, `prompt=None` | test_tiny_budget_refuses_the_call_and_writes_one_budget_event |
+| design.md gateway step 3: model picked per role from config, judges on a different model from specialists | `model_choice_for` | test_model_choice_for_maps_each_role_to_its_own_config_field, test_role_selects_configured_model_and_temperature |
+| Section 11 `temperature`: per-role value, used only if the model allows it | `temperature_for` | test_temperature_for_maps_each_role_to_its_own_config_field |
+| Section 11 `retries.max_api_attempts` (2); design.md: retry timeouts and rate limits with a short wait | `call()`'s attempt loop, `RETRYABLE_ERRORS`, `self._sleep(retries.api_retry_wait_seconds)` | test_timeout_retries_once_then_succeeds, test_rate_limit_retries_once_then_succeeds, test_timeout_twice_exhausts_attempts_and_refuses, test_non_timeout_provider_error_does_not_retry |
+| design.md: "A retry ... is a new call through the gateway. It counts against the budget and appears in the trace." | reservation acquired inside the loop, once per attempt; one `TraceEvent` per attempt | test_every_attempt_counts_against_the_budget, test_timeout_retries_once_then_succeeds |
+| Section 10 TraceEvent: prompt, raw_output, model, tokens_in/out, latency_ms, attempt, repair, budget_tokens_used, error | `call()`'s success/error trace writes | test_successful_call_returns_output_and_writes_one_llm_call_event |
+| Section 10 `attempt: Literal[1, 2]` | loop bounded by `retries.max_api_attempts` (fixed at 2 by T2's config validation) | test_timeout_twice_exhausts_attempts_and_refuses |
+| design.md: "Bad JSON is not the gateway's job." | `call()` returns `response.raw_output` unparsed on success | test_bad_json_output_is_returned_as_is_grounding_is_not_gateways_job |
+| Section 11: "Agents never call a provider directly. There is no other path to a model." / tasks.md T8: a test fails if any module outside `providers/` imports a provider SDK | `providers/` package boundary; `LLMGateway` is the only caller of `Provider.complete` | test_no_module_outside_providers_imports_a_provider_sdk |
+| Contracts rule 21: API keys never appear in `trace.jsonl` or `run.json` | gateway/trace path never reads or forwards environment values; test-only `KeyHoldingProvider` stands in for a future real adapter | test_api_keys_never_appear_in_trace_or_run_bundle |
+| design.md: "One unit test: with a tiny budget, the call is refused." | `Budget.check_and_reserve` raising `BudgetExhausted`, converted to `GatewayRefusal` | test_tiny_budget_refuses_the_call_and_writes_one_budget_event |
+| tasks.md T8: `FakeProvider` supports scripted responses (good output, bad JSON, a timeout) so later tasks can drive specific scenarios | `providers/fake.py` `Scripted` / exception-type script entries | tests/test_providers.py (good output, bad JSON, timeout, rate limit, script order, exhaustion, cap enforcement) |
+
+#### T8 mutation audit
+
+Re-run from a clean checkout with the project virtual environment, after committing the code, tests and mutation specs:
+
+```powershell
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/gateway.py --spec tools/t8_gateway_mutations.json
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/providers/fake.py --spec tools/t8_providers_mutations.json
+```
+
+**gateway.py (24 mutations)**
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Provider approval checked before any attempt | `if provider not in ... approved_providers:` -> `if False:` | test_privacy_blocks_unapproved_provider_before_any_attempt |
+| Identifier scan actually runs on the prompt | `hits = scan_identifiers(prompt)` -> `hits = []` | test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it |
+| Privacy block never records the prompt | `prompt=None` (privacy block) -> `prompt=prompt` | test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it |
+| Privacy refusal is actually raised | `raise GatewayRefusal(reason)` -> `pass` | test_privacy_blocks_unapproved_provider_before_any_attempt |
+| Budget exhaustion is caught and converted to a refusal | `except BudgetExhausted as error:` -> `except TypeError as error:` | test_tiny_budget_refuses_the_call_and_writes_one_budget_event |
+| Budget refusal never records the prompt | `prompt=None` (budget refusal) -> `prompt="leaked"` | test_tiny_budget_refuses_the_call_and_writes_one_budget_event |
+| Budget refusal is actually raised | `raise GatewayRefusal(str(error)) from error` -> `pass` | test_tiny_budget_refuses_the_call_and_writes_one_budget_event |
+| Retry is limited to retryable error types | `isinstance(error, RETRYABLE_ERRORS)` -> `True` | test_non_timeout_provider_error_does_not_retry |
+| A retryable error actually retries instead of refusing immediately | drop the `continue` after `self._sleep(...)` | test_timeout_retries_once_then_succeeds |
+| Settlement uses the actual response tokens, not zero | `budget.complete(reservation, response.tokens_in, response.tokens_out)` -> `(reservation, 0, 0)` | test_successful_call_returns_output_and_writes_one_llm_call_event |
+| Successful trace event records the actual tokens_in | `tokens_in=response.tokens_in` -> `tokens_in=0` | test_successful_call_returns_output_and_writes_one_llm_call_event |
+| Successful trace event records the actual tokens_out | `tokens_out=response.tokens_out` -> `tokens_out=0` | test_successful_call_returns_output_and_writes_one_llm_call_event |
+| GatewayResult carries the provider's actual latency | `GatewayResult(..., latency_ms)` -> `GatewayResult(..., 0)` | test_successful_call_returns_output_and_writes_one_llm_call_event |
+| Model choice: specialist roles use models.specialist | `return config.models.specialist` -> `return config.models.chair` | test_model_choice_for_maps_each_role_to_its_own_config_field |
+| Model choice: chair uses models.chair | `return config.models.chair` -> `return config.models.red_team` | test_model_choice_for_maps_each_role_to_its_own_config_field |
+| Model choice: red team uses models.red_team | `return config.models.red_team` -> `return config.models.chair` | test_model_choice_for_maps_each_role_to_its_own_config_field |
+| Model choice: judge A and judge B are not interchangeable | swap the `judge_a`/`judge_b` branches | test_model_choice_for_maps_each_role_to_its_own_config_field |
+| Temperature: specialist roles use temperature.specialist | `return config.temperature.specialist` -> `return config.temperature.chair` | test_temperature_for_maps_each_role_to_its_own_config_field |
+| Temperature: judges use temperature.judge | `return config.temperature.judge` -> `return config.temperature.red_team` | test_temperature_for_maps_each_role_to_its_own_config_field |
+| Temperature: red team uses temperature.red_team | `return config.temperature.red_team` -> `return config.temperature.judge` | test_temperature_for_maps_each_role_to_its_own_config_field |
+| Temperature: chair uses temperature.chair | `return config.temperature.chair` -> `return config.temperature.specialist` | test_temperature_for_maps_each_role_to_its_own_config_field |
+| Construction requires a registered provider for every configured role | `if choice["provider"] not in providers:` -> `if False:` | test_gateway_construction_requires_a_provider_for_every_configured_role |
+| The role's budget output cap sizes the provider call, not an arbitrary value | `cap = self._budget.output_cap(role)` -> `cap = 1` | test_successful_call_returns_output_and_writes_one_llm_call_event |
+| The reservation uses the token estimate, not a hardcoded value | `tokens_in = estimate_tokens_in(prompt)` -> `tokens_in = 0` | test_reservation_accounts_for_prompt_length_not_just_the_output_cap |
+
+**providers/fake.py (6 mutations)**
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Script advances one outcome per call | drop `self._index += 1` | test_script_replays_in_order_one_outcome_per_call |
+| Script exhaustion raises ProviderError | `if self._index >= len(self._script):` -> `if False:` | test_script_exhaustion_raises_provider_error |
+| Reserved output cap is enforced | `if outcome.tokens_out > max_tokens:` -> `if False:` | test_output_exceeding_the_reserved_cap_is_a_provider_error |
+| A scripted exception type is actually raised | `if isinstance(outcome, type) and issubclass(...)` -> `if False:` | test_scripted_timeout_is_raised |
+| An empty script is rejected at construction | `if not script:` -> `if False:` | test_empty_script_is_rejected_at_construction |
+| calls_made reflects the real call count | `return self._index` -> `return 0` | test_script_replays_in_order_one_outcome_per_call |
+
+All 30 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
