@@ -1,0 +1,116 @@
+[
+  {
+    "rule": "render_argument includes the source text for each citation",
+    "old": "lines.append(f\"  - cites {citation.passage_id}: \\\"{citation.quote}\\\" \u2014 source: {source_text}\")",
+    "new": "lines.append(f\"  - cites {citation.passage_id}: \\\"{citation.quote}\\\"\")",
+    "test": "test_render_argument_shows_citation_source_text"
+  },
+  {
+    "rule": "truncate_feedback caps the number of notes",
+    "old": "kept = list(feedback)[:max_notes]",
+    "new": "kept = list(feedback)",
+    "test": "test_feedback_is_cut_to_the_configured_limits"
+  },
+  {
+    "rule": "truncate_feedback caps each note's word count",
+    "old": "return [{\"claim_id\": note[\"claim_id\"], \"note\": \" \".join(note[\"note\"].split()[:max_words])} for note in kept]",
+    "new": "return [{\"claim_id\": note[\"claim_id\"], \"note\": note[\"note\"]} for note in kept]",
+    "test": "test_feedback_is_cut_to_the_configured_limits"
+  },
+  {
+    "rule": "Round 1 counterarguments is forced null regardless of the model's answer",
+    "old": "counterarguments = None if round_number == 1 else draft.counterarguments",
+    "new": "counterarguments = draft.counterarguments",
+    "test": "test_round1_counterarguments_is_forced_null"
+  },
+  {
+    "rule": "Round 2 feedback is forced empty regardless of the model's answer",
+    "old": "feedback = [] if round_number == 2 else truncate_feedback(",
+    "new": "feedback = truncate_feedback(",
+    "test": "test_round2_feedback_is_forced_empty"
+  },
+  {
+    "rule": "build_score records which model actually produced the score",
+    "old": "groundedness=draft.groundedness, logic=draft.logic, uncertainty=draft.uncertainty,",
+    "new": "groundedness=1, logic=draft.logic, uncertainty=draft.uncertainty,",
+    "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
+  },
+  {
+    "rule": "Only arguments of the requested round are eligible",
+    "old": "if argument.round == round_number and argument.status != \"failed\"]",
+    "new": "if argument.status != \"failed\"]",
+    "test": "test_failed_and_wrong_round_arguments_are_skipped"
+  },
+  {
+    "rule": "Failed arguments are not eligible",
+    "old": "eligible = [argument for argument in arguments\n               if argument.round == round_number and argument.status != \"failed\"]",
+    "new": "eligible = [argument for argument in arguments\n               if argument.round == round_number]",
+    "test": "test_failed_and_wrong_round_arguments_are_skipped"
+  },
+  {
+    "rule": "No eligible arguments means no gateway call and no failure",
+    "old": "    if not eligible:\n        return [], [], False",
+    "new": "    if not eligible:\n        return [], [], True",
+    "test": "test_no_eligible_arguments_makes_no_gateway_call"
+  },
+  {
+    "rule": "The arguments are actually shuffled before presenting",
+    "old": "    shuffle(shown)\n    presented_order",
+    "new": "    presented_order",
+    "test": "test_shuffled_order_is_recorded_and_matches_what_was_scored"
+  },
+  {
+    "rule": "presented_order reflects the shuffled order, not the original order",
+    "old": "presented_order = [argument.argument_id for argument in shown]",
+    "new": "presented_order = [argument.argument_id for argument in eligible]",
+    "test": "test_shuffled_order_is_recorded_and_matches_what_was_scored"
+  },
+  {
+    "rule": "Each shown argument's own passages are added to the sources shown to the judge",
+    "old": "sources.update(passage_sources)",
+    "new": "pass",
+    "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
+  },
+  {
+    "rule": "The case is included in the judge's prompt",
+    "old": "data_blocks = [(\"Case\", render_case(case))]",
+    "new": "data_blocks = []",
+    "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
+  },
+  {
+    "rule": "Every shown argument is included in the judge's prompt",
+    "old": "data_blocks.extend((argument.argument_id, render_argument(argument, sources)) for argument in shown)",
+    "new": "pass",
+    "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
+  },
+  {
+    "rule": "A response with the wrong number of scores is treated as an issue needing repair",
+    "old": "if len(scores) != len(shown):",
+    "new": "if False:",
+    "test": "test_array_length_mismatch_triggers_repair"
+  },
+  {
+    "rule": "Round 2 requires a counterarguments score from every argument",
+    "old": "        if round_number == 2:\n            return [RepairIssue(f\"Score for {argument.argument_id}\",\n                                \"counterarguments score is required in Round 2\")\n                    for argument, score in zip(shown, scores) if score.counterarguments is None]",
+    "new": "        if round_number == 1:\n            return [RepairIssue(f\"Score for {argument.argument_id}\",\n                                \"counterarguments score is required in Round 2\")\n                    for argument, score in zip(shown, scores) if score.counterarguments is None]",
+    "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
+  },
+  {
+    "rule": "A missing counterarguments score is actually detected",
+    "old": "if score.counterarguments is None]",
+    "new": "if score.counterarguments is not None]",
+    "test": "test_round2_missing_counterarguments_triggers_repair"
+  },
+  {
+    "rule": "A call that never produced a draft is reported as failed",
+    "old": "        assert failure_reason is not None  # call_and_parse_with_repair always explains a None draft\n        return [], [], True",
+    "new": "        assert failure_reason is not None  # call_and_parse_with_repair always explains a None draft\n        return [], [], False",
+    "test": "test_bad_json_twice_fails_the_call"
+  },
+  {
+    "rule": "Scores are matched to the shuffled argument order, not the original order",
+    "old": "for argument, score_draft in zip(shown, draft)]",
+    "new": "for argument, score_draft in zip(reversed(shown), draft)]",
+    "test": "test_shuffled_order_is_recorded_and_matches_what_was_scored"
+  }
+]
