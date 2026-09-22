@@ -1,0 +1,122 @@
+[
+  {
+    "rule": "render_case labels each section with its ID",
+    "old": "return \"\\n\\n\".join(f\"## {section.heading} ({section.id})\\n{section.text}\" for section in case.sections)",
+    "new": "return \"\\n\\n\".join(f\"## {section.heading}\\n{section.text}\" for section in case.sections)",
+    "test": "test_render_case_labels_every_section_with_its_id"
+  },
+  {
+    "rule": "render_passages labels each passage with its ID",
+    "old": "return \"\\n\\n\".join(f\"## {passage.id} \u2014 {passage.source_title}\\n{passage.text}\" for passage in passages)",
+    "new": "return \"\\n\\n\".join(f\"## {passage.source_title}\\n{passage.text}\" for passage in passages)",
+    "test": "test_render_passages_labels_every_passage_with_its_id"
+  },
+  {
+    "rule": "render_passages handles no passages retrieved",
+    "old": "    if not passages:\n        return \"(no passages were retrieved)\"",
+    "new": "    if False:\n        return \"(no passages were retrieved)\"",
+    "test": "test_render_passages_handles_no_passages_retrieved"
+  },
+  {
+    "rule": "parse_draft catches ValidationError specifically",
+    "old": "except ValidationError as error:\n        return None, describe_validation_error(error)",
+    "new": "except TypeError as error:\n        return None, describe_validation_error(error)",
+    "test": "test_bad_json_twice_fails_the_turn"
+  },
+  {
+    "rule": "ground_argument assigns one-based claim IDs",
+    "old": "for index, claim in enumerate(draft.claims, start=1)]",
+    "new": "for index, claim in enumerate(draft.claims, start=0)]",
+    "test": "test_good_output_produces_a_grounded_ok_argument"
+  },
+  {
+    "rule": "Repair only triggers when issues were actually found",
+    "old": "if draft is not None and not issues:",
+    "new": "if draft is not None:",
+    "test": "test_bad_citation_twice_leaves_the_claim_ungrounded_but_the_turn_ok"
+  },
+  {
+    "rule": "Repair issues fall back to the parse error only when there is no draft",
+    "old": "repair_issues = issues if draft is not None else [",
+    "new": "repair_issues = [] if draft is not None else [",
+    "test": "test_bad_citation_twice_leaves_the_claim_ungrounded_but_the_turn_ok"
+  },
+  {
+    "rule": "The repair call is marked repair=True",
+    "old": "repaired = gateway.call(role=role, step=step, round_number=round_number, prompt=repair_text,\n                                repair=True, retrieved_passage_ids=list(retrieved_ids))",
+    "new": "repaired = gateway.call(role=role, step=step, round_number=round_number, prompt=repair_text,\n                                repair=False, retrieved_passage_ids=list(retrieved_ids))",
+    "test": "test_bad_json_then_fixed_uses_the_repair_retry"
+  },
+  {
+    "rule": "A first-call refusal is not counted as having used a repair",
+    "old": "return None, False, f\"gateway refused the call: {error}\"",
+    "new": "return None, True, f\"gateway refused the call: {error}\"",
+    "test": "test_gateway_refusal_on_first_call_fails_the_turn_without_a_repair"
+  },
+  {
+    "rule": "A repair-call refusal is counted as having used a repair",
+    "old": "return None, True, f\"gateway refused the repair attempt: {error}\"",
+    "new": "return None, False, f\"gateway refused the repair attempt: {error}\"",
+    "test": "test_gateway_refusal_on_repair_call_still_marks_repair_used"
+  },
+  {
+    "rule": "A successfully repaired draft is actually returned",
+    "old": "return repaired_draft, True, None",
+    "new": "return None, True, None",
+    "test": "test_bad_json_then_fixed_uses_the_repair_retry"
+  },
+  {
+    "rule": "A claim with no citations is treated as an issue needing repair",
+    "old": "        if not claim.citations:\n            issues.append(RepairIssue(f\"Claim {claim.claim_id}\", \"no citation was given\"))\n            continue",
+    "new": "        if False:\n            issues.append(RepairIssue(f\"Claim {claim.claim_id}\", \"no citation was given\"))\n            continue",
+    "test": "test_claim_with_no_citation_is_ungrounded_and_triggers_repair"
+  },
+  {
+    "rule": "An unverified citation is treated as an issue needing repair",
+    "old": "            if not citation.verified:",
+    "new": "            if citation.verified:",
+    "test": "test_bad_citation_twice_leaves_the_claim_ungrounded_but_the_turn_ok"
+  },
+  {
+    "rule": "A failed turn actually reports status failed",
+    "old": "status=\"failed\", failure_reason=failure_reason,",
+    "new": "status=\"ok\", failure_reason=failure_reason,",
+    "test": "test_bad_json_twice_fails_the_turn"
+  },
+  {
+    "rule": "The argument ID uses the R1 prefix",
+    "old": "argument_id = f\"R1-{role.value}\"",
+    "new": "argument_id = f\"R2-{role.value}\"",
+    "test": "test_good_output_produces_a_grounded_ok_argument"
+  },
+  {
+    "rule": "Retrieval is queried for round 1",
+    "old": "query = build_query(role, 1, case, config)",
+    "new": "query = build_query(role, 2, case, config)",
+    "test": "test_good_output_produces_a_grounded_ok_argument"
+  },
+  {
+    "rule": "retrieved_passage_ids reflects what was actually retrieved",
+    "old": "retrieved_ids = [passage.id for passage in retrieval.passages]",
+    "new": "retrieved_ids = []",
+    "test": "test_good_output_produces_a_grounded_ok_argument"
+  },
+  {
+    "rule": "Case sections are citable sources",
+    "old": "sources: dict[str, str] = {section.id: section.text for section in case.sections}",
+    "new": "sources: dict[str, str] = {}",
+    "test": "test_claim_citing_a_case_section_is_grounded"
+  },
+  {
+    "rule": "shown_ids covers every source actually shown",
+    "old": "shown_ids = set(sources)",
+    "new": "shown_ids = set()",
+    "test": "test_good_output_produces_a_grounded_ok_argument"
+  },
+  {
+    "rule": "The prompt includes the retrieved-passages data block",
+    "old": "data_blocks = [(\"Case\", render_case(case)), (\"Retrieved passages\", render_passages(retrieval.passages))]",
+    "new": "data_blocks = [(\"Case\", render_case(case))]",
+    "test": "test_good_output_produces_a_grounded_ok_argument"
+  }
+]
