@@ -39,6 +39,7 @@ One row per task. Fill it in as you go, not at the end.
 | T3 | Added template ingestion and four-group injection scanning with synthetic clean/attack fixtures. | 705 tests pass; all 33 mutations detected and restored; contract mapping below. | Paused for preamble clarification; human approved rejection. Added an independent exact-tag assertion during review. | |
 | T3b | Applied the exact authorized preamble/privacy documentation updates, then added the ingest privacy guard, config policy, safe rejection trace and reusable identifier list. | 774 tests pass; 32 mutations detected and restored in an isolated committed checkout. | Fixed a Windows line-ending assertion and updated the model-audit count for the new config shape. Existing architecture edits were preserved. | |
 | T4 | Built KB validation, shared privacy scanning, deterministic BM25 retrieval and Round 1/2 query construction using synthetic test fixtures only. | 808 tests pass; all 42 final mutations detected and restored. Clinical demonstration passed; added email was rejected without exposing it. | The Round 1 isolation mutation initially failed a different test than expected; strengthened its regression fixture and repeated successfully. | |
+| T5 | Implemented isolated quote normalization, source/turn checks, citation verification and current claim grounding checks. | 838 tests pass; all 33 mutations detected and restored. Every requested quote rule has a separate named test. | No test failures or surviving mutations during implementation/audit. The requested quote rule is rule 4 in section 13, rather than section 4. | |
 
 ### T0 review notes
 
@@ -725,3 +726,110 @@ Human review starting points:
 1. `src/council/kb.py` - `load_kb` / `read_passages`: global IDs, exact text, privacy and warnings.
 2. `src/council/kb.py` - `build_query`: Round 1 and Round 2 inputs.
 3. `src/council/kb.py` - `KnowledgeBase.retrieve`: BM25 scores, role isolation and ID tie-breaking.
+
+### T5: quote verification
+
+Implemented `src/council/grounding.py` and synthetic tests in `tests/test_grounding.py`; committed as `3f6a64e` before mutation checks. The contract quote rule is section 13, rule 4; section 5 specifies Citation and Claim fields. The user's twelve requested examples each have their own named test.
+
+`normalize_quote_text` is the one normalization function. It folds case, collapses whitespace and translates curly single/double quotes and common hyphen/dash styles. Its only production caller is `quote_failure`, which uses it for both the quote and source. Retrieval's tokenizer and all stored source/quote text remain unchanged. A repository search confirmed there are no other production uses.
+
+`quote_failure` splits on literal `...`, counts 4 through 40 words across the retained parts, and matches each part against the same source in order without overlap. It uses escaped literal matching with word-edge checks: a changed word cannot pass merely because it is a substring, and punctuation cannot act as a regex wildcard. Leading/trailing ellipses are allowed; empty or punctuation-only quotes fail the minimum count. Unicode ellipsis is not treated as the contract's three-dot skip operator.
+
+`verify_citation` receives a code-owned registry of valid source IDs/text and the IDs actually shown in the current turn. Both existence and turn availability are checked before matching the quote. It constructs a fresh Citation with code-set source_type, verified and verify_note, preserving passage_id and quote exactly. Failure notes are fixed descriptions and never echo the quote, source text or untrusted ID. Unknown non-CASE IDs are classified as KB candidates for the two-valued source_type field, but cannot verify because they are absent from the registry. The registry must be built from validated case sections/KB passages, never model output.
+
+`ground_claim` copies the caller-assigned claim_id and draft text, verifies all citations, and marks the current result grounded only when there is at least one citation and all pass. Rechecking a repaired draft recomputes the result. T10 owns the single shared repair retry and final turn outcome; T5 makes no model calls, spends no retry and does not turn a citation failure into a failed specialist turn.
+
+What went wrong / limits:
+
+- Implementation tests and all named mutation checks passed; no surviving mutation required a new test.
+- The user's section reference differed from the document numbering. The enumerated requirements agree with section 13 rule 4 and section 5, so no contract edit or clarification was needed.
+- The contract does not define word tokenization in detail. This checker counts whitespace-separated units containing at least one letter or digit, after style normalization, summed across ellipsis parts. Hyphenated words count as one; standalone punctuation and ellipses do not count. This convention is documented in the function and tested at both boundaries and across skips.
+- A successful match proves that quoted text occurs in a source shown in that turn. It does not prove that the source supports the claim or that the claim is clinically correct.
+- All examples are synthetic, with no provider calls, dependency installs or network access. General trace integration and repair orchestration belong to later tasks. No T6 work was started.
+- Existing architecture Markdown/SVG/PNG edits were preserved. Mutation checks used an isolated committed worktree, with the main virtual-environment interpreter and pytest's src path, to keep every restore/status check clean without hiding the human's changes.
+
+#### T5 contract check
+
+All test names below refer to `tests/test_grounding.py`.
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 13 rule 4: exact copied words match | `quote_failure` | `test_exact_match` |
+| Case differences ignored | `normalize_quote_text` | `test_case_difference` |
+| Extra whitespace ignored | `normalize_quote_text` | `test_extra_whitespace` |
+| Curly and straight quote styles equivalent | `normalize_quote_text` | `test_curly_vs_straight_quotes` |
+| Em dash and hyphen styles equivalent | `normalize_quote_text` | `test_em_dash_vs_hyphen` |
+| Literal three-dot skips, parts in order | `quote_failure` | `test_ellipsis_parts_in_order` |
+| Out-of-order parts rejected | forward search cursor in `quote_failure` | `test_ellipsis_parts_out_of_order_fail` |
+| Under four words rejected | total word count in `quote_failure` | `test_under_four_words_fails` |
+| Over forty words rejected | total word count in `quote_failure` | `test_over_forty_words_fails` |
+| Inclusive four/forty boundaries; total across parts | `quote_failure` | `test_four_word_boundary_passes`, `test_forty_word_boundary_passes`, `test_ellipsis_word_count_is_total_and_excludes_skip_marker` |
+| Section 13 rule 3: source actually shown in that turn | `verify_citation` shown_ids check | `test_passage_not_shown_this_turn_fails`, `test_case_source_must_also_be_shown` |
+| Section 13 rule 3: cited ID exists | `verify_citation` registry membership | `test_unknown_passage_id_fails` (even when listed in shown IDs) |
+| Changed word rejected | literal match and word boundaries | `test_one_changed_word_fails`, `test_substring_at_word_boundaries_is_not_a_quote` |
+| Ordered parts cannot reuse overlapping source words | cursor advances to match end | `test_ellipsis_cannot_reuse_overlapping_words`, `test_later_occurrence_can_complete_ordered_match` |
+| Match only the cited source, not another source or a union | source lookup by passage_id | `test_quote_is_checked_against_its_named_source`, `test_no_cross_source_stitching` |
+| No unrequested fuzzy/regex matching | `re.escape` and literal punctuation | `test_literal_punctuation_not_regex_or_fuzzy_matching` |
+| Citation.passage_id and quote | copied unchanged from draft | `test_citation_preserves_data_and_sets_code_owned_fields` |
+| Citation.source_type | code derives case vs KB candidate from ID prefix | `test_exact_match`, `test_citation_preserves_data_and_sets_code_owned_fields` |
+| Citation.verified | code combines existence, shown IDs and quote check | exact, unknown-ID, unshown-source and changed-word tests |
+| Citation.verify_note | safe failure reason or empty on success | exact, unknown-ID, length and order tests; `test_failure_notes_do_not_echo_untrusted_data` |
+| Claim.claim_id, text, citations | caller ID, unchanged draft text, newly checked citations | `test_claim_requires_every_citation_to_pass` |
+| Claim.grounding_status; section 13 rule 2 | nonempty citation list and every citation verified | `test_claim_requires_citations`, `test_claim_requires_every_citation_to_pass`, `test_rechecking_repaired_claim_can_ground_it` |
+| Section 4 / rule 3: Round 2 carryover must actually be shown again | current shown_ids, no automatic historic exemption | `test_round2_carryover_only_verifies_when_shown_again` |
+| User: normalization in one function, used only for quote checks | `normalize_quote_text`; only two calls within `quote_failure` | quote-style tests plus repository reference search |
+
+No T5 contract requirement is knowingly implemented differently from the written rule. Repair scheduling and final post-retry status integration remain T10, not an additional retry path in this module.
+
+#### T5 mutation audit
+
+Re-run from a clean checkout:
+
+```powershell
+.venv/Scripts/python.exe -m pytest -p no:cacheprovider
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/grounding.py --spec tools/t5_mutations.json
+```
+
+All 33 deliberate breaks were detected on committed code `3f6a64e` in `.venv/t5-audit`. Each ran the full suite, produced the named failing test, restored the file with `git restore`, and confirmed clean Git status before the next mutation. The table records the actual observed failures. Final restored-code tests: 838 passed.
+
+| Rule | What was broken | Which test failed |
+|---|---|---|
+| Case normalization | `text.translate(styles).casefold() -> text.translate(styles)` | `tests/test_grounding.py::test_case_difference` |
+| Whitespace normalization | `" ".join(text.translate(styles).casefold().split()) -> text.translate(styles).casefold()` | `tests/test_grounding.py::test_extra_whitespace` |
+| Curly single quote | `"’": "'" -> "’": "’"` | `tests/test_grounding.py::test_curly_vs_straight_quotes` |
+| Curly double quote | `"“": '"' -> "“": "“"` | `tests/test_grounding.py::test_curly_vs_straight_quotes` |
+| Em dash and hyphen | `"—": "-" -> "—": "—"` | `tests/test_grounding.py::test_em_dash_vs_hyphen` |
+| Split ellipsis into parts | `normalized.split("...") -> [normalized]` | `tests/test_grounding.py::test_ellipsis_parts_in_order` |
+| Ellipsis parts in order | `cursor = match.end() -> cursor = 0` | `tests/test_grounding.py::test_ellipsis_parts_out_of_order_fail` |
+| Ellipsis cannot overlap | `cursor = match.end() -> cursor = match.start()` | `tests/test_grounding.py::test_ellipsis_cannot_reuse_overlapping_words` |
+| Under four words rejected | `if word_count < 4: -> if word_count < 3:` | `tests/test_grounding.py::test_under_four_words_fails` |
+| Four words accepted | `if word_count < 4: -> if word_count < 5:` | `tests/test_grounding.py::test_four_word_boundary_passes` |
+| Over forty words rejected | `if word_count > 40: -> if word_count > 41:` | `tests/test_grounding.py::test_over_forty_words_fails` |
+| Forty words accepted | `if word_count > 40: -> if word_count > 39:` | `tests/test_grounding.py::test_forty_word_boundary_passes` |
+| Total words excludes ellipsis | `word_count = sum(any(char.isalnum() for char in word) for part in parts for word in part.split()) -> word_count = len(normalized.split())` | `tests/test_grounding.py::test_ellipsis_word_count_is_total_and_excludes_skip_marker` |
+| Parts must be found | `if match is None: /             return "quote text not found in source in order" -> if match is None: /             return None` | `tests/test_grounding.py::test_one_changed_word_fails` |
+| Literal punctuation | `re.escape(part) -> part` | `tests/test_grounding.py::test_literal_punctuation_not_regex_or_fuzzy_matching` |
+| Left word boundary | `left = r"(?<!\w)" if part[0].isalnum() or part[0] == "_" else "" -> left = ""` | `tests/test_grounding.py::test_substring_at_word_boundaries_is_not_a_quote` |
+| Right word boundary | `right = r"(?!\w)" if part[-1].isalnum() or part[-1] == "_" else "" -> right = ""` | `tests/test_grounding.py::test_substring_at_word_boundaries_is_not_a_quote` |
+| Known source registry required | `if draft.passage_id not in sources: -> if False:` | `tests/test_grounding.py::test_unknown_passage_id_fails` |
+| Shown in this turn required | `elif draft.passage_id not in shown_ids: -> elif False:` | `tests/test_grounding.py::test_passage_not_shown_this_turn_fails` |
+| Only named source may support quote | `sources[draft.passage_id] -> next(iter(sources.values()))` | `tests/test_grounding.py::test_quote_is_checked_against_its_named_source` |
+| Preserve original quote | `passage_id=draft.passage_id, quote=draft.quote, -> passage_id=draft.passage_id, quote=draft.quote.strip(),` | `tests/test_grounding.py::test_citation_preserves_data_and_sets_code_owned_fields` |
+| Preserve passage ID | `passage_id=draft.passage_id, quote=draft.quote, -> passage_id="wrong", quote=draft.quote,` | `tests/test_grounding.py::test_citation_preserves_data_and_sets_code_owned_fields` |
+| Case source type | `source_type="case" if draft.passage_id.startswith("CASE-") else "kb" -> source_type="kb"` | `tests/test_grounding.py::test_exact_match` |
+| KB source type | `source_type="case" if draft.passage_id.startswith("CASE-") else "kb" -> source_type="case"` | `tests/test_grounding.py::test_citation_preserves_data_and_sets_code_owned_fields` |
+| Verified true for valid match | `verified=reason is None -> verified=False` | `tests/test_grounding.py::test_exact_match` |
+| Verified false for failure | `verified=reason is None -> verified=True` | `tests/test_grounding.py::test_one_changed_word_fails` |
+| Failure explanation | `verify_note=reason or "" -> verify_note=""` | `tests/test_grounding.py::test_unknown_passage_id_fails` |
+| Failure notes do not echo input | `reason = "unknown passage ID" -> reason = "unknown passage ID: " + draft.passage_id` | `tests/test_grounding.py::test_failure_notes_do_not_echo_untrusted_data` |
+| Claim needs at least one citation | `bool(citations) and all(citation.verified for citation in citations) -> all(citation.verified for citation in citations)` | `tests/test_grounding.py::test_claim_requires_citations` |
+| All claim citations must verify | `all(citation.verified for citation in citations) -> any(citation.verified for citation in citations)` | `tests/test_grounding.py::test_claim_requires_every_citation_to_pass` |
+| Claim code-owned status | `grounding_status="grounded" if grounded else "ungrounded" -> grounding_status="ungrounded"` | `tests/test_grounding.py::test_rechecking_repaired_claim_can_ground_it` |
+| Claim ID from caller | `Claim(claim_id=claim_id, text=draft.text -> Claim(claim_id="wrong", text=draft.text` | `tests/test_grounding.py::test_claim_requires_every_citation_to_pass` |
+| Preserve claim text | `Claim(claim_id=claim_id, text=draft.text -> Claim(claim_id=claim_id, text="wrong"` | `tests/test_grounding.py::test_claim_requires_every_citation_to_pass` |
+
+Human review starting points:
+
+1. `src/council/grounding.py` - `normalize_quote_text`: all permitted normalization in one place.
+2. `src/council/grounding.py` - `quote_failure`: lengths, skips, ordering and literal matching.
+3. `src/council/grounding.py` - `verify_citation`: source registry, turn availability and code-owned verification.
