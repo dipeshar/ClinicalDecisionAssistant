@@ -1164,3 +1164,9 @@ Re-ran the full built-in T1 plan (117 mutations, no `--spec`) against the curren
 | all other 114 | (unchanged from the original T1/T3b audits) | 1 | `KILLED` |
 
 Committed code was restored and `git status` was clean after every mutation.
+
+## Checkpoint A
+
+### Human sign-off
+
+I reviewed docs/checkpoint-a.md and ran tools/t6_check_failed_specialist.py myself. A specialist whose Round 1 turn failed was correctly excluded from specialists_counted, dissent, and both confidence terms. Checkpoint A is closed on 2026-09-22.
