@@ -126,7 +126,7 @@ Round 2 has two jobs: answer the opposing view, and fix or drop weak claims. It 
 
 - The rebuttal names the exact claim it answers (`target_claim_id`), from another role's Round 1 argument, and says why it is the strongest opposing claim.
 - Every Round 1 claim of its own must be marked **kept**, **revised** or **dropped**, with a short reason. Code checks that none is left out, so a claim cannot vanish silently.
-- The judges change nothing themselves. Their notes are advice. The specialist decides what to do, and the record shows what it did.
+- A judge's note naming a specific claim is binding on that claim: it cannot be kept as-is in Round 2, only revised or dropped. Judges still never write claims themselves, and their notes never touch which recommendation is right — only the fate of the specific claim they named. Code checks this after the specialist's Round 2 response is otherwise valid (see the data contracts): if a named claim is marked kept anyway, code overrides it. There is no appeal within the round, including when a judge's concern turns out to be mistaken — that is a known limit, not an oversight.
 - New and revised claims must be grounded and are checked like any other. A specialist must keep at least one claim.
 - A specialist may change its stance. Code records the change.
 
@@ -147,7 +147,7 @@ How judges work:
 - Code shuffles the argument order for each judge and round, and records the order, to reduce position bias.
 - The two judges do not see each other's scores.
 - Judges list any claim they cannot trace to a source.
-- Judges also write short notes for each specialist on what to fix. Notes are limited in number and length. They are about sourcing, logic and uncertainty, and never about which recommendation is right, so judges cannot steer the outcome. Notes carry no scores.
+- Judges also write short notes for each specialist on what to fix. Notes are limited in number and length. They are about sourcing, logic and uncertainty, and never about which recommendation is right, so judges cannot steer the outcome. Notes carry no scores. A note naming a specific claim is the one exception: it doesn't steer the recommendation, but it is binding on that claim.
 - Judges do not see Round 1 scores when they score Round 2, so they are not anchored by them.
 - Judges run on a different model from the specialists. The model used is saved with every score.
 - If the two judges differ by 2 or more points on the same argument and criterion, we record a disagreement.
