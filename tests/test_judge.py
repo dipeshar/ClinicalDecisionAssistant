@@ -89,6 +89,7 @@ def test_one_call_scores_every_non_failed_argument_of_the_round(config: Config, 
     assert {score.argument_id for score in scores} == {"R1-SURG", "R1-PHYS"}
     assert all(score.judge == "JUDGE_A" and score.round == 1 for score in scores)
     assert all(score.model == "fake/judge" for score in scores)
+    assert all(score.groundedness == 5 and score.logic == 5 and score.uncertainty == 5 for score in scores)
     prompt = trace_events(trace_path)[0]["prompt"]
     assert "Creatinine 1.1 mg/dL, eGFR 78." in prompt
     assert "R1-SURG" in prompt and "R1-PHYS" in prompt

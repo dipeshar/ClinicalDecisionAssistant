@@ -30,7 +30,7 @@
     "test": "test_round2_feedback_is_forced_empty"
   },
   {
-    "rule": "build_score records which model actually produced the score",
+    "rule": "build_score passes through the model's actual groundedness rating",
     "old": "groundedness=draft.groundedness, logic=draft.logic, uncertainty=draft.uncertainty,",
     "new": "groundedness=1, logic=draft.logic, uncertainty=draft.uncertainty,",
     "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
