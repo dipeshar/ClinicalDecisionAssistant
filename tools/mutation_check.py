@@ -128,7 +128,13 @@ def run_mutation(root: Path, target: Path, mutation: Mutation) -> dict[str, Any]
         target.write_text(changed, encoding="utf-8")
         run = run_tests(root)
         failed = [line for line in run.stdout.splitlines() if line.startswith("FAILED ")]
-        killed = run.returncode == 1 and any(expected in line for line in failed)
+        # A clean exit (0) is the only outcome that means the mutation survived. Any
+        # other exit code is a kill: an ordinary test failure (1), a collection error
+        # from an import-time crash (2), or anything else pytest can report. Do not
+        # gate on a "FAILED " line naming `expected`: a collection error never
+        # produces one, since it happens before any test runs, yet it just as surely
+        # proves the code broke and the suite no longer passes.
+        killed = run.returncode != 0
         return dict(rule=rule, broke=old, replacement=new, killed=killed,
                     failed_tests=failed, exit_code=run.returncode)
     finally:

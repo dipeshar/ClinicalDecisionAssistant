@@ -55,8 +55,12 @@ def test_restore_after_every_outcome(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert target.read_text() == "broken"
         if outcome == "timeout":
             raise subprocess.TimeoutExpired("pytest", 120)
+        # A collection error has no "FAILED " line at all (nothing ran), unlike an
+        # ordinary test failure; it must still count as killed, on exit code alone.
+        stdout = {"killed": "FAILED tests/test_example.py::test_rule", "survived": "",
+                 "collection_error": "ERROR tests/test_example.py - ImportError: boom"}[outcome]
         code = {"killed": 1, "survived": 0, "collection_error": 2}[outcome]
-        return subprocess.CompletedProcess([], code, "FAILED tests/test_example.py::test_rule", "")
+        return subprocess.CompletedProcess([], code, stdout, "")
 
     monkeypatch.setattr(audit.subprocess, "run", git)
     monkeypatch.setattr(audit, "run_tests", tests)
@@ -66,6 +70,44 @@ def test_restore_after_every_outcome(tmp_path: Path, monkeypatch: pytest.MonkeyP
             audit.run_mutation(tmp_path, target, mutation)
     else:
         result = audit.run_mutation(tmp_path, target, mutation)
-        assert result["killed"] is (outcome == "killed")
+        assert result["killed"] is (outcome != "survived")
     assert target.read_text() == "original"
     assert commands[-2:] == [["git", "restore", "--", "example.py"], ["git", "status", "--porcelain"]]
+
+
+def test_import_time_crash_is_killed_end_to_end(tmp_path: Path) -> None:
+    """A real pytest run: a mutation that crashes a module at import time, before any
+    test runs, must be reported killed. This is what the pre-fix tool got wrong: no
+    "FAILED " line is ever produced for a collection error, only a nonzero exit code.
+    """
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["."]\n', encoding="utf-8")
+    target = tmp_path / "target.py"
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "tests" / "conftest.py").write_text("import target\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+    def git(*args: str) -> None:
+        subprocess.run(list(args), cwd=tmp_path, capture_output=True, check=True)
+
+    git("git", "init", "-q")
+    git("git", "config", "user.email", "synthetic@example.com")
+    git("git", "config", "user.name", "Synthetic")
+    git("git", "add", "-A")
+    git("git", "commit", "-q", "-m", "synthetic baseline")
+
+    baseline = audit.run_tests(tmp_path)
+    assert baseline.returncode == 0
+
+    mutations = audit.build_from_spec(target.read_text(encoding="utf-8"), [
+        dict(rule="Import-time crash", old="VALUE = 1",
+             new="raise RuntimeError('synthetic import crash')", test="test_ok"),
+    ])
+    record = audit.run_mutation(tmp_path, target, mutations[0])
+
+    assert record["exit_code"] != 0
+    assert not any(line.startswith("FAILED ") for line in record["failed_tests"])
+    assert record["killed"] is True
+    assert target.read_text(encoding="utf-8") == "VALUE = 1\n"
+    audit.require_clean(tmp_path)
