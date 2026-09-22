@@ -454,6 +454,15 @@ class JudgeSummary(ContractModel):
     code_ungrounded_claims: list[str]
 
 
+class PrivacySummary(ContractModel):
+    synthetic_marker_found: bool
+    ingest_identifier_hits: int
+    outbound_prompts_checked: int
+    outbound_prompts_blocked: int
+    approved_providers: list[str]
+    providers_used: list[str]
+
+
 class RequiredAction(ContractModel):
     text: str
     source_ids: list[str]
@@ -502,6 +511,7 @@ class Report(ContractModel):
     dissent: list[Dissent]
     red_team_findings: list[RedTeamFinding]
     injection_check: InjectionCheck
+    privacy_summary: PrivacySummary
     judge_summary: JudgeSummary
     narrative: str
     citations_index: list[Citation]

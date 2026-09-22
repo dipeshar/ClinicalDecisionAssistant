@@ -78,6 +78,9 @@ def contract_samples() -> dict[str, dict[str, Any]]:
     s["JudgeSummary"] = dict(mean_score=s["RoundMeans"], disagreement_count=0, judges=[s["JudgeParticipation"]],
                              failed_judge_calls=[s["FailedJudgeCall"]], round_comparison=[s["RoundComparison"]],
                              code_ungrounded_claims=["R1-SURG-C1"])
+    s["PrivacySummary"] = dict(synthetic_marker_found=True, ingest_identifier_hits=0,
+                               outbound_prompts_checked=4, outbound_prompts_blocked=1,
+                               approved_providers=["fake"], providers_used=["fake"])
     s["RequiredAction"] = dict(text="Review synthetic source", source_ids=["RT-1"])
     s["Dissent"] = dict(role="SURG", stance="conditional", argument_id="R1-SURG", note="Synthetic dissent")
     s["HumanDecision"] = dict(run_id=s["Scorecard"]["run_id"], decision="comment_only", comment="Synthetic review",
@@ -89,7 +92,8 @@ def contract_samples() -> dict[str, dict[str, Any]]:
                        incomplete_reasons=["JUDGE_B failed"], failed_turns=["JUDGE_B"], confidence=s["Confidence"],
                        council_warning="Synthetic majority dissent", dissent=[s["Dissent"]],
                        red_team_findings=[s["RedTeamFinding"]], injection_check=s["InjectionCheck"],
-                       judge_summary=s["JudgeSummary"], citations_index=[s["Citation"]],
+                       privacy_summary=s["PrivacySummary"], judge_summary=s["JudgeSummary"],
+                       citations_index=[s["Citation"]],
                        disclaimer="decision support only, requires human clinical sign-off, synthetic data",
                        human_decision=s["HumanDecision"])
     s["TraceEvent"] = dict(run_id=s["Scorecard"]["run_id"], seq=1, timestamp="2026-09-19T10:30:00Z", step="judge",
