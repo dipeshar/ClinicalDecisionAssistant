@@ -22,13 +22,13 @@ Give a thicker border to the two boxes we want the panel to notice: **LLM gatewa
 
 **One big dashed box: "Orchestrator (plain Python)"**, with the note "Rounds, budgets, retries". Inside it, in this order:
 
-1. Ingest and injection scan (teal, full width)
+1. Ingest, injection and privacy scan (teal, full width)
 2. Four specialists side by side (purple): Lead surgeon, Physician, Anaesthesia, Admin and ethics. Each says "Own KB". Add a small label "Rounds 1 and 2 (repeat)" near this row.
 3. Code checks (teal, full width): JSON shape, citation quotes, budgets
 4. Judge A and Judge B side by side (purple). Each says "Different model".
 5. Red team (purple): attacks process, tests injection
 6. Council chair (purple) next to Report checks (teal): "Writes report, no new claims" and "Confidence, disclaimer, IDs"
-7. LLM gateway (teal), as a base layer at the bottom of the dashed box: "Every model call. Budget, model choice, retries, log."
+7. LLM gateway (teal), as a base layer at the bottom of the dashed box: "Every model call. Privacy, budget, model choice, retries, log."
 
 **Outside, at the bottom**
 
@@ -63,7 +63,7 @@ Mermaid places the boxes automatically, so the layout will not match the drawing
 flowchart TD
   CASE["Case file (Markdown)"]
   subgraph ORCH["Orchestrator (plain Python)"]
-    ING["Ingest and injection scan"]
+    ING["Ingest, injection and privacy scan"]
     SURG["Lead surgeon<br/>Own KB"]
     PHYS["Physician<br/>Own KB"]
     ANAES["Anaesthesia<br/>Own KB"]
@@ -74,7 +74,7 @@ flowchart TD
     RED["Red team<br/>Attacks process, tests injection"]
     CHAIR["Council chair<br/>Writes report, no new claims"]
     RCHK["Report checks<br/>Confidence, disclaimer, IDs"]
-    GW["LLM gateway: every model call<br/>Budget, model choice, retries, log"]
+    GW["LLM gateway: every model call<br/>Privacy, budget, model choice, retries, log"]
   end
   MODELS["Model APIs<br/>Model 1 and 2"]
   RUN["Run folder<br/>trace.jsonl, run.json"]
