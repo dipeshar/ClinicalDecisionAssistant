@@ -404,6 +404,7 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 20. **Gateway privacy check.** Before every call, the gateway checks that the provider is in `approved_providers` and that the prompt matches no identifier pattern. If either check fails, the call is refused, a `privacy_block` event is written, the turn counts as failed, and the report is `INCOMPLETE` with the reason.
 21. **No secrets in outputs.** API keys never appear in `trace.jsonl`, `run.json` or any report. `config_snapshot` never contains secrets.
 22. **One pattern list.** Ingest and the gateway use the same identifier pattern list, kept in one place, so they cannot drift apart.
+23. **Budget refusal event.** When the gateway refuses a call because the reservation would exceed a budget limit (tokens, calls, seconds, or the chair reserve), it writes exactly one `EventType.BUDGET` trace event recording which limit was hit and the amount requested versus what remained. It does not include the prompt. The refused turn counts as failed, the same as a privacy refusal (rule 20).
 
 ## 14. Run folder
 

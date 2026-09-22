@@ -72,23 +72,29 @@ class Budget:
             config = self._config
             chair = role == Role.CHAIR
             if self._state.exhausted and not chair:
-                raise BudgetExhausted(self._state.reason)
+                raise BudgetExhausted(f"{self._state.reason}: requested this call, already exhausted (0 remaining)")
             token_limit = config.max_total_tokens - (0 if chair else config.chair_reserve.tokens)
             call_limit = config.max_calls - (0 if chair else config.chair_reserve.calls)
             time_limit = config.max_seconds_total - (0 if chair else config.chair_reserve.seconds)
             remaining = time_limit - (self._clock() - self._state.started_at)
+            pending_total = sum(self._pending.values())
             total = tokens_in + output
             reason = None
-            if self._state.tokens_used + sum(self._pending.values()) + total > token_limit:
+            detail = None
+            if self._state.tokens_used + pending_total + total > token_limit:
                 reason = "token budget exhausted"
+                tokens_remaining = token_limit - self._state.tokens_used - pending_total
+                detail = f"{reason}: requested {total} tokens, {tokens_remaining} remaining"
             elif self._state.calls_used >= call_limit:
                 reason = "call budget exhausted"
+                detail = f"{reason}: requested 1 call, {call_limit - self._state.calls_used} remaining"
             elif remaining <= 0:
                 reason = "time budget exhausted"
+                detail = f"{reason}: requested this call, {remaining:.1f}s remaining"
             if reason is not None:
                 self._state.exhausted = True
                 self._state.reason = reason
-                raise BudgetExhausted(reason)
+                raise BudgetExhausted(detail)
             reservation = Reservation(tokens_in, output, remaining)
             self._pending[reservation] = total
             self._state.calls_used += 1
