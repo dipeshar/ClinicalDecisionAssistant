@@ -63,7 +63,8 @@ Read the case, let 4 specialists argue for 2 rounds, have judges score each roun
 - The orchestrator skips the remaining steps and goes to the chair. The report is marked **INCOMPLETE** with the reasons.
 - If the chair call also fails, code writes a bare report: no recommendation, no confidence, status INCOMPLETE, with the arguments and scores collected so far.
 
-**A failed specialist turn.** The run continues. That argument is not judged and not counted in the stance split. The report lists it as failed. A specialist whose Round 1 turn failed does not take part in Round 2, because it has no argument to revise and no judge notes. If a Round 2 turn fails, its Round 1 argument stands as its final argument.
+**A failed specialist turn.** The run continues. That argument is not judged and not counted in the stance split. The report lists it as failed. A specialist whose Round 1 turn failed does not take part in Round 2, because it has no argument to revise and no judge notes. If a Round 2 turn fails, its Round 1 argument stands as its final argument. The same applies if Round 2 does not run at all, for example because the budget ran out after Round 1: every specialist's Round 1 argument stands as final.
+**Every specialist failed.** If no specialist has a non-failed final argument, there is nothing for the council to have decided. Code skips the chair call and writes a bare report, the same shape used when the chair call itself fails (contracts, section 8), with status INCOMPLETE and the reason "all specialists failed".
 
 **A failed judge call.** If a judge's call still fails after the repair retry, the run continues with the other judge. The report is marked INCOMPLETE with the reason. If no judge scored a round, that round has no scores and no notes, and the missing scores lower the confidence (contracts, section 12).
 

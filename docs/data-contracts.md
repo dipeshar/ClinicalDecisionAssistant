@@ -246,7 +246,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | disclaimer | str | CODE | Fixed text: decision support only, requires human clinical sign-off, synthetic data |
 | human_decision | HumanDecision or null | CODE | Empty until the gate |
 
-**Bare report:** if the chair call fails, code writes a report with status `INCOMPLETE` and:
+**Bare report:** code writes a bare report, status `INCOMPLETE`, in two cases: the chair call fails, or no specialist has a non-failed final argument (every specialist failed). In the second case `incomplete_reasons` includes `"all specialists failed"` and the chair is not called. Either way:
 
 - `recommendation`, `confidence` and `council_warning` set to null.
 - Empty lists (`[]`) for `recommendation_basis`, `strongest_for`, `strongest_against`, `required_actions` and `dissent`, an empty dict (`{}`) for `role_notes`, and an empty string for `narrative`.
@@ -364,14 +364,14 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | `delay_pending_investigation` | `conditional`, `against` |
 | `decline` | `against` |
 
-A specialist whose final stance is not in the accepted list is a **dissenter**. The final stance is the Round 2 stance, or the Round 1 stance if the Round 2 turn failed. Failed turns are ignored. If more than half of the non-failed specialists dissent, `council_warning` is set.
+A specialist whose final stance is not in the accepted list is a **dissenter**. The final stance is the Round 2 stance, or the Round 1 stance if Round 2 was skipped for that specialist, whether because its own Round 2 turn failed or because Round 2 did not run at all (for example, the budget ran out after Round 1). Failed turns are ignored. If more than half of the non-failed specialists dissent, `council_warning` is set.
 
 **Confidence formula** (all in code, with a unit test):
 
 1. `judge_part` = (mean judge score of Round 2 arguments, across all criteria, judges and arguments, minus 1) divided by 4, times 100. If Round 2 was not judged, use Round 1. If neither round was judged, `judge_part` is 0, so missing evidence lowers the confidence.
 2. `agreement_part` = share of non-failed specialists whose final stance is accepted, times 100.
 3. `base` = 0.5 times `judge_part`, plus 0.5 times `agreement_part`.
-4. Penalties, counted on the final round only (Round 2, or Round 1 for a specialist whose Round 2 turn failed). A claim that was fixed or dropped in Round 2 is therefore not punished again:
+4. Penalties, counted on the final round only (Round 2, or Round 1 when Round 2 was skipped for that specialist, whether its own turn failed or the round did not run). A claim that was fixed or dropped in Round 2 is therefore not punished again:
    - 5 per ungrounded claim in the final round (max 20)
    - 10 per high-severity red-team finding (max 20)
    - 5 per judge disagreement in the final round (max 10)
@@ -389,7 +389,7 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 5. A rebuttal target must be a real Round 1 argument from a different role, and `target_claim_id` must be a claim inside it.
 6. Judges must score every non-failed argument of a round once, and only real argument IDs. Argument order is shuffled per judge and round, and recorded in `presented_order`.
 7. Red team evidence IDs must exist.
-8. Chair IDs (basis, strongest claims, actions, narrative tags) must exist. The basis and the strongest claims must come from the final round (Round 2, or Round 1 for a specialist whose Round 2 turn failed), so a claim that was dropped cannot be cited as strongest. Strongest claims must also be `grounded`. The chair's claim text is copied in by code, not retyped.
+8. Chair IDs (basis, strongest claims, actions, narrative tags) must exist. The basis and the strongest claims must come from the final round (Round 2, or Round 1 when Round 2 was skipped for that specialist), so a claim that was dropped cannot be cited as strongest. Strongest claims must also be `grounded`. The chair's claim text is copied in by code, not retyped.
 9. Confidence, dissent and the disclaimer are set by code only.
 10. The gateway checks the budget before every LLM call. Other roles stop at the maximum minus the chair reserve. If a budget is exhausted, skip to the chair and mark the report `INCOMPLETE`. If the chair call fails, write a bare report.
 11. The report page shows case text and model output as plain text only, never as HTML.
