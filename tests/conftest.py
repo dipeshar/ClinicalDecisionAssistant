@@ -9,6 +9,11 @@ from council.config import load_config
 from council.models import Config
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption("--race-iterations", type=int, default=25,
+                     help="Iterations per thread in the combined budget/trace race test")
+
+
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
     data = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
