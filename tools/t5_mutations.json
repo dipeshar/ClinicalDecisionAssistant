@@ -1,0 +1,200 @@
+[
+  {
+    "rule": "Case normalization",
+    "old": "text.translate(styles).casefold()",
+    "new": "text.translate(styles)",
+    "test": "test_case_difference"
+  },
+  {
+    "rule": "Whitespace normalization",
+    "old": "\" \".join(text.translate(styles).casefold().split())",
+    "new": "text.translate(styles).casefold()",
+    "test": "test_extra_whitespace"
+  },
+  {
+    "rule": "Curly single quote",
+    "old": "\"\u2019\": \"'\"",
+    "new": "\"\u2019\": \"\u2019\"",
+    "test": "test_curly_vs_straight_quotes"
+  },
+  {
+    "rule": "Curly double quote",
+    "old": "\"\u201c\": '\"'",
+    "new": "\"\u201c\": \"\u201c\"",
+    "test": "test_curly_vs_straight_quotes"
+  },
+  {
+    "rule": "Em dash and hyphen",
+    "old": "\"\u2014\": \"-\"",
+    "new": "\"\u2014\": \"\u2014\"",
+    "test": "test_em_dash_vs_hyphen"
+  },
+  {
+    "rule": "Split ellipsis into parts",
+    "old": "normalized.split(\"...\")",
+    "new": "[normalized]",
+    "test": "test_ellipsis_parts_in_order"
+  },
+  {
+    "rule": "Ellipsis parts in order",
+    "old": "cursor = match.end()",
+    "new": "cursor = 0",
+    "test": "test_ellipsis_parts_out_of_order_fail"
+  },
+  {
+    "rule": "Ellipsis cannot overlap",
+    "old": "cursor = match.end()",
+    "new": "cursor = match.start()",
+    "test": "test_ellipsis_cannot_reuse_overlapping_words"
+  },
+  {
+    "rule": "Under four words rejected",
+    "old": "if word_count < 4:",
+    "new": "if word_count < 3:",
+    "test": "test_under_four_words_fails"
+  },
+  {
+    "rule": "Four words accepted",
+    "old": "if word_count < 4:",
+    "new": "if word_count < 5:",
+    "test": "test_four_word_boundary_passes"
+  },
+  {
+    "rule": "Over forty words rejected",
+    "old": "if word_count > 40:",
+    "new": "if word_count > 41:",
+    "test": "test_over_forty_words_fails"
+  },
+  {
+    "rule": "Forty words accepted",
+    "old": "if word_count > 40:",
+    "new": "if word_count > 39:",
+    "test": "test_forty_word_boundary_passes"
+  },
+  {
+    "rule": "Total words excludes ellipsis",
+    "old": "word_count = sum(any(char.isalnum() for char in word) for part in parts for word in part.split())",
+    "new": "word_count = len(normalized.split())",
+    "test": "test_ellipsis_word_count_is_total_and_excludes_skip_marker"
+  },
+  {
+    "rule": "Parts must be found",
+    "old": "if match is None:\n            return \"quote text not found in source in order\"",
+    "new": "if match is None:\n            return None",
+    "test": "test_one_changed_word_fails"
+  },
+  {
+    "rule": "Literal punctuation",
+    "old": "re.escape(part)",
+    "new": "part",
+    "test": "test_literal_punctuation_not_regex_or_fuzzy_matching"
+  },
+  {
+    "rule": "Left word boundary",
+    "old": "left = r\"(?<!\\w)\" if part[0].isalnum() or part[0] == \"_\" else \"\"",
+    "new": "left = \"\"",
+    "test": "test_substring_at_word_boundaries_is_not_a_quote"
+  },
+  {
+    "rule": "Right word boundary",
+    "old": "right = r\"(?!\\w)\" if part[-1].isalnum() or part[-1] == \"_\" else \"\"",
+    "new": "right = \"\"",
+    "test": "test_substring_at_word_boundaries_is_not_a_quote"
+  },
+  {
+    "rule": "Known source registry required",
+    "old": "if draft.passage_id not in sources:",
+    "new": "if False:",
+    "test": "test_unknown_passage_id_fails"
+  },
+  {
+    "rule": "Shown in this turn required",
+    "old": "elif draft.passage_id not in shown_ids:",
+    "new": "elif False:",
+    "test": "test_passage_not_shown_this_turn_fails"
+  },
+  {
+    "rule": "Only named source may support quote",
+    "old": "sources[draft.passage_id]",
+    "new": "next(iter(sources.values()))",
+    "test": "test_quote_is_checked_against_its_named_source"
+  },
+  {
+    "rule": "Preserve original quote",
+    "old": "passage_id=draft.passage_id, quote=draft.quote,",
+    "new": "passage_id=draft.passage_id, quote=draft.quote.strip(),",
+    "test": "test_citation_preserves_data_and_sets_code_owned_fields"
+  },
+  {
+    "rule": "Preserve passage ID",
+    "old": "passage_id=draft.passage_id, quote=draft.quote,",
+    "new": "passage_id=\"wrong\", quote=draft.quote,",
+    "test": "test_citation_preserves_data_and_sets_code_owned_fields"
+  },
+  {
+    "rule": "Case source type",
+    "old": "source_type=\"case\" if draft.passage_id.startswith(\"CASE-\") else \"kb\"",
+    "new": "source_type=\"kb\"",
+    "test": "test_exact_match"
+  },
+  {
+    "rule": "KB source type",
+    "old": "source_type=\"case\" if draft.passage_id.startswith(\"CASE-\") else \"kb\"",
+    "new": "source_type=\"case\"",
+    "test": "test_citation_preserves_data_and_sets_code_owned_fields"
+  },
+  {
+    "rule": "Verified true for valid match",
+    "old": "verified=reason is None",
+    "new": "verified=False",
+    "test": "test_exact_match"
+  },
+  {
+    "rule": "Verified false for failure",
+    "old": "verified=reason is None",
+    "new": "verified=True",
+    "test": "test_one_changed_word_fails"
+  },
+  {
+    "rule": "Failure explanation",
+    "old": "verify_note=reason or \"\"",
+    "new": "verify_note=\"\"",
+    "test": "test_unknown_passage_id_fails"
+  },
+  {
+    "rule": "Failure notes do not echo input",
+    "old": "reason = \"unknown passage ID\"",
+    "new": "reason = \"unknown passage ID: \" + draft.passage_id",
+    "test": "test_failure_notes_do_not_echo_untrusted_data"
+  },
+  {
+    "rule": "Claim needs at least one citation",
+    "old": "bool(citations) and all(citation.verified for citation in citations)",
+    "new": "all(citation.verified for citation in citations)",
+    "test": "test_claim_requires_citations"
+  },
+  {
+    "rule": "All claim citations must verify",
+    "old": "all(citation.verified for citation in citations)",
+    "new": "any(citation.verified for citation in citations)",
+    "test": "test_claim_requires_every_citation_to_pass"
+  },
+  {
+    "rule": "Claim code-owned status",
+    "old": "grounding_status=\"grounded\" if grounded else \"ungrounded\"",
+    "new": "grounding_status=\"ungrounded\"",
+    "test": "test_rechecking_repaired_claim_can_ground_it"
+  },
+  {
+    "rule": "Claim ID from caller",
+    "old": "Claim(claim_id=claim_id, text=draft.text",
+    "new": "Claim(claim_id=\"wrong\", text=draft.text",
+    "test": "test_claim_requires_every_citation_to_pass"
+  },
+  {
+    "rule": "Preserve claim text",
+    "old": "Claim(claim_id=claim_id, text=draft.text",
+    "new": "Claim(claim_id=claim_id, text=\"wrong\"",
+    "test": "test_claim_requires_every_citation_to_pass"
+  }
+]
