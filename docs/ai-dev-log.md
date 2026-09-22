@@ -40,6 +40,7 @@ One row per task. Fill it in as you go, not at the end.
 | T3b | Applied the exact authorized preamble/privacy documentation updates, then added the ingest privacy guard, config policy, safe rejection trace and reusable identifier list. | 774 tests pass; 32 mutations detected and restored in an isolated committed checkout. | Fixed a Windows line-ending assertion and updated the model-audit count for the new config shape. Existing architecture edits were preserved. | |
 | T4 | Built KB validation, shared privacy scanning, deterministic BM25 retrieval and Round 1/2 query construction using synthetic test fixtures only. | 808 tests pass; all 42 final mutations detected and restored. Clinical demonstration passed; added email was rejected without exposing it. | The Round 1 isolation mutation initially failed a different test than expected; strengthened its regression fixture and repeated successfully. | |
 | T5 | Implemented isolated quote normalization, source/turn checks, citation verification and current claim grounding checks. | 838 tests pass; all 33 mutations detected and restored. Every requested quote rule has a separate named test. | No test failures or surviving mutations during implementation/audit. The requested quote rule is rule 4 in section 13, rather than section 4. | |
+| T6 | Implemented final-argument selection, dissent, strict-majority warning and confidence formula. | 892 tests pass; all 45 committed-code mutations detected and restored; contract mapping below. | Initially stopped on two contract gaps, resolved by the human. Discarded stale doc edits only with explicit authorization. Corrected one test fixture arithmetic error. | |
 
 ### T0 review notes
 
@@ -833,3 +834,105 @@ Human review starting points:
 1. `src/council/grounding.py` - `normalize_quote_text`: all permitted normalization in one place.
 2. `src/council/grounding.py` - `quote_failure`: lengths, skips, ordering and literal matching.
 3. `src/council/grounding.py` - `verify_citation`: source registry, turn availability and code-owned verification.
+
+
+### T6: dissent and confidence
+
+The human resolved the two gaps that initially stopped T6: skipped Round 2 uses Round 1 as final, and no working specialist means a bare report with no chair call. Stale working copies had also removed the privacy rules; work paused instead of committing those deletions. At the human's explicit instruction, restored only docs/design.md and docs/data-contracts.md from HEAD, verified each of the five supplied old texts occurred exactly once, applied their exact replacements, displayed the diff, and committed as 8135a2c (Docs: Round 2 skipped and all-specialists-failed cases). No earlier supplied file was used.
+
+Implemented src/council/scoring.py, tests/test_scoring.py and tools/t6_mutations.json, committed as a1b910c before the mutation audit. The fixed stance table drives both dissent and agreement. Final argument selection uses a successful Round 2 argument, otherwise the successful Round 1 argument; failed Round 1 specialists stay excluded. Dissent copies the final role, stance, argument ID and chair note. The warning requires a strict majority of the non-failed specialists.
+
+Confidence averages individual criterion scores from the latest judged round, uses the share of accepting specialists, applies the three capped penalties, clamps to 0–100 and assigns the exact 40/70 boundaries. Judge-round selection is global; claim and disagreement penalties select the final argument separately for each specialist. Rebuttal response claims are claims too; repeated claim IDs are counted once. Raw scores and turn records are expected to have passed their upstream ID/uniqueness checks. Existing contract models are used without new report shapes.
+
+What went wrong / limits:
+
+- One initial test fixture incorrectly expected 70 from arithmetic that yields 67.5. Corrected the synthetic inputs; the final full suite passes 892 tests (54 new T6 cases).
+- No confidence value is manufactured for zero working specialists: final_arguments returns an empty list and compute_confidence returns None, with empty dissent and no warning. The later chair/report and orchestrator tasks (T14/T15) must use this signal to skip the chair and write the INCOMPLETE bare report with reason "all specialists failed". T6 does not implement model calls or report writing.
+- Full scorecard aggregation, chair ID checks and report integration remain in their later tasks. No T7 work was started. No contract behavior was silently changed; no unresolved T6 contract deviation remains.
+- Tests use synthetic records and arithmetic only, with no provider calls, network access or new dependencies. Existing architecture.md/png/svg edits were preserved. The mutation audit ran in an isolated checkout of the committed code using the main virtual environment; each break was undone with git restore and Git status verified clean before the next break.
+
+#### T6 contract check
+
+Implementations below are in src/council/scoring.py; tests are in tests/test_scoring.py.
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 1 specialist roles; section 5 Argument.role, round, status, stance, argument_id | final_arguments selects only four specialists, uses R2 or R1 fallback, excludes failed R1 | test_final_round_selection_and_failed_specialists, test_round2_failed_or_skipped_falls_back |
+| Section 12 accepted stances, all four recommendations and three stances | ACCEPTED_STANCES, compute_dissent, compute_confidence | test_stance_table (12 combinations) |
+| Section 8 dissent.role, stance, argument_id, note; role_notes copied exactly | compute_dissent | test_stance_table, test_round2_failed_or_skipped_falls_back |
+| Sections 8/12 council_warning, strictly more than half of working specialists | council_warning | test_warning_requires_strict_majority |
+| Section 8 bare-report confidence=null, dissent=[], council_warning=null when all specialists fail | final_arguments, compute_confidence, compute_dissent, council_warning; report creation and chair skip deferred to T14/T15 | test_no_working_final_argument_has_no_confidence |
+| Sections 6/12 Score.round, groundedness, logic, uncertainty, counterarguments; null R1 criterion omitted; equal weight per criterion score across judges/arguments | judge_component | test_judge_round2_preferred_and_all_values_weighted_equally, test_judge_round1_fallback_even_when_round2_arguments_exist |
+| Section 12 prefer judged R2, else R1, else judge_part=0 and judge_round_used=null | judge_component | same two judge-round tests, test_no_judges_and_failed_turns_lower_confidence |
+| Sections 6/11/13 rule 18: Score.judge, argument_id, absolute gap >=2 per criterion, one judge means zero disagreements | disagreement_count | test_disagreements_absolute_per_criterion_and_one_judge_zero, test_disagreement_penalty_rate_and_cap |
+| Sections 5/12 Claim.claim_id, grounding_status; Argument.claims and Rebuttal.response_claims; only final claims count | ungrounded_count, final_arguments | test_final_penalties_ignore_fixed_and_dropped_round1_claims, test_rebuttal_claims_count_once_by_id |
+| Section 12 final round selected per specialist, including failed/skipped R2, independently of judged round | final_arguments, ungrounded_count, disagreement_count | test_round2_failed_or_skipped_falls_back, test_penalties_fall_back_per_role_not_per_judged_round |
+| Sections 8/12 ConfidenceInputs.judge_part, judge_round_used, agreement_part, specialists_counted, specialists_accepting, base | compute_confidence, judge_component | test_no_judges_and_failed_turns_lower_confidence (all fields), test_stance_table, judge-round tests |
+| Sections 8/12 ungrounded_claims.count and penalty: 5 each, cap 20 | compute_confidence | test_ungrounded_penalty_rate_and_cap |
+| Sections 7/8/12 RedTeamFinding.severity; high_severity_findings.count and penalty: high only, 10 each, cap 20 | compute_confidence | test_high_findings_penalty_rate_and_cap |
+| Sections 8/12 judge_disagreements.count and penalty: 5 each, cap 10 | compute_confidence, disagreement_count | test_disagreement_penalty_rate_and_cap |
+| Sections 8/12 total_penalty and Confidence.score: base minus all penalties, clamp 0–100 | compute_confidence, clamp_score | test_combined_penalties_and_lower_clamping, test_clamping |
+| Sections 8/12 Confidence.level and inputs: >=70 high, >=40 medium, otherwise low; no rounding before comparison | confidence_level, compute_confidence | test_level_boundaries, test_level_boundaries_through_formula, test_high_boundary_through_formula |
+| Section 13 rule 9: dissent and confidence computed by code | compute_dissent, compute_confidence construct full existing models | test_stance_table and formula tests |
+| Section 13 rules 16/17: failed R1 stays failed; failed turns excluded from final stance counts | final_arguments | test_final_round_selection_and_failed_specialists, test_no_working_final_argument_has_no_confidence |
+
+#### T6 mutation audit
+
+Re-run from a clean checkout with the project virtual environment:
+
+```powershell
+.venv/Scripts/python.exe tools/mutation_check.py --target src/council/scoring.py --spec tools/t6_mutations.json
+```
+
+The existing runner executes the full suite for each mutation, requires the named test to fail, restores the committed target with git restore, and requires a clean, fully readable Git status. Use --list to preview without edits. No new tests were needed after the initial implementation commit.
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Proceed accepts for only | `Recommendation.PROCEED: frozenset({Stance.FOR}) -> Recommendation.PROCEED: frozenset({Stance.FOR, Stance.CONDITIONAL})` | `tests/test_scoring.py::test_stance_table` |
+| Modifications accepts conditional | `Recommendation.PROCEED_WITH_MODIFICATIONS: frozenset({Stance.FOR, Stance.CONDITIONAL}) -> Recommendation.PROCEED_WITH_MODIFICATIONS: frozenset({Stance.FOR})` | `tests/test_scoring.py::test_stance_table` |
+| Delay accepts against | `Recommendation.DELAY_PENDING_INVESTIGATION: frozenset({Stance.CONDITIONAL, Stance.AGAINST}) -> Recommendation.DELAY_PENDING_INVESTIGATION: frozenset({Stance.CONDITIONAL})` | `tests/test_scoring.py::test_stance_table` |
+| Decline accepts against only | `Recommendation.DECLINE: frozenset({Stance.AGAINST}) -> Recommendation.DECLINE: frozenset({Stance.AGAINST, Stance.FOR})` | `tests/test_scoring.py::test_stance_table` |
+| Count specialists only | `(Role.SURG, Role.PHYS, Role.ANAES, Role.ADMIN) -> (Role.SURG, Role.PHYS, Role.ANAES, Role.ADMIN, Role.CHAIR)` | `tests/test_scoring.py::test_final_round_selection_and_failed_specialists` |
+| Failed Round 1 stays failed | `first is None or first.status == TurnStatus.FAILED -> first is None` | `tests/test_scoring.py::test_final_round_selection_and_failed_specialists` |
+| Successful Round 2 supersedes Round 1 | `final.append(second if second is not None and second.status == TurnStatus.OK else first) -> final.append(first)` | `tests/test_scoring.py::test_final_round_selection_and_failed_specialists` |
+| Failed Round 2 uses Round 1 | `second is not None and second.status == TurnStatus.OK -> second is not None` | `tests/test_scoring.py::test_round2_failed_or_skipped_falls_back` |
+| Skipped Round 2 uses Round 1 | `second = turns.get((role, 2)) -> second = turns.get((role, 2)) /         if second is None: /             continue` | `tests/test_scoring.py::test_round2_failed_or_skipped_falls_back` |
+| Dissent note copied exactly | `note=role_notes[argument.role] -> note="Changed note"` | `tests/test_scoring.py::test_stance_table` |
+| Dissent carries final argument ID | `argument_id=argument.argument_id, note= -> argument_id="R1-ADMIN", note=` | `tests/test_scoring.py::test_stance_table` |
+| Only unaccepted positions dissent | `if argument.stance not in ACCEPTED_STANCES[recommendation] -> if argument.stance in ACCEPTED_STANCES[recommendation]` | `tests/test_scoring.py::test_stance_table` |
+| Warning requires more than half | `if dissenters > len(final) / 2: -> if dissenters >= len(final) / 2:` | `tests/test_scoring.py::test_warning_requires_strict_majority` |
+| Warning denominator excludes failed specialists | `if dissenters > len(final) / 2: -> if dissenters > 4 / 2:` | `tests/test_scoring.py::test_warning_requires_strict_majority` |
+| Prefer latest judged round | `for round_number in (2, 1): -> for round_number in (1, 2):` | `tests/test_scoring.py::test_judge_round2_preferred_and_all_values_weighted_equally` |
+| Round 1 scores remain fallback | `for round_number in (2, 1): -> for round_number in (2,):` | `tests/test_scoring.py::test_judge_round1_fallback_even_when_round2_arguments_exist` |
+| Average all judges arguments and criteria | `mean(values) - 1 -> mean(values[:4]) - 1` | `tests/test_scoring.py::test_judge_round2_preferred_and_all_values_weighted_equally` |
+| Exclude null Round 1 counterarguments | `if (value := getattr(score, criterion.value)) is not None -> if (value := (getattr(score, criterion.value) or 0)) is not None` | `tests/test_scoring.py::test_judge_round1_fallback_even_when_round2_arguments_exist` |
+| Judge scale subtracts one | `(mean(values) - 1) / 4 * 100 -> mean(values) / 4 * 100` | `tests/test_scoring.py::test_judge_round1_fallback_even_when_round2_arguments_exist` |
+| Judge scale divides by four | `(mean(values) - 1) / 4 * 100 -> (mean(values) - 1) / 5 * 100` | `tests/test_scoring.py::test_judge_round1_fallback_even_when_round2_arguments_exist` |
+| No scores means zero and null round | `return 0.0, None -> return 100.0, 1` | `tests/test_scoring.py::test_no_judges_and_failed_turns_lower_confidence` |
+| Only final arguments incur disagreements | `if score.argument_id == argument.argument_id -> if score.argument_id.endswith(argument.role.value)` | `tests/test_scoring.py::test_final_penalties_ignore_fixed_and_dropped_round1_claims` |
+| One judge has zero disagreements | `if len(judges) != 2: /             continue -> if len(judges) != 2: /             count += 1 /             continue` | `tests/test_scoring.py::test_disagreements_absolute_per_criterion_and_one_judge_zero` |
+| Disagreement gap includes two | `abs(left - right) >= 2 -> abs(left - right) > 2` | `tests/test_scoring.py::test_disagreements_absolute_per_criterion_and_one_judge_zero` |
+| Disagreement gap is absolute | `abs(left - right) >= 2 -> (left - right) >= 2` | `tests/test_scoring.py::test_disagreements_absolute_per_criterion_and_one_judge_zero` |
+| Rebuttal claims also counted | `if argument.rebuttal is not None: -> if False:` | `tests/test_scoring.py::test_rebuttal_claims_count_once_by_id` |
+| Only code-ungrounded claims penalized | `claim.grounding_status == GroundingStatus.UNGROUNDED -> True` | `tests/test_scoring.py::test_final_penalties_ignore_fixed_and_dropped_round1_claims` |
+| Final claims only, per role fallback | `ungrounded = ungrounded_count(final) -> ungrounded = ungrounded_count(arguments)` | `tests/test_scoring.py::test_penalties_fall_back_per_role_not_per_judged_round` |
+| All specialists failed means null confidence | `if not final: /         return None -> if False: /         return None` | `tests/test_scoring.py::test_no_working_final_argument_has_no_confidence` |
+| Agreement uses nonfailed denominator | `agreement_part = accepting / len(final) * 100 -> agreement_part = accepting / 4 * 100` | `tests/test_scoring.py::test_no_judges_and_failed_turns_lower_confidence` |
+| Base gives equal weight to judges and agreement | `base = 0.5 * judge_part + 0.5 * agreement_part -> base = 0.6 * judge_part + 0.4 * agreement_part` | `tests/test_scoring.py::test_no_judges_and_failed_turns_lower_confidence` |
+| Only high findings penalized | `finding.severity == Level.HIGH -> finding.severity != Level.LOW` | `tests/test_scoring.py::test_high_findings_penalty_rate_and_cap` |
+| Ungrounded rate | `5 * ungrounded -> 4 * ungrounded` | `tests/test_scoring.py::test_ungrounded_penalty_rate_and_cap` |
+| Ungrounded cap | `min(20, 5 * ungrounded) -> min(25, 5 * ungrounded)` | `tests/test_scoring.py::test_ungrounded_penalty_rate_and_cap` |
+| Finding rate | `10 * high -> 5 * high` | `tests/test_scoring.py::test_high_findings_penalty_rate_and_cap` |
+| Finding cap | `min(20, 10 * high) -> min(30, 10 * high)` | `tests/test_scoring.py::test_high_findings_penalty_rate_and_cap` |
+| Disagreement rate | `5 * disagreements -> 4 * disagreements` | `tests/test_scoring.py::test_disagreement_penalty_rate_and_cap` |
+| Disagreement cap | `min(10, 5 * disagreements) -> min(15, 5 * disagreements)` | `tests/test_scoring.py::test_disagreement_penalty_rate_and_cap` |
+| Sum all penalties | `ungrounded_penalty.penalty + high_penalty.penalty + disagreement_penalty.penalty -> ungrounded_penalty.penalty + high_penalty.penalty` | `tests/test_scoring.py::test_combined_penalties_and_lower_clamping` |
+| Subtract penalties | `clamp_score(base - total) -> clamp_score(base + total)` | `tests/test_scoring.py::test_combined_penalties_and_lower_clamping` |
+| Clamp below zero | `max(0.0, score) -> score` | `tests/test_scoring.py::test_clamping` |
+| Clamp above 100 | `min(100.0, max(0.0, score)) -> max(0.0, score)` | `tests/test_scoring.py::test_clamping` |
+| High includes 70 | `if score >= 70: -> if score > 70:` | `tests/test_scoring.py::test_level_boundaries` |
+| Medium includes 40 | `if score >= 40: -> if score > 40:` | `tests/test_scoring.py::test_level_boundaries` |
+| Count repeated claim IDs only once | `claims.update((claim.claim_id, claim) for claim in argument.rebuttal.response_claims) -> claims.update((claim.claim_id + "-duplicate", claim) for claim in argument.rebuttal.response_claims)` | `tests/test_scoring.py::test_rebuttal_claims_count_once_by_id` |
+
+
+All 45 mutations were detected by their named tests. Committed code was restored and the audit worktree was clean after every mutation.
