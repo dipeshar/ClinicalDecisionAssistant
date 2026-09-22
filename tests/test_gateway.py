@@ -114,6 +114,20 @@ def test_tiny_budget_refuses_the_call_and_writes_one_budget_event(config: Config
     assert provider.calls_made == 0
 
 
+def test_reservation_accounts_for_prompt_length_not_just_the_output_cap(config: Config, tmp_path: Path) -> None:
+    """A budget tight enough to admit the output cap alone, but not the cap plus a long prompt."""
+    budget = Budget(BudgetConfig(
+        max_total_tokens=15, max_calls=5, max_seconds_total=60,
+        chair_reserve=dict(tokens=1, calls=1, seconds=10),
+        max_tokens_per_call=dict(specialist=10, judge=10, red_team=10, chair=10),
+    ))
+    provider = FakeProvider("fake", [Scripted()])
+    gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider}, budget=budget)
+    with pytest.raises(GatewayRefusal, match="token budget"):
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="x" * 10)
+    assert provider.calls_made == 0
+
+
 def test_timeout_retries_once_then_succeeds(config: Config, tmp_path: Path) -> None:
     provider = FakeProvider("fake", [ProviderTimeout, Scripted(raw_output="ok", tokens_in=1, tokens_out=2)])
     sleeps: list[float] = []

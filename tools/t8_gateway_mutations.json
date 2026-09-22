@@ -141,6 +141,6 @@
     "rule": "The reservation uses the token estimate, not a hardcoded value",
     "old": "tokens_in = estimate_tokens_in(prompt)",
     "new": "tokens_in = 0",
-    "test": "test_tiny_budget_refuses_the_call_and_writes_one_budget_event"
+    "test": "test_reservation_accounts_for_prompt_length_not_just_the_output_cap"
   }
 ]
