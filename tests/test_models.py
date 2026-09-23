@@ -42,10 +42,10 @@ def contract_samples() -> dict[str, dict[str, Any]]:
                          repair_used=False, status="ok", failure_reason=None)
     s["UntraceableClaim"] = dict(claim_id="R1-SURG-C1", reason="Missing source")
     s["FeedbackNote"] = dict(claim_id="R1-SURG-C1", note="Find a source")
-    s["ScoreDraft"] = dict(groundedness=1, logic=3, uncertainty=5, counterarguments=None,
+    s["ScoreDraft"] = dict(argument_id="R1-SURG", groundedness=1, logic=3, uncertainty=5, counterarguments=None,
                            justification=dict(groundedness="No source", logic="Coherent", uncertainty="Explicit"),
                            untraceable_claims=[s["UntraceableClaim"]], feedback=[s["FeedbackNote"]])
-    s["Score"] = dict(**s["ScoreDraft"], judge="JUDGE_A", argument_id="R1-SURG", model="fake-judge", round=1)
+    s["Score"] = dict(**s["ScoreDraft"], judge="JUDGE_A", model="fake-judge", round=1)
     s["FailedJudgeCall"] = dict(judge="JUDGE_B", round=1)
     s["CriterionMeans"] = dict(groundedness=1.0, logic=3.0, uncertainty=5.0, counterarguments=None)
     s["CriterionGaps"] = dict(groundedness=None, logic=None, uncertainty=None, counterarguments=None)
@@ -197,7 +197,7 @@ DRAFT_OWNERS = {
     "ClaimDraft": "claim_id grounding_status",
     "RevisionDraft": "new_claim_id",
     "ArgumentDraft": "argument_id role round stance_changed retrieved_passage_ids repair_used status failure_reason",
-    "ScoreDraft": "judge argument_id model round",
+    "ScoreDraft": "judge model round",
     "RedTeamFindingDraft": "finding_id",
     "InjectionCheckDraft": "scanner_flag_count claims_citing_flagged_lines",
     "ReportDraft": "run_id case_id status incomplete_reasons failed_turns confidence council_warning dissent red_team_findings injection_check judge_summary citations_index disclaimer human_decision",

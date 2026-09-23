@@ -8,6 +8,13 @@ full, call the gateway, parse the response as one `ScoreDraft` per argument
 CODE-owned `Score`. Round 1 feedback is truncated to the configured limits;
 Round 2 feedback is always empty, and Round 2 always needs a counterarguments
 score, regardless of what the model wrote for either (contracts section 6).
+
+Scores are matched to arguments by the `argument_id` each `ScoreDraft` names,
+never by array position (contracts section 6, rule 25): a response naming
+anything other than exactly the set of arguments shown — missing, duplicate,
+or unknown — is a validation failure. If it is still wrong after the one
+repair retry, the whole call is treated as failed (rule 18), the same as bad
+JSON that never parses; the run continues with the other judge.
 """
 
 from collections.abc import Callable, Mapping, MutableSequence, Sequence
@@ -57,17 +64,21 @@ def truncate_feedback(feedback: Sequence[dict], max_notes: int, max_words: int) 
     return [{"claim_id": note["claim_id"], "note": " ".join(note["note"].split()[:max_words])} for note in kept]
 
 
-def build_score(judge: Role, argument_id: str, model: str, round_number: Round, draft: ScoreDraft,
-                config: Config) -> Score:
+def build_score(judge: Role, model: str, round_number: Round, draft: ScoreDraft, config: Config) -> Score:
     """Force the round-dependent fields (contracts section 6) rather than trust the
-    model: Round 1 never has a counterarguments score, Round 2 never has feedback."""
+    model: Round 1 never has a counterarguments score, Round 2 never has feedback.
+
+    `draft.argument_id` is used as-is: by the time this is called, `run_judge`
+    has already verified the full set of argument_ids in the response exactly
+    matches the arguments shown (rule 25).
+    """
     counterarguments = None if round_number == 1 else draft.counterarguments
     feedback = [] if round_number == 2 else truncate_feedback(
         [note.model_dump() for note in draft.feedback], config.judging.feedback_max_notes,
         config.judging.feedback_max_words,
     )
     return Score(
-        judge=judge, argument_id=argument_id, model=model, round=round_number,
+        judge=judge, argument_id=draft.argument_id, model=model, round=round_number,
         groundedness=draft.groundedness, logic=draft.logic, uncertainty=draft.uncertainty,
         counterarguments=counterarguments, justification=draft.justification,
         untraceable_claims=draft.untraceable_claims, feedback=feedback,
@@ -105,14 +116,28 @@ def run_judge(
     data_blocks.extend((argument.argument_id, render_argument(argument, sources)) for argument in shown)
     body = prompting.judge_body(data_blocks, prompts_dir)
 
+    expected_ids = {argument.argument_id for argument in shown}
+
     def find_issues(scores: list[ScoreDraft]) -> list[RepairIssue]:
-        if len(scores) != len(shown):
-            return [RepairIssue("Response", f"expected {len(shown)} scores, one per argument shown, "
-                                            f"got {len(scores)}")]
+        seen_ids = [score.argument_id for score in scores]
+        missing = expected_ids - set(seen_ids)
+        unknown = sorted(set(seen_ids) - expected_ids)
+        duplicated = sorted({id for id in seen_ids if seen_ids.count(id) > 1})
+        issues = []
+        if missing:
+            issues.append(RepairIssue("Response", f"missing a score for: {', '.join(sorted(missing))}"))
+        if unknown:
+            issues.append(RepairIssue("Response", f"scored an argument that was not shown: {', '.join(unknown)}"))
+        if duplicated:
+            issues.append(RepairIssue("Response", f"scored more than once: {', '.join(duplicated)}"))
+        if issues:
+            # The argument_id set is wrong; positions can't be trusted yet, so
+            # don't also report per-score problems until this is fixed.
+            return issues
         if round_number == 2:
-            return [RepairIssue(f"Score for {argument.argument_id}",
+            return [RepairIssue(f"Score for {score.argument_id}",
                                 "counterarguments score is required in Round 2")
-                    for argument, score in zip(shown, scores) if score.counterarguments is None]
+                    for score in scores if score.counterarguments is None]
         return []
 
     draft, _repair_used, failure_reason, model = call_and_parse_with_repair(
@@ -124,7 +149,12 @@ def run_judge(
         assert failure_reason is not None  # call_and_parse_with_repair always explains a None draft
         return [], [], True
 
+    if find_issues(draft):
+        # Still wrong after the one repair retry (rule 25): the call is failed,
+        # not partially accepted, since positions can't be trusted to fall back on.
+        return [], [], True
+
     assert model is not None  # a successful draft always came from a real gateway call
-    scores = [build_score(judge, argument.argument_id, model, round_number, score_draft, config)
-              for argument, score_draft in zip(shown, draft)]
+    by_id = {score.argument_id: score for score in draft}
+    scores = [build_score(judge, model, round_number, by_id[argument.argument_id], config) for argument in shown]
     return scores, presented_order, False

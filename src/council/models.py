@@ -288,6 +288,7 @@ class FeedbackNote(ContractModel):
 
 
 class ScoreDraft(ContractModel):
+    argument_id: str
     groundedness: Rating
     logic: Rating
     uncertainty: Rating
@@ -299,7 +300,6 @@ class ScoreDraft(ContractModel):
 
 class Score(ScoreDraft):
     judge: Judge
-    argument_id: str
     model: str
     round: Round
 
