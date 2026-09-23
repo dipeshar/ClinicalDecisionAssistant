@@ -157,6 +157,27 @@ def test_invalid_chair_ids_share_one_repair_retry(config: Config, tmp_path: Path
     assert "UNKNOWN" in trace[1]["prompt"]
 
 
+def test_nonfinal_recommendation_basis_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
+    bad = draft_json(basis=["R1-SURG"])
+    report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])
+    assert report.recommendation is not None
+    assert "final-round argument IDs" in events(path)[1]["prompt"]
+
+
+def test_nonfinal_strongest_claim_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
+    bad = draft_json(strongest=["R1-SURG-C1"])
+    report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])
+    assert report.recommendation is not None
+    assert "final-round claim IDs" in events(path)[1]["prompt"]
+
+
+def test_unknown_action_source_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
+    bad = draft_json(action_ids=["UNKNOWN"])
+    report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])
+    assert report.recommendation is not None
+    assert "UNKNOWN" in events(path)[1]["prompt"]
+
+
 def test_ungrounded_strongest_claim_triggers_repair(config: Config, tmp_path: Path) -> None:
     args = [argument(Role.SURG, 1, grounded=False)]
     repaired = draft_json(basis=["R1-SURG"], strongest=[], notes={"SURG": "Conditional support."},
@@ -175,6 +196,20 @@ def test_narrative_requires_real_id_at_end_of_every_sentence(config: Config, tmp
     assert report.recommendation is not None
     repair = events(path)[1]["prompt"]
     assert "must end with at least one ID tag" in repair and "NOPE" in repair
+
+
+def test_narrative_unknown_id_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
+    bad = draft_json(narrative="The sentence ends in a syntactically valid tag [NOPE].")
+    report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])
+    assert report.recommendation is not None
+    assert "uses IDs that do not exist: NOPE" in events(path)[1]["prompt"]
+
+
+def test_narrative_missing_end_tag_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
+    bad = draft_json(narrative="The sentence mentions [RT-1] before uncited closing words.")
+    report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])
+    assert report.recommendation is not None
+    assert "must end with at least one ID tag" in events(path)[1]["prompt"]
 
 
 def test_role_notes_must_cover_exactly_non_failed_final_specialists(config: Config, tmp_path: Path) -> None:
@@ -220,3 +255,21 @@ def test_failed_turns_and_supplied_reasons_make_full_report_incomplete(config: C
     assert report.incomplete_reasons == [
         "R1-PHYS failed: Synthetic failure", "JUDGE_B failed in Round 2", "budget exhausted after Round 1",
     ]
+
+
+def test_code_computes_dissent_and_majority_warning(config: Config, tmp_path: Path) -> None:
+    args = [
+        argument(Role.SURG, 1, stance="against"),
+        argument(Role.PHYS, 1, stance="against"),
+        argument(Role.ANAES, 1, stance="for"),
+    ]
+    output = draft_json(
+        basis=["R1-ANAES"], strongest=["R1-ANAES-C1"], action_ids=["RT-1"],
+        notes={"SURG": "Opposes proceeding.", "PHYS": "Opposes proceeding.", "ANAES": "Supports proceeding."},
+        narrative="The council records divided positions [R1-ANAES] [R1-SURG] [R1-PHYS].",
+    )
+    report, _, _ = run(config, tmp_path, [Scripted(raw_output=output)], arguments=args,
+                       scores=[score(argument.argument_id, 1) for argument in args])
+    assert [item.role for item in report.dissent] == [Role.SURG, Role.PHYS]
+    assert [item.note for item in report.dissent] == ["Opposes proceeding.", "Opposes proceeding."]
+    assert report.council_warning is not None
