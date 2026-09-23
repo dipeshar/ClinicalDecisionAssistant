@@ -1639,3 +1639,66 @@ No T13 contract field or rule could not be implemented as written.
 All seven mutations were detected by their named tests. The committed source was restored after each mutation. Final verification: 1,050 tests passed.
 
 What I verified by hand:
+
+## T14: chair and report checks
+
+`run_chair` (`src/council/agents/chair.py`) first calls T6's `final_arguments`. When that result is empty, it skips `LLMGateway` entirely and returns the section 8 bare report with `"all specialists failed"`, as explicitly required for T14. Otherwise the chair sees only final specialist arguments (Round 2 with Round 1 fallback), judge scores for those exact argument IDs, and the red-team report. Confidence, dissent, the council warning, status, failed-turn lists, citations, the disclaimer, and the human-decision placeholder are not in the chair draft schema and are filled by `src/council/report.py`.
+
+Chair validation shares the single repair retry. `recommendation_basis` must use final argument IDs; strongest claims must exist in a final argument and be grounded; required-action sources must be final claim or red-team finding IDs; role notes must cover exactly the non-failed final specialists; and each narrative sentence must end in real claim, argument, or finding tags. A response still invalid after repair produces the same bare-report shape as a failed chair call.
+
+`bare_report` preserves the code-owned data collected so far. `full_report` derives failed specialists and failed judge calls, merges those reasons with caller-supplied reasons such as a budget exhaustion, marks the report `INCOMPLETE` whenever any reason remains, and delegates the T6 formula/table logic to `compute_confidence`, `compute_dissent`, and `council_warning`.
+
+What went wrong / limits:
+
+- The mutation audit found one surviving mutation: deleting all judge scores from the confidence call still passed because the test checked that confidence was code-owned and counted specialists, but not its numeric judge input. The test now asserts the exact score (`87.5`), `judge_part` (`75.0`), and Round 2 selection; the mutation then failed.
+- The initial focused test incorrectly searched the whole prompt for the words `confidence`, `dissent`, and `disclaimer`, but the human-owned chair instructions correctly mention that those fields are withheld. The assertion was narrowed to JSON field names, which proves they are absent from supplied data and the draft schema without contradicting the prompt text.
+- The sandbox's Windows pytest temporary directory still required the previously approved test-run access. No network or real provider was used.
+- A pre-existing untracked `tools/t6_check_failed_specialist.py` was preserved. Git also continues to warn that `.test-tmp/t13/` and `pytest-cache-files-dh8x9g56/` are unreadable; after every mutation, the tracked T14 files had no diff.
+- Section 13 rule 8 says the chair's strongest-claim text is copied by code, while section 8 defines `strongest_for`/`strongest_against` as lists of claim IDs and the `Report` contract has no field for copied text. T14 validates and preserves the IDs; a later human-readable report renderer can resolve their text from `RunBundle.arguments` without letting the chair retype it. No contract field was invented.
+- Every model response in the tests came from `FakeProvider`; no real model was called.
+
+#### T14 contract check
+
+Implementation in `src/council/agents/chair.py` and `src/council/report.py`; tests in `tests/test_chair.py`.
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Extra T14 rule and section 8 second bare trigger: use `final_arguments`; when empty, skip chair and include `all specialists failed` | first branch in `run_chair`, `bare_report` | `test_all_specialists_failed_skips_chair_and_writes_bare_report` (asserts zero provider calls) |
+| Design chair input: final arguments, their final-round scores, red-team report; no confidence/dissent/disclaimer data | `run_chair` data blocks and final-ID score filter | `test_good_chair_result_uses_final_arguments_and_code_owned_fields` |
+| Section 13 rule 8: recommendation basis uses final-round argument IDs | `chair_issues` `bad_basis` check | `test_nonfinal_recommendation_basis_alone_triggers_repair` |
+| Section 13 rule 8: strongest claims exist in final arguments and are grounded | `chair_issues` final-claim registry and grounding check | `test_nonfinal_strongest_claim_alone_triggers_repair`, `test_ungrounded_strongest_claim_triggers_repair` |
+| Section 8 required actions point to existing claim or finding IDs | `chair_issues` action source registry | `test_unknown_action_source_alone_triggers_repair` |
+| Section 8 narrative: every sentence ends in existing ID tags | `narrative_issues` | `test_narrative_missing_end_tag_alone_triggers_repair`, `test_narrative_unknown_id_alone_triggers_repair` |
+| Design role notes: one per non-failed final specialist | `chair_issues` exact role-set check | `test_role_notes_must_cover_exactly_non_failed_final_specialists` |
+| Section 13 rule 1: bad shape/IDs share one repair; still invalid after repair fails the chair | `call_and_parse_with_repair`, final `chair_issues` recheck | `test_invalid_chair_ids_share_one_repair_retry`, `test_chair_failure_writes_bare_report` |
+| Section 8 bare report shape for chair failure | `bare_report` | `test_chair_failure_writes_bare_report` |
+| Section 8 `status`, `incomplete_reasons`, `failed_turns` | `derived_incomplete_reasons`, `failed_turn_ids`, `merge_reasons`; status selected in `full_report` | `test_failed_turns_and_supplied_reasons_make_full_report_incomplete` |
+| Section 8/12 confidence, dissent, council warning are CODE-owned | `compute_confidence`, `compute_dissent`, `council_warning` calls in `full_report` | `test_good_chair_result_uses_final_arguments_and_code_owned_fields`, `test_code_computes_dissent_and_majority_warning` |
+| Section 8 code fields copied/filled: red-team data, privacy summary, judge summary, citations, disclaimer, null human decision | `bare_report`, `full_report`, `collected_citations` | `test_good_chair_result_uses_final_arguments_and_code_owned_fields`, `test_chair_failure_writes_bare_report` |
+| Every chair model call goes through `LLMGateway` with role `CHAIR`, step `chair`, no round | `call_and_parse_with_repair` in `run_chair` | trace assertions in `test_good_chair_result_uses_final_arguments_and_code_owned_fields`; T8 import guard remains green |
+
+No data-contract field was changed. The strongest-claim-text wording described above cannot be stored in the specified `Report` shape and remains resolvable from the run bundle by ID.
+
+#### T14 mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Skip chair when no non-failed final specialist exists | disable the empty-`final_arguments` branch | `test_all_specialists_failed_skips_chair_and_writes_bare_report` |
+| Chair sees final arguments only | pass every successful round instead of `final_arguments` | `test_good_chair_result_uses_final_arguments_and_code_owned_fields` |
+| Recommendation basis is final-round only | disable the invalid-basis branch | `test_nonfinal_recommendation_basis_alone_triggers_repair` |
+| Strongest claims are final-round only | disable the invalid-strongest branch | `test_nonfinal_strongest_claim_alone_triggers_repair` |
+| Strongest claims must be grounded | disable the ungrounded-strongest branch | `test_ungrounded_strongest_claim_triggers_repair` |
+| Required-action source IDs exist | disable action-source validation | `test_unknown_action_source_alone_triggers_repair` |
+| Every narrative sentence ends with an ID tag | disable the end-tag check | `test_narrative_missing_end_tag_alone_triggers_repair` |
+| Narrative tags name real IDs | replace the unknown-tag set with empty | `test_narrative_unknown_id_alone_triggers_repair` |
+| Role notes cover exactly the final specialists | disable the exact role-set check | `test_role_notes_must_cover_exactly_non_failed_final_specialists` |
+| Still-invalid repaired chair output becomes a bare report | remove the final `chair_issues` recheck | `test_chair_failure_writes_bare_report` |
+| Confidence uses collected judge scores | call `compute_confidence` with no scores | `test_good_chair_result_uses_final_arguments_and_code_owned_fields` (survived first, killed after stronger assertion) |
+| Dissent is computed by code | replace computed dissent with an empty list | `test_code_computes_dissent_and_majority_warning` |
+| Majority dissent sets the code warning | hardcode `council_warning=None` | `test_code_computes_dissent_and_majority_warning` |
+| Caller-supplied incomplete reasons are retained | omit supplied reasons from `full_report` | `test_failed_turns_and_supplied_reasons_make_full_report_incomplete` |
+| Bare reports retain collected red-team findings | replace findings with an empty list | `test_chair_failure_writes_bare_report` |
+
+All 15 mutations were detected by their named tests. One required a test improvement, committed before repeating it. The committed source was restored after every mutation. Final verification: 1,064 tests passed.
+
+What I verified by hand:
