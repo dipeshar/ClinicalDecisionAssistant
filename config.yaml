@@ -11,11 +11,11 @@ paths:
 # load_config rejects TBD entries with the setting's name; tests use synthetic model names.
 # API keys come from environment variables, never from this file.
 models:
-  specialist: { provider: TBD, model: TBD }
-  chair:      { provider: TBD, model: TBD }
-  red_team:   { provider: TBD, model: TBD }
-  judge_a:    { provider: TBD, model: TBD }
-  judge_b:    { provider: TBD, model: TBD }
+  specialist: { provider: groq, model: llama-3.3-70b-versatile }
+  chair:      { provider: groq, model: llama-3.3-70b-versatile }
+  red_team:   { provider: groq, model: llama-3.3-70b-versatile }
+  judge_a:    { provider: groq, model: qwen/qwen3-32b }
+  judge_b:    { provider: groq, model: qwen/qwen3-32b }
 
 temperature:            # used only if the model allows it
   specialist: 0.4
@@ -85,4 +85,4 @@ roles:
 
 privacy:
   synthetic_marker: "Synthetic case for a demonstration"
-  approved_providers: []   # fill in the providers you actually use, for example [openai, anthropic]
+  approved_providers: [groq]
