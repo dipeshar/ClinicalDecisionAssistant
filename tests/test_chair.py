@@ -131,6 +131,9 @@ def test_good_chair_result_uses_final_arguments_and_code_owned_fields(config: Co
     assert report.status == "COMPLETE"
     assert report.recommendation == "proceed_with_modifications"
     assert report.confidence is not None and report.confidence.inputs.specialists_counted == 2
+    assert report.confidence.score == 87.5
+    assert report.confidence.inputs.judge_part == 75.0
+    assert report.confidence.inputs.judge_round_used == 2
     assert report.dissent == [] and report.council_warning is None
     assert report.disclaimer == "decision support only, requires human clinical sign-off, synthetic data"
     assert report.red_team_findings == RED_TEAM.findings
