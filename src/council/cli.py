@@ -20,6 +20,7 @@ from council.models import (
 )
 from council.orchestrator import CouncilRun, run_council
 from council.providers.base import Provider
+from council.providers.factory import ProviderConfigurationError, build_providers
 from council.trace import TraceWriteError, TraceWriter
 
 Input = Callable[[str], str]
@@ -157,11 +158,17 @@ def build_bundle(run_id: str, created_at: datetime, config: Config, case: CaseCo
     )
 
 
-def run_command(case_path: Path, config_path: Path, providers: Mapping[str, Provider],
+def run_command(case_path: Path, config_path: Path, providers: Mapping[str, Provider] | None = None,
                 input_fn: Input = input, output_fn: Output = print,
                 clock: Clock = lambda: datetime.now(timezone.utc)) -> Path:
-    """Run the council, write T16 artifacts, and save the hash-bound human decision."""
+    """Run the council, write T16 artifacts, and save the hash-bound human decision.
+
+    `providers=None` is the real CLI's normal path: real adapters are built from
+    config (T17's `build_providers`), reading each provider's API key from the
+    environment. Callers that need a stand-in (tests, `tools/demo_run.py`) pass an
+    explicit mapping instead, which is used exactly as given."""
     config = load_config(config_path)
+    resolved_providers = dict(providers) if providers is not None else build_providers(config)
     created_at = clock()
     case = ingest_case(case_path, config)
     run_id = new_run_id(case.case_id, created_at)
@@ -169,7 +176,7 @@ def run_command(case_path: Path, config_path: Path, providers: Mapping[str, Prov
     folder.mkdir(parents=True, exist_ok=False)
     trace = TraceWriter(folder / "trace.jsonl", run_id)
     kb = load_kb({role: settings.kb for role, settings in config.roles.items()})
-    gateway = LLMGateway(config, Budget(config.budget), trace, dict(providers))
+    gateway = LLMGateway(config, Budget(config.budget), trace, resolved_providers)
     result = run_council(run_id=run_id, case=case, kb=kb, config=config, gateway=gateway,
                          prompts_dir=config.paths.prompts)
     bundle = build_bundle(run_id, created_at, config, case, kb, result)
@@ -206,15 +213,17 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, *, providers: Mapping[str, Provider] | None = None,
          input_fn: Input = input, output_fn: Output = print,
          clock: Clock = lambda: datetime.now(timezone.utc)) -> int:
-    """CLI entry point. T17 supplies real provider adapters; tests inject FakeProvider."""
+    """CLI entry point. `providers=None` (the real `python -m council run` invocation)
+    builds real adapters from config; tests and tools/demo_run.py inject FakeProvider."""
     command_parser = parser()
     args = command_parser.parse_args(argv)
     if args.command is None:
         command_parser.print_help()
         return 0
     try:
-        run_command(args.case, args.config, providers or {}, input_fn, output_fn, clock)
-    except (ConfigError, IngestError, KBError, TraceWriteError, OSError, ValueError) as error:
+        run_command(args.case, args.config, providers, input_fn, output_fn, clock)
+    except (ConfigError, IngestError, KBError, TraceWriteError, OSError, ValueError,
+            ProviderConfigurationError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     return 0

@@ -115,6 +115,26 @@ def write_cli_case(root: Path) -> Path:
     return path
 
 
+def test_real_cli_invocation_reports_missing_api_key_clearly_not_a_stack_trace(
+    config: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """No `providers=` given (the real `python -m council run` path) builds real
+    adapters from config; a missing key must fail cleanly, before ingest or the KB."""
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    config_path = write_cli_config(config, tmp_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    for name in data["models"]:
+        data["models"][name]["provider"] = "groq"
+    data["privacy"]["approved_providers"] = ["groq"]
+    config_path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+    code = main(["run", str(tmp_path / "a_case_that_does_not_exist.md"), "--config", str(config_path)])
+
+    assert code == 1
+    assert "GROQ_API_KEY" in capsys.readouterr().err
+    assert not (tmp_path / "runs").exists()
+
+
 def test_run_command_writes_pre_t19_folder_and_hash_bound_comment(
     config: object, tmp_path: Path,
 ) -> None:
