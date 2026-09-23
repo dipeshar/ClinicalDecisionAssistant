@@ -328,6 +328,8 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | repair | bool | True if this call is the repair retry |
 | budget_tokens_used | int | Total tokens used after this event |
 | error | str or null | |
+| finish_reason | str or null | Why the model stopped: "stop", "length", or similar. Null on a failed call with no response. |
+| reasoning | str or null | The model's internal reasoning content, when requested and returned. Null otherwise. |
 
 ## 11. Budget and config
 
