@@ -127,10 +127,13 @@ def test_good_output_produces_an_ok_round2_argument(config: Config, tmp_path: Pa
     assert argument.status == "ok" and argument.failure_reason is None
     assert argument.argument_id == "R2-SURG" and argument.round == 2
     assert len(argument.claims) == 1 and argument.claims[0].grounding_status == "grounded"
+    assert argument.claims[0].claim_id == "R2-SURG-C1"
     assert argument.rebuttal is not None
     assert argument.rebuttal.target_argument_id == "R1-PHYS" and argument.rebuttal.target_claim_id == "R1-PHYS-C1"
     assert len(argument.rebuttal.response_claims) == 1
     assert argument.rebuttal.response_claims[0].grounding_status == "grounded"
+    # Rebuttal claims continue the same claim_id numbering after the main claims list.
+    assert argument.rebuttal.response_claims[0].claim_id == "R2-SURG-C2"
     assert {r.round1_claim_id for r in argument.revisions} == {"R1-SURG-C1", "R1-SURG-C2"}
     kept = next(r for r in argument.revisions if r.round1_claim_id == "R1-SURG-C1")
     assert kept.action == "kept" and kept.new_claim_id == "R2-SURG-C1"
@@ -140,8 +143,11 @@ def test_good_output_produces_an_ok_round2_argument(config: Config, tmp_path: Pa
 
     prompt = trace_events(trace_path)[0]["prompt"]
     assert "R1-PHYS" in prompt and "R1-ANAES" in prompt and "R1-ADMIN" in prompt  # other arguments
+    assert "### R1-PHYS (PHYS)" in prompt  # the "other argument" heading format
+    assert "### R1-SURG (SURG)" not in prompt  # own role must not appear as an "other" argument
     assert "----- BEGIN Your Round 1 argument" in prompt  # the labeled data block itself
     assert "R1-SURG-C1" in prompt and "R1-SURG-C2" in prompt
+    assert "SURG-KB-01" in prompt and "Operative risk is low" in prompt  # retrieved passages block
 
 
 def test_round1_failure_skips_round2(config: Config, tmp_path: Path) -> None:
@@ -365,6 +371,64 @@ def test_bad_json_twice_fails_the_turn(config: Config, tmp_path: Path) -> None:
                             own_round1(), ALL_ROUND1, [], REAL_PROMPTS)
 
     assert argument is not None and argument.status == "failed"
+
+
+def test_failed_other_argument_excluded_from_prompt(config: Config, tmp_path: Path) -> None:
+    round1_with_a_failure = [own_round1(), other_round1(Role.PHYS), other_round1(Role.ANAES, status="failed"),
+                             other_round1(Role.ADMIN)]
+    revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
+    gateway, trace_path = make_gateway(config, tmp_path, [
+        Scripted(raw_output=round2_json(revisions), tokens_in=5, tokens_out=5),
+    ])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), round1_with_a_failure, [], REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "ok"
+    prompt = trace_events(trace_path)[0]["prompt"]
+    assert "### R1-PHYS (PHYS)" in prompt
+    assert "### R1-ANAES (ANAES)" not in prompt
+
+
+def test_judge_notes_filter_to_own_round1_argument(config: Config, tmp_path: Path) -> None:
+    """A score for a different argument, or a different round, must not appear in the notes."""
+    scores = [
+        Score(judge="JUDGE_A", argument_id="R1-SURG", model="fake/judge", round=1,
+             groundedness=5, logic=5, uncertainty=5, counterarguments=None, justification={},
+             untraceable_claims=[], feedback=[FeedbackNote(claim_id=None, note="Relevant note for SURG.")]),
+        Score(judge="JUDGE_A", argument_id="R1-PHYS", model="fake/judge", round=1,
+             groundedness=1, logic=1, uncertainty=1, counterarguments=None, justification={},
+             untraceable_claims=[], feedback=[FeedbackNote(claim_id=None, note="Irrelevant note for PHYS.")]),
+        Score(judge="JUDGE_B", argument_id="R1-SURG", model="fake/judge", round=2,
+             groundedness=1, logic=1, uncertainty=1, counterarguments=4, justification={},
+             untraceable_claims=[], feedback=[]),
+    ]
+    revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
+    gateway, trace_path = make_gateway(config, tmp_path, [
+        Scripted(raw_output=round2_json(revisions), tokens_in=5, tokens_out=5),
+    ])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), ALL_ROUND1, scores, REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "ok"
+    prompt = trace_events(trace_path)[0]["prompt"]
+    assert "Relevant note for SURG." in prompt
+    assert "Irrelevant note for PHYS." not in prompt
+
+
+def test_stance_changed_is_recorded_when_stance_differs(config: Config, tmp_path: Path) -> None:
+    revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
+    changed = json.loads(round2_json(revisions))
+    changed["stance"] = "against"
+    gateway, _ = make_gateway(config, tmp_path, [Scripted(raw_output=json.dumps(changed), tokens_in=5, tokens_out=5)])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), ALL_ROUND1, [], REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "ok"
+    assert argument.stance == "against"
+    assert argument.stance_changed is True
 
 
 def test_render_other_arguments_excludes_own_role() -> None:
