@@ -217,7 +217,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | findings | list[RedTeamFinding] | LLM | |
 | injection_check.scanner_flag_count | int | CODE | From ingest |
 | injection_check.claims_citing_flagged_lines | list[claim_id] | CODE | Any claim whose citation points at a flagged line |
-| injection_check.verdict | `no_sign` \| `possible_influence` \| `influenced` | LLM | Did any argument follow an embedded instruction? |
+| injection_check.verdict | `no_sign` \| `possible_influence` \| `influenced` \| `not_run` | LLM, or CODE when the red team did not run | Did any argument follow an embedded instruction? `not_run` is set by code, never the red team, when this step of the pipeline was skipped (see the new rule below). |
 | injection_check.notes | str | LLM | |
 
 ## 8. Report
@@ -238,7 +238,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | role_notes | dict: role to str | CHAIR (LLM) | One short note per non-failed specialist on how its position relates to the recommendation |
 | dissent | list of `{role, stance, argument_id, note}` | CODE | Specialists whose final stance is not accepted (section 12). `note` is copied from `role_notes`. |
 | red_team_findings | list[RedTeamFinding] | CODE | Copied in full from the red team report |
-| injection_check | object | CODE | Copied from the red team report |
+| injection_check | object | CODE | Copied from the red team report, or code-built with verdict `not_run` if the red team never ran (see the rule above) |
 | privacy_summary | PrivacySummary | CODE | Shape below |
 | judge_summary | JudgeSummary | CODE | Shape below |
 | narrative | str | CHAIR (LLM) | Short summary. Every sentence ends with at least one ID tag such as `[R1-SURG-C2]`. Code checks the tags exist. |
@@ -407,6 +407,7 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 23. **Budget refusal event.** When the gateway refuses a call because the reservation would exceed a budget limit (tokens, calls, seconds, or the chair reserve), it writes exactly one `EventType.BUDGET` trace event recording which limit was hit and the amount requested versus what remained. It does not include the prompt. The refused turn counts as failed, the same as a privacy refusal (rule 20).
 24. **Binding judge concerns in Round 2.** A Round 1 claim that both judges named — each independently, as a `feedback` note with that `claim_id`, or by listing it in `untraceable_claims`, in either combination — cannot be marked `kept` in the specialist's Round 2 `revisions`. A claim named by only one judge is not binding. Code checks this after the specialist's Round 2 response is otherwise valid: if any `revisions` entry marks such a doubly-named claim `kept`, treat this as a validation failure eligible for the same repair retry as a bad citation or bad shape (rule 1). If it is still `kept` after the retry, code overrides it: remove it from the Round 2 `claims` list, set its `revisions` entry to `action: dropped`, `new_claim_index: null`, and replace `reason` with a fixed code-generated note stating both judges flagged the claim. Record the override as a trace validation event naming the claim id. This does not fail the specialist's turn; the rest of the Round 2 argument stands as submitted.
 25. **Judge response matching.** A judge's response for one round must include exactly one score per non-failed argument presented that round, each carrying the argument_id of a presented argument. If any argument_id is missing, duplicated, or doesn't match a presented argument, this is a validation failure eligible for the same repair retry as a bad citation or bad shape (rule 1). If it is still wrong after the retry, that judge's call for that round is treated as failed (rule 18): the run continues with the other judge, and the report is marked INCOMPLETE with the reason.
+26. **Injection check when the red team did not run.** If the pipeline reaches the report without ever running the red team — the budget ran out before that step, or every specialist failed and the run went straight to a bare report — code builds `injection_check` itself rather than copying it from a `RedTeamReport`, which doesn't exist in this case. `scanner_flag_count` and `claims_citing_flagged_lines` are computed the same way they always are, from ingest and whatever claims do exist. `verdict` is set to `not_run`, and `notes` is a fixed message stating the red team did not run and why. `red_team_findings` is an empty list. This keeps the scanner's real findings visible even when the qualitative check was never reached, instead of losing them or inventing a verdict the system never formed.
 
 ## 14. Run folder
 

@@ -190,6 +190,7 @@ The exact table and formula are in `data-contracts.md`, section 12.
 - Its evidence can be case sections, arguments, claims, or its own KB passages.
 - For the injection check, code lists the scanner flags and any claims that cite a flagged line. The red team says whether any argument followed an embedded instruction.
 - Red-team findings appear in full in the final report.
+- If the red team never runs — budget exhausted, or every specialist failed — code still reports the scanner's own findings in `injection_check`, with `verdict: not_run` rather than a guessed verdict. The qualitative judgment is honestly reported as never having been made, not invented.
 
 ## Prompt injection defense
 
