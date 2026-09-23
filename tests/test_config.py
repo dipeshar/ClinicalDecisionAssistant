@@ -144,9 +144,14 @@ def test_unknown_role(tmp_path: Path, valid_data: dict[str, Any]) -> None:
         load_config(write_config(tmp_path, valid_data))
 
 
-def test_checked_in_placeholders_explain_what_to_fill() -> None:
-    with pytest.raises(ConfigError, match="models.specialist.provider: replace TBD"):
-        load_config()
+def test_checked_in_config_has_real_models_and_approved_provider() -> None:
+    config = load_config()
+    for role_choice in (config.models.specialist, config.models.chair, config.models.red_team,
+                       config.models.judge_a, config.models.judge_b):
+        assert role_choice.provider != "TBD"
+        assert role_choice.model != "TBD"
+    assert config.privacy.approved_providers
+    assert "groq" in config.privacy.approved_providers
 
 
 def test_tunable_values_and_missing_resource_files(tmp_path: Path, valid_data: dict[str, Any]) -> None:
