@@ -148,7 +148,7 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | Field | Type | Filled by | Notes |
 |---|---|---|---|
 | judge | `JUDGE_A` \| `JUDGE_B` | CODE | |
-| argument_id | str | CODE | Must be a real, non-failed argument |
+| argument_id | str | LLM, verified by CODE | The judge names which argument this score is for, exactly as shown. Code verifies the full set of argument_ids in one judge's response for one round exactly matches the set of non-failed arguments presented that round (no missing, no duplicate, no unknown IDs) before accepting any of them. |
 | model | str | CODE | Which model scored. Judges use a different model from the specialists. |
 | round | 1 \| 2 | CODE | |
 | groundedness | int 1-5 | LLM | |
@@ -406,6 +406,7 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 22. **One pattern list.** Ingest and the gateway use the same identifier pattern list, kept in one place, so they cannot drift apart.
 23. **Budget refusal event.** When the gateway refuses a call because the reservation would exceed a budget limit (tokens, calls, seconds, or the chair reserve), it writes exactly one `EventType.BUDGET` trace event recording which limit was hit and the amount requested versus what remained. It does not include the prompt. The refused turn counts as failed, the same as a privacy refusal (rule 20).
 24. **Binding judge concerns in Round 2.** A Round 1 claim that both judges named — each independently, as a `feedback` note with that `claim_id`, or by listing it in `untraceable_claims`, in either combination — cannot be marked `kept` in the specialist's Round 2 `revisions`. A claim named by only one judge is not binding. Code checks this after the specialist's Round 2 response is otherwise valid: if any `revisions` entry marks such a doubly-named claim `kept`, treat this as a validation failure eligible for the same repair retry as a bad citation or bad shape (rule 1). If it is still `kept` after the retry, code overrides it: remove it from the Round 2 `claims` list, set its `revisions` entry to `action: dropped`, `new_claim_index: null`, and replace `reason` with a fixed code-generated note stating both judges flagged the claim. Record the override as a trace validation event naming the claim id. This does not fail the specialist's turn; the rest of the Round 2 argument stands as submitted.
+25. **Judge response matching.** A judge's response for one round must include exactly one score per non-failed argument presented that round, each carrying the argument_id of a presented argument. If any argument_id is missing, duplicated, or doesn't match a presented argument, this is a validation failure eligible for the same repair retry as a bad citation or bad shape (rule 1). If it is still wrong after the retry, that judge's call for that round is treated as failed (rule 18): the run continues with the other judge, and the report is marked INCOMPLETE with the reason.
 
 ## 14. Run folder
 

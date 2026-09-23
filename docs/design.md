@@ -145,6 +145,7 @@ How judges work:
 
 - Each judge scores all non-failed specialist arguments of a round in one call. That is 4 judge calls in total (2 judges, 2 rounds).
 - Code shuffles the argument order for each judge and round, and records the order, to reduce position bias.
+- Each score in the response names which argument it's for; code checks this matches the arguments shown exactly, so a score can never be silently misattributed to the wrong argument.
 - The two judges do not see each other's scores.
 - Judges list any claim they cannot trace to a source.
 - Judges also write short notes for each specialist on what to fix. Notes are limited in number and length. They are about sourcing, logic and uncertainty, and never about which recommendation is right, so judges cannot steer the outcome. Notes carry no scores. A note naming a specific claim is the one exception: it doesn't steer the recommendation, but when both judges independently name the same claim, it is binding on that claim.
