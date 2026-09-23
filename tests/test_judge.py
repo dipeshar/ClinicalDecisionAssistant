@@ -219,12 +219,11 @@ def test_scores_are_matched_by_argument_id_not_response_order(config: Config, tm
     assert [score.argument_id for score in scores] == ["R1-SURG", "R1-PHYS"]
 
 
-def test_duplicate_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
-    """One argument scored twice, the other not at all: a real judge mistake, not just a count."""
+def test_missing_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
+    """PHYS was shown but not scored at all: isolated from duplication or an unknown ID."""
     args = [argument(Role.SURG), argument(Role.PHYS)]
-    duplicated = score_json(["R1-SURG", "R1-SURG"])  # same length as expected (2), but wrong
     gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=duplicated, tokens_in=5, tokens_out=5),
+        Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),  # PHYS missing
         Scripted(raw_output=score_json(["R1-SURG", "R1-PHYS"]), tokens_in=5, tokens_out=5),
     ])
 
@@ -236,13 +235,15 @@ def test_duplicate_argument_id_triggers_repair(config: Config, tmp_path: Path) -
     assert {score.argument_id for score in scores} == {"R1-SURG", "R1-PHYS"}
     events = trace_events(trace_path)
     assert [event["repair"] for event in events] == [False, True]
-    assert "scored more than once" in events[1]["prompt"] and "R1-SURG" in events[1]["prompt"]
+    assert "missing a score for" in events[1]["prompt"] and "R1-PHYS" in events[1]["prompt"]
 
 
-def test_unknown_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
+def test_duplicate_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
+    """SURG scored twice: isolated from any missing or unknown argument."""
     args = [argument(Role.SURG)]
+    duplicated = score_json(["R1-SURG", "R1-SURG"])
     gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R1-PHYS"]), tokens_in=5, tokens_out=5),  # PHYS wasn't shown at all
+        Scripted(raw_output=duplicated, tokens_in=5, tokens_out=5),
         Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),
     ])
 
@@ -253,6 +254,26 @@ def test_unknown_argument_id_triggers_repair(config: Config, tmp_path: Path) -> 
     assert order == ["R1-SURG"]
     assert [score.argument_id for score in scores] == ["R1-SURG"]
     events = trace_events(trace_path)
+    assert [event["repair"] for event in events] == [False, True]
+    assert "scored more than once" in events[1]["prompt"] and "R1-SURG" in events[1]["prompt"]
+
+
+def test_unknown_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
+    """PHYS was scored despite never being shown: isolated from any missing or duplicate ID."""
+    args = [argument(Role.SURG)]
+    gateway, trace_path = make_gateway(config, tmp_path, [
+        Scripted(raw_output=score_json(["R1-SURG", "R1-PHYS"]), tokens_in=5, tokens_out=5),
+        Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),
+    ])
+
+    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
+                                        REAL_PROMPTS, shuffle=lambda items: None)
+
+    assert failed is False
+    assert order == ["R1-SURG"]
+    assert [score.argument_id for score in scores] == ["R1-SURG"]
+    events = trace_events(trace_path)
+    assert [event["repair"] for event in events] == [False, True]
     assert "not shown" in events[1]["prompt"] and "R1-PHYS" in events[1]["prompt"]
 
 
