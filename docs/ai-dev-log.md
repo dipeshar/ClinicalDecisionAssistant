@@ -1592,3 +1592,50 @@ Implementation in `src/council/agents/specialist.py`; tests in `tests/test_speci
 | stance_changed compares the Round 2 stance against the Round 1 stance | hardcode `False` | test_stance_changed_is_recorded_when_stance_differs |
 
 All 26 mutations were detected by their named tests (five required test fixes first; see "What went wrong" above). T8's `gateway.py` (24/24) and T10's `specialist.py` Round 1 logic (20/20, three spec anchors widened after `run_round2` introduced near-duplicate lines) were both re-confirmed unaffected. Committed code was restored and the audit worktree was clean after every mutation.
+
+## T13: red team
+
+`run_red_team` (`src/council/agents/red_team.py`) sends one prompt through `LLMGateway` with the labeled case, every supplied specialist argument from both rounds, every supplied judge score, code-computed injection inputs, and the supplied red-team KB passages. It parses only `RedTeamReportDraft`, assigns `RT-<n>` finding IDs in code, and fills the scanner count and flagged-line claim IDs in code. A bad JSON response or a finding containing an unknown evidence ID shares the single repair retry. If the repaired response is still invalid, the red-team result is discarded (`None`) for the later orchestrator to handle.
+
+`valid_evidence_ids` permits only IDs for case sections, supplied arguments, all their main and rebuttal claims, and supplied `RED-KB-nn` passages. `claims_citing_flagged_lines` requires a verified case citation whose quote matches a scanner-tagged line in the cited section; merely citing another line in the same flagged section does not count.
+
+What went wrong / limits:
+
+- The sandbox could not create or inspect pytest's normal Windows temporary directories. Tests were rerun with the required filesystem access; no network or real provider was used.
+- The first mutation pass found that the test distinguished flagged and unflagged sections but not a flagged line from a normal line in the same section. The fixture and assertion were strengthened and committed before rerunning that mutation.
+- A pre-existing untracked `tools/t6_check_failed_specialist.py` was preserved. Git also warns that `.test-tmp/t13/` and `pytest-cache-files-dh8x9g56/` are unreadable, so `git status` cannot be literally warning-free; after every mutation, the tracked T13 files had no diff.
+- The contracts provide a section ID and quote on a citation, but no citation line number. T13 resolves the cited line by matching the verified quote against scanner-tagged lines. No contract change was needed.
+- Every model response in the tests came from `FakeProvider`; no real model was called.
+
+#### T13 contract check
+
+Implementation in `src/council/agents/red_team.py`; tests in `tests/test_red_team.py`.
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| tasks.md T13: findings use real evidence IDs | `valid_evidence_ids`, `evidence_issues`, post-repair recheck in `run_red_team` | `test_good_report_validates_ids_and_fills_code_owned_fields`, `test_invalid_evidence_id_triggers_shared_repair`, `test_invalid_evidence_after_repair_discards_report` |
+| tasks.md T13 and section 7: injection check lists claims citing flagged lines | `claims_citing_flagged_lines` | `test_claims_citing_flagged_lines_requires_quote_on_flagged_line`, `test_claims_citing_flagged_lines_ignores_unverified_citation` |
+| Section 7 `RedTeamFinding.finding_id`: CODE, `RT-<n>` | `run_red_team` enumeration from 1 | `test_good_report_validates_ids_and_fills_code_owned_fields` |
+| Section 7 `injection_check.scanner_flag_count`: CODE, from ingest | `len(case.injection_flags)` in `run_red_team` | `test_good_report_validates_ids_and_fills_code_owned_fields` |
+| Section 7 evidence IDs: case sections, arguments, claims, or own `RED-KB-nn` passages | `valid_evidence_ids` includes those four namespaces, including rebuttal response claims | `test_good_report_validates_ids_and_fills_code_owned_fields`, invalid-ID repair tests |
+| Design red-team inputs: case, all arguments, all scores, injection inputs, own KB passages | five data blocks in `run_red_team`; `render_arguments`, `render_scores`, `render_injection_inputs`, `render_passages` | `test_good_report_validates_ids_and_fills_code_owned_fields` |
+| Section 13 rule 1: output parses into its draft contract; one repair retry | shared `call_and_parse_with_repair`, with evidence validation in `find_issues` | `test_bad_json_twice_discards_report`, both invalid-evidence tests |
+| Every model call goes through `LLMGateway`; RED has no round | `call_and_parse_with_repair(... role=RED, step=red_team, round_number=None)`; shared helper type widened to accept structural-role calls | `test_good_report_validates_ids_and_fills_code_owned_fields`; T8 provider-import guard remains green |
+
+No T13 contract field or rule could not be implemented as written.
+
+#### T13 mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Unknown finding evidence IDs trigger the repair | replace the computed unknown-ID set with an empty list | `test_invalid_evidence_id_triggers_shared_repair` |
+| Still-invalid evidence after repair discards the report | remove the final evidence recheck | `test_invalid_evidence_after_repair_discards_report` |
+| Scanner flag count is filled by code from ingest | hardcode `scanner_flag_count=0` | `test_good_report_validates_ids_and_fills_code_owned_fields` |
+| Unverified citations cannot establish flagged-line influence | remove the `citation.verified` condition | `test_claims_citing_flagged_lines_ignores_unverified_citation` |
+| The citation quote must match the flagged line, not merely its section | accept any verified citation to a section containing a flag | `test_claims_citing_flagged_lines_requires_quote_on_flagged_line` |
+| Finding IDs start at `RT-1` | enumerate findings from zero | `test_good_report_validates_ids_and_fills_code_owned_fields` |
+| Red-team KB passages are present in the prompt | replace the KB data block with `(omitted)` | `test_good_report_validates_ids_and_fills_code_owned_fields` |
+
+All seven mutations were detected by their named tests. The committed source was restored after each mutation. Final verification: 1,050 tests passed.
+
+What I verified by hand:
