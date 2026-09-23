@@ -67,8 +67,8 @@
   },
   {
     "rule": "A claim with no citations is treated as an issue needing repair",
-    "old": "        if not claim.citations:\n            issues.append(RepairIssue(f\"Claim {claim.claim_id}\", \"no citation was given\"))\n            continue",
-    "new": "        if False:\n            issues.append(RepairIssue(f\"Claim {claim.claim_id}\", \"no citation was given\"))\n            continue",
+    "old": "        if not claim.citations:\n            issues.append(RepairIssue(f\"{label} {claim.claim_id}\", \"no citation was given\"))\n            continue",
+    "new": "        if False:\n            issues.append(RepairIssue(f\"{label} {claim.claim_id}\", \"no citation was given\"))\n            continue",
     "test": "test_claim_with_no_citation_is_ungrounded_and_triggers_repair"
   },
   {
@@ -103,14 +103,14 @@
   },
   {
     "rule": "Case sections are citable sources",
-    "old": "sources: dict[str, str] = {section.id: section.text for section in case.sections}",
-    "new": "sources: dict[str, str] = {}",
+    "old": "sources: dict[str, str] = {section.id: section.text for section in case.sections}\n    sources.update({passage.id: passage.text for passage in retrieval.passages})",
+    "new": "sources: dict[str, str] = {}\n    sources.update({passage.id: passage.text for passage in retrieval.passages})",
     "test": "test_claim_citing_a_case_section_is_grounded"
   },
   {
     "rule": "shown_ids covers every source actually shown",
-    "old": "shown_ids = set(sources)",
-    "new": "shown_ids = set()",
+    "old": "sources.update({passage.id: passage.text for passage in retrieval.passages})\n    shown_ids = set(sources)",
+    "new": "sources.update({passage.id: passage.text for passage in retrieval.passages})\n    shown_ids = set()",
     "test": "test_good_output_produces_a_grounded_ok_argument"
   },
   {
