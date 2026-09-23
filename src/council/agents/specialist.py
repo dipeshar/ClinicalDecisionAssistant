@@ -77,7 +77,7 @@ def ground_argument(draft: ArgumentDraft, argument_id: str, sources: Mapping[str
 
 
 def call_and_parse_with_repair(
-    gateway: LLMGateway, *, role: Role, step: Step, round_number: Round, body: str,
+    gateway: LLMGateway, *, role: Role, step: Step, round_number: Round | None, body: str,
     schema_model: SchemaSource, prompts_dir: str | Path, retrieved_ids: Sequence[str],
     find_issues: Callable[[Any], list[RepairIssue]],
 ) -> tuple[Any | None, bool, str | None, str | None]:
