@@ -442,6 +442,28 @@ def test_render_other_arguments_handles_none_available() -> None:
     assert s.render_other_arguments([]) == "(no other Round 1 arguments are available)"
 
 
+def test_render_own_argument_reports_each_citations_actual_check_result() -> None:
+    argument = Argument(
+        argument_id="R1-SURG", role=Role.SURG, round=1, stance="for", summary="Synthetic summary.",
+        claims=[
+            Claim(claim_id="R1-SURG-C1", text="A verified claim.",
+                 citations=[Citation(passage_id="SURG-KB-01", quote="Operative risk is low",
+                                    source_type="kb", verified=True, verify_note="")],
+                 grounding_status="grounded"),
+            Claim(claim_id="R1-SURG-C2", text="An unverified claim.",
+                 citations=[Citation(passage_id="SURG-KB-01", quote="not really in the passage",
+                                    source_type="kb", verified=False,
+                                    verify_note="quote text not found in source in order")],
+                 grounding_status="ungrounded"),
+        ],
+        conditions=[], uncertainties=[], rebuttal=None, revisions=None, stance_changed=False,
+        retrieved_passage_ids=["SURG-KB-01"], repair_used=False, status="ok", failure_reason=None,
+    )
+    text = s.render_own_argument_with_checks(argument)
+    assert "(verified)" in text
+    assert "(check failed: quote text not found in source in order)" in text
+
+
 def test_binding_claim_ids_requires_both_judges() -> None:
     one_judge = [Score(judge="JUDGE_A", argument_id="R1-SURG", model="fake/judge", round=1,
                        groundedness=1, logic=1, uncertainty=1, counterarguments=None, justification={},

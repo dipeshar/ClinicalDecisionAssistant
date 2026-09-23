@@ -9,7 +9,7 @@
     "rule": "render_own_argument_with_checks reports the citation check result",
     "old": "check = \"verified\" if citation.verified else f\"check failed: {citation.verify_note}\"",
     "new": "check = \"verified\"",
-    "test": "test_good_output_produces_an_ok_round2_argument"
+    "test": "test_render_own_argument_reports_each_citations_actual_check_result"
   },
   {
     "rule": "render_judge_notes carries no numeric scores",
