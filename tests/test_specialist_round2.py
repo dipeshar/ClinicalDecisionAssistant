@@ -228,7 +228,9 @@ def test_rebuttal_targeting_own_role_triggers_repair(config: Config, tmp_path: P
     revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
     bad_rebuttal = {"target_argument_id": "R1-SURG", "target_claim_id": "R1-SURG-C1",
                     "why_strongest": "Invalid: targets its own Round 1 argument.",
-                    "response_claims": [{"text": "x", "citations": []}]}
+                    "response_claims": [{"text": "A grounded response claim.",
+                                        "citations": [{"passage_id": "SURG-KB-01",
+                                                      "quote": "Operative risk is low when renal function is normal"}]}]}
     good_rebuttal = {"target_argument_id": "R1-PHYS", "target_claim_id": "R1-PHYS-C1",
                      "why_strongest": "It is the clearest opposing claim.",
                      "response_claims": [{"text": "The opposing claim overstates the risk.",
