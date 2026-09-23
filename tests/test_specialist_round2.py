@@ -362,6 +362,22 @@ def test_no_claims_kept_fails_the_turn_if_still_empty_after_repair(config: Confi
     assert argument is not None and argument.status == "failed"
 
 
+def test_out_of_bounds_new_claim_index_fails_the_turn_if_still_wrong_after_repair(
+    config: Config, tmp_path: Path,
+) -> None:
+    """"kept" at index 5 when the Round 2 claims list only has 1 entry."""
+    out_of_bounds = [revision("R1-SURG-C1", "kept", 5), revision("R1-SURG-C2", "dropped", None)]
+    gateway, _ = make_gateway(config, tmp_path, [
+        Scripted(raw_output=round2_json(out_of_bounds), tokens_in=5, tokens_out=5),
+        Scripted(raw_output=round2_json(out_of_bounds), tokens_in=5, tokens_out=5),
+    ])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), ALL_ROUND1, [], REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "failed"
+
+
 def test_bad_json_twice_fails_the_turn(config: Config, tmp_path: Path) -> None:
     gateway, _ = make_gateway(config, tmp_path, [
         Scripted(raw_output="not valid json"),

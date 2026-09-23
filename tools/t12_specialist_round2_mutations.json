@@ -45,7 +45,7 @@
     "rule": "revision_structure_issues checks new_claim_index is within the Round 2 claims list",
     "old": "if revision.new_claim_index is None or not 1 <= revision.new_claim_index <= num_claims:",
     "new": "if False:",
-    "test": "test_no_claims_kept_fails_the_turn_if_still_empty_after_repair"
+    "test": "test_out_of_bounds_new_claim_index_fails_the_turn_if_still_wrong_after_repair"
   },
   {
     "rule": "revision_structure_issues requires at least one claim kept overall",
