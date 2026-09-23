@@ -106,7 +106,7 @@ The code loads these, wraps the data and appends the JSON schema. Prompts hold o
 | T13 | Red team | `agents/red_team.py` | Findings are checked for real evidence IDs. The injection check lists claims that cite flagged lines. |
 | T14 | Chair and report checks | `agents/chair.py`, `report.py` | Chair IDs are checked (final round only). Code fills dissent, confidence and disclaimer. A bare report is written when the chair fails. INCOMPLETE reasons are listed. |
 | T15 | Orchestrator | `orchestrator.py` | Two rounds, specialists in parallel, skip to the chair when a budget runs out, no path to a third round. End-to-end fake-provider tests: happy path, one failed specialist, budget exhausted after Round 1. |
-| T16 | CLI and human gate | `cli.py` | `python -m council run cases/<file>.md` writes the run folder (contracts section 14) and asks approve, reject or comment. The decision is saved with the report hash. |
+| T16 | CLI and human gate | `cli.py` | `python -m council run cases/<file>.md` writes the run folder as it exists before T19: trace.jsonl, run.json, scorecard.json, and report.md (contracts section 14). and asks approve, reject or comment. The decision is saved with the report hash. |
 | T17 | Real providers, first live run | `providers/<provider_a>.py`, `providers/<provider_b>.py` | Both adapters work. One live run on the sample case. The trace shows the real prompts. The token count is checked against the budget. Re-run the T8 API-key-never-leaks test against the real provider adapters, not just the fake KeyHoldingProvider, since T8 could only prove the gateway and trace path itself never touches a key. |
 
 **Checkpoint B.** The human reads one full trace by hand and checks 5 citations against their source passages.
