@@ -100,11 +100,12 @@ def contract_samples() -> dict[str, dict[str, Any]]:
                            event_type="error", role="JUDGE_B", round=1, model="fake-judge", prompt="Synthetic data",
                            retrieved_passage_ids=None, raw_output="invalid json", parsed_ref=None,
                            tokens_in=10, tokens_out=2, latency_ms=1, attempt=2, repair=True,
-                           budget_tokens_used=12, error="Invalid output")
+                           budget_tokens_used=12, error="Invalid output", finish_reason=None, reasoning=None)
     s["BudgetState"] = dict(tokens_used=12, calls_used=1, started_at=123.5, exhausted=False, reason=None)
     s["ModelChoice"] = dict(provider="fake", model="fake-model")
     s["ModelChoices"] = {role: s["ModelChoice"] for role in ["specialist", "chair", "red_team", "judge_a", "judge_b"]}
     s["RoleValues"] = dict(specialist=0.4, judge=0.0, red_team=0.5, chair=0.2)
+    s["ReasoningEffortConfig"] = dict(specialist="low", judge="low", red_team="low", chair="low")
     s["TokenCaps"] = dict(specialist=1500, judge=2500, red_team=2500, chair=3000)
     s["ChairReserve"] = dict(tokens=10000, seconds=60, calls=2)
     s["BudgetConfig"] = dict(max_total_tokens=200000, max_calls=40, max_seconds_total=600,
@@ -117,6 +118,7 @@ def contract_samples() -> dict[str, dict[str, Any]]:
     s["RoleConfig"] = dict(name="Synthetic surgeon", kb="kb/surgeon", keywords=["risk"], persona_prompt="persona_surg.md")
     s["PrivacyConfig"] = dict(synthetic_marker="Synthetic case for a demonstration", approved_providers=["fake"])
     s["Config"] = dict(privacy=s["PrivacyConfig"], paths=s["PathsConfig"], models=s["ModelChoices"], temperature=s["RoleValues"],
+                       reasoning_effort=s["ReasoningEffortConfig"],
                        budget=s["BudgetConfig"], retries=s["RetryConfig"], retrieval=s["RetrievalConfig"],
                        grounding=s["GroundingConfig"], judging=s["JudgingConfig"], roles={"SURG": s["RoleConfig"]})
     s["Source"] = dict(source_type="case", source_title="Tests and Imaging", text="Synthetic data only.")

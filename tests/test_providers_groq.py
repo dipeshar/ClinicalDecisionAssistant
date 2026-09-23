@@ -15,10 +15,11 @@ class StubCompletions:
         self.outcome = outcome
         self.calls: list[dict[str, object]] = []
 
-    def create(self, *, model: str, messages: list[dict[str, str]], max_tokens: int,
-              temperature: float) -> object:
+    def create(self, *, model: str, messages: list[dict[str, str]], max_tokens: int, temperature: float,
+              reasoning_effort: str | None, include_reasoning: bool) -> object:
         self.calls.append({"model": model, "messages": messages, "max_tokens": max_tokens,
-                           "temperature": temperature})
+                           "temperature": temperature, "reasoning_effort": reasoning_effort,
+                           "include_reasoning": include_reasoning})
         if isinstance(self.outcome, BaseException):
             raise self.outcome
         return self.outcome
@@ -29,9 +30,10 @@ def stub_client(outcome: object) -> tuple[object, StubCompletions]:
     return SimpleNamespace(chat=SimpleNamespace(completions=completions)), completions
 
 
-def chat_completion(content: str | None = "hello", prompt_tokens: int = 10, completion_tokens: int = 5) -> object:
-    message = SimpleNamespace(content=content)
-    choice = SimpleNamespace(message=message)
+def chat_completion(content: str | None = "hello", prompt_tokens: int = 10, completion_tokens: int = 5,
+                    finish_reason: str | None = "stop", reasoning: str | None = None) -> object:
+    message = SimpleNamespace(content=content, reasoning=reasoning)
+    choice = SimpleNamespace(message=message, finish_reason=finish_reason)
     usage = SimpleNamespace(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
     return SimpleNamespace(choices=[choice], usage=usage)
 
@@ -43,22 +45,36 @@ def http_error(cls: type[groq.APIStatusError], text: str) -> groq.APIStatusError
 
 
 def test_good_response_returns_content_and_reported_usage() -> None:
-    client, _ = stub_client(chat_completion(content="{}", prompt_tokens=12, completion_tokens=7))
+    client, _ = stub_client(chat_completion(content="{}", prompt_tokens=12, completion_tokens=7,
+                                            finish_reason="stop", reasoning="Synthetic reasoning trace"))
     provider = GroqProvider(client=client)
-    response = provider.complete(model="llama-3.3-70b-versatile", prompt="p", max_tokens=100, temperature=0.4)
+    response = provider.complete(model="openai/gpt-oss-120b", prompt="p", max_tokens=100, temperature=0.4)
     assert response.raw_output == "{}"
     assert response.tokens_in == 12
     assert response.tokens_out == 7
     assert response.latency_ms >= 0
+    assert response.finish_reason == "stop"
+    assert response.reasoning == "Synthetic reasoning trace"
 
 
-def test_model_max_tokens_temperature_and_prompt_are_forwarded() -> None:
+def test_model_max_tokens_temperature_prompt_and_reasoning_effort_are_forwarded() -> None:
     client, completions = stub_client(chat_completion())
     provider = GroqProvider(client=client)
-    provider.complete(model="qwen/qwen3-32b", prompt="synthetic prompt", max_tokens=42, temperature=0.1)
+    provider.complete(model="qwen/qwen3.8-27b", prompt="synthetic prompt", max_tokens=42, temperature=0.1,
+                      reasoning_effort="low")
     assert completions.calls == [{
-        "model": "qwen/qwen3-32b", "messages": [{"role": "user", "content": "synthetic prompt"}],
-        "max_tokens": 42, "temperature": 0.1,
+        "model": "qwen/qwen3.8-27b", "messages": [{"role": "user", "content": "synthetic prompt"}],
+        "max_tokens": 42, "temperature": 0.1, "reasoning_effort": "low", "include_reasoning": True,
+    }]
+
+
+def test_include_reasoning_is_always_requested_even_with_no_reasoning_effort() -> None:
+    client, completions = stub_client(chat_completion())
+    provider = GroqProvider(client=client)
+    provider.complete(model="m", prompt="p", max_tokens=10, temperature=0)
+    assert completions.calls == [{
+        "model": "m", "messages": [{"role": "user", "content": "p"}],
+        "max_tokens": 10, "temperature": 0, "reasoning_effort": None, "include_reasoning": True,
     }]
 
 

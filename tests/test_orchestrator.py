@@ -121,7 +121,8 @@ class AdaptiveFakeProvider(FakeProvider):
         with self._adaptive_lock:
             return self._adaptive_calls
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float) -> ProviderResponse:
+    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                reasoning_effort: str | None = None) -> ProviderResponse:
         with self._adaptive_lock:
             self._adaptive_calls += 1
             self._active += 1

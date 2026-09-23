@@ -28,6 +28,8 @@ class ProviderResponse:
     tokens_in: int
     tokens_out: int
     latency_ms: int
+    finish_reason: str | None = None
+    reasoning: str | None = None
 
 
 class Provider(ABC):
@@ -36,5 +38,6 @@ class Provider(ABC):
     name: str
 
     @abstractmethod
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float) -> ProviderResponse:
+    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                reasoning_effort: str | None = None) -> ProviderResponse:
         """Return one completion, or raise ProviderError / ProviderTimeout."""

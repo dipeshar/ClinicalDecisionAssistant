@@ -19,7 +19,8 @@ def event(**changes: object) -> TraceEvent:
                   event_type="llm_call", role="SURG", round=1, model="fake/synthetic",
                   prompt="Synthetic prompt\nsecond line", retrieved_passage_ids=["CASE-tests"],
                   raw_output='{"synthetic": true}\n', parsed_ref="R1-SURG", tokens_in=2,
-                  tokens_out=3, latency_ms=1, attempt=1, repair=False, budget_tokens_used=5, error=None)
+                  tokens_out=3, latency_ms=1, attempt=1, repair=False, budget_tokens_used=5, error=None,
+                  finish_reason="stop", reasoning=None)
     fields.update(changes)
     return TraceEvent.model_validate(fields)
 

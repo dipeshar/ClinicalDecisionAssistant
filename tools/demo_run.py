@@ -120,7 +120,8 @@ class DemoFakeProvider(Provider):
         self._lock = Lock()
         self.calls_made = 0
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float) -> ProviderResponse:
+    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                reasoning_effort: str | None = None) -> ProviderResponse:
         with self._lock:
             self.calls_made += 1
         if "# Chair instructions" in prompt:

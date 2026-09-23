@@ -20,12 +20,14 @@ class GroqProvider(Provider):
     def __init__(self, *, client: "groq.Groq | None" = None) -> None:
         self._client = client if client is not None else groq.Groq()
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float) -> ProviderResponse:
+    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                reasoning_effort: str | None = None) -> ProviderResponse:
         start = perf_counter()
         try:
             response = self._client.chat.completions.create(
                 model=model, messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens, temperature=temperature,
+                reasoning_effort=reasoning_effort, include_reasoning=True,
             )
         except groq.APITimeoutError as error:
             raise ProviderTimeout("groq: request timed out") from error
@@ -36,5 +38,7 @@ class GroqProvider(Provider):
         latency_ms = round((perf_counter() - start) * 1000)
         if response.usage is None:
             raise ProviderError("groq: response had no usage data")
-        content = response.choices[0].message.content or ""
-        return ProviderResponse(content, response.usage.prompt_tokens, response.usage.completion_tokens, latency_ms)
+        choice = response.choices[0]
+        content = choice.message.content or ""
+        return ProviderResponse(content, response.usage.prompt_tokens, response.usage.completion_tokens, latency_ms,
+                                finish_reason=choice.finish_reason, reasoning=choice.message.reasoning)

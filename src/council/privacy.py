@@ -102,6 +102,7 @@ def write_privacy_rejection(runs_dir: str | Path, hit: PrivacyHit) -> None:
             prompt=None, retrieved_passage_ids=None, raw_output=None, parsed_ref=None,
             tokens_in=0, tokens_out=0, latency_ms=None, attempt=1, repair=False,
             budget_tokens_used=0, error=f"{hit.kind} at line {hit.line_number}",
+            finish_reason=None, reasoning=None,
         )
         try:
             folder = Path(runs_dir) / run_id

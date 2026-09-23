@@ -74,6 +74,18 @@ def temperature_for(config: Config, role: Role) -> float:
     raise ValueError(f"no temperature configured for role {role!r}")
 
 
+def reasoning_effort_for(config: Config, role: Role) -> str:
+    if role in SPECIALIST_ROLES:
+        return config.reasoning_effort.specialist
+    if role in JUDGE_ROLES:
+        return config.reasoning_effort.judge
+    if role is Role.RED:
+        return config.reasoning_effort.red_team
+    if role is Role.CHAIR:
+        return config.reasoning_effort.chair
+    raise ValueError(f"no reasoning effort configured for role {role!r}")
+
+
 def _elapsed_ms(start: float) -> int:
     return max(0, round((perf_counter() - start) * 1000))
 
@@ -113,6 +125,7 @@ class LLMGateway:
         cap = self._budget.output_cap(role)
         tokens_in = estimate_tokens_in(prompt)
         temperature = temperature_for(self._config, role)
+        reasoning_effort = reasoning_effort_for(self._config, role)
         max_attempts = self._config.retries.max_api_attempts
         last_error = "no attempt was made"
 
@@ -124,8 +137,8 @@ class LLMGateway:
             with self._usage_lock:
                 self._providers_used.add(choice.provider)
             try:
-                response = provider.complete(model=choice.model, prompt=prompt,
-                                             max_tokens=cap, temperature=temperature)
+                response = provider.complete(model=choice.model, prompt=prompt, max_tokens=cap,
+                                             temperature=temperature, reasoning_effort=reasoning_effort)
             except ProviderError as error:
                 latency_ms = _elapsed_ms(start)
                 last_error = str(error)
@@ -135,6 +148,7 @@ class LLMGateway:
                     retrieved_passage_ids=retrieved_passage_ids, raw_output=None, parsed_ref=None,
                     tokens_in=None, tokens_out=None, latency_ms=latency_ms, attempt=attempt,
                     repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used, error=last_error,
+                    finish_reason=None, reasoning=None,
                 ))
                 if isinstance(error, RETRYABLE_ERRORS) and attempt < max_attempts:
                     self._sleep(self._config.retries.api_retry_wait_seconds)
@@ -150,6 +164,7 @@ class LLMGateway:
                     parsed_ref=None, tokens_in=response.tokens_in, tokens_out=response.tokens_out,
                     latency_ms=latency_ms, attempt=attempt, repair=repair,
                     budget_tokens_used=state.tokens_used, error=None,
+                    finish_reason=response.finish_reason, reasoning=response.reasoning,
                 ))
                 return GatewayResult(response.raw_output, response.tokens_in, response.tokens_out,
                                      model_label, latency_ms)
@@ -165,6 +180,7 @@ class LLMGateway:
             role=role, round=round_number, model=None, prompt=None, retrieved_passage_ids=None,
             raw_output=None, parsed_ref=parsed_ref, tokens_in=None, tokens_out=None, latency_ms=None,
             attempt=1, repair=False, budget_tokens_used=self._budget.snapshot().tokens_used, error=note,
+            finish_reason=None, reasoning=None,
         ))
 
     def budget_state(self) -> BudgetState:
@@ -199,6 +215,7 @@ class LLMGateway:
             role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,
             raw_output=None, parsed_ref=None, tokens_in=None, tokens_out=None, latency_ms=None,
             attempt=1, repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used, error=reason,
+            finish_reason=None, reasoning=None,
         ))
         raise GatewayRefusal(reason)
 
@@ -212,6 +229,6 @@ class LLMGateway:
                 role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,
                 raw_output=None, parsed_ref=None, tokens_in=None, tokens_out=None, latency_ms=None,
                 attempt=attempt, repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used,
-                error=str(error),
+                error=str(error), finish_reason=None, reasoning=None,
             ))
             raise GatewayRefusal(str(error)) from error

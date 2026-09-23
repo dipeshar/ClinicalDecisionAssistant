@@ -203,25 +203,26 @@ def test_temperature_for_maps_each_role_to_its_own_config_field(config: Config) 
         assert temperature_for(config, role) == expected
 
 
-def test_role_selects_configured_model_and_temperature(config: Config, tmp_path: Path) -> None:
-    captured: list[tuple[str, float]] = []
+def test_role_selects_configured_model_temperature_and_reasoning_effort(config: Config, tmp_path: Path) -> None:
+    captured: list[tuple[str, float, str | None]] = []
 
     class SpyProvider(Provider):
         name = "fake"
 
-        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float) -> ProviderResponse:
-            captured.append((model, temperature))
+        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                    reasoning_effort: str | None = None) -> ProviderResponse:
+            captured.append((model, temperature, reasoning_effort))
             return ProviderResponse("{}", 1, 1, 1)
 
     gateway, _ = make_gateway(config, tmp_path, {"fake": SpyProvider()})
     for role in (Role.SURG, Role.JUDGE_A, Role.JUDGE_B, Role.RED, Role.CHAIR):
         gateway.call(role=role, step=Step.SPECIALIST, round_number=None, prompt="p")
     assert captured == [
-        ("specialist", config.temperature.specialist),
-        ("judge", config.temperature.judge),
-        ("judge", config.temperature.judge),
-        ("specialist", config.temperature.red_team),
-        ("specialist", config.temperature.chair),
+        ("specialist", config.temperature.specialist, config.reasoning_effort.specialist),
+        ("judge", config.temperature.judge, config.reasoning_effort.judge),
+        ("judge", config.temperature.judge, config.reasoning_effort.judge),
+        ("specialist", config.temperature.red_team, config.reasoning_effort.red_team),
+        ("specialist", config.temperature.chair, config.reasoning_effort.chair),
     ]
 
 
@@ -276,7 +277,8 @@ def test_api_keys_never_appear_in_trace_or_run_bundle(
         def __init__(self, api_key: str) -> None:
             self._api_key = api_key  # held, never returned or logged
 
-        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float) -> ProviderResponse:
+        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                    reasoning_effort: str | None = None) -> ProviderResponse:
             if not self._api_key:
                 raise ProviderError("missing credentials")
             return ProviderResponse('{"ok": true}', 2, 2, 1)

@@ -566,6 +566,8 @@ class TraceEvent(ContractModel):
     repair: bool
     budget_tokens_used: int
     error: str | None
+    finish_reason: str | None
+    reasoning: str | None
 
 
 class BudgetState(ContractModel):
@@ -596,6 +598,16 @@ class RoleValues(ContractModel):
     judge: float
     red_team: float
     chair: float
+
+
+ReasoningEffort = Literal["none", "default", "low", "medium", "high"]
+
+
+class ReasoningEffortConfig(ContractModel):
+    specialist: ReasoningEffort
+    judge: ReasoningEffort
+    red_team: ReasoningEffort
+    chair: ReasoningEffort
 
 
 class TokenCaps(ContractModel):
@@ -665,6 +677,7 @@ class Config(ContractModel):
     paths: PathsConfig
     models: ModelChoices
     temperature: RoleValues
+    reasoning_effort: ReasoningEffortConfig
     budget: BudgetConfig
     retries: RetryConfig
     retrieval: RetrievalConfig

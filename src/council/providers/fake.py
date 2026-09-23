@@ -37,7 +37,8 @@ class FakeProvider(Provider):
         self._index = 0
         self._lock = Lock()
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float) -> ProviderResponse:
+    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                reasoning_effort: str | None = None) -> ProviderResponse:
         with self._lock:
             if self._index >= len(self._script):
                 raise ProviderError(f"{self.name}: fake provider script exhausted")

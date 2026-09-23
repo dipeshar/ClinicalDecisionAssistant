@@ -191,6 +191,7 @@ def run_command(case_path: Path, config_path: Path, providers: Mapping[str, Prov
         raw_output=None, parsed_ref=decision.decision.value, tokens_in=None, tokens_out=None,
         latency_ms=None, attempt=1, repair=False,
         budget_tokens_used=gateway.budget_state().tokens_used, error=None,
+        finish_reason=None, reasoning=None,
     ))
     write_artifacts(folder, bundle)
     output_fn(f"Saved {decision.decision.value} decision in {folder}")

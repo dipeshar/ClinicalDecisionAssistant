@@ -23,19 +23,25 @@ temperature:            # used only if the model allows it
   red_team: 0.5
   chair: 0.2
 
+reasoning_effort:
+  specialist: low
+  judge: low
+  red_team: low
+  chair: low
+
 budget:
   max_total_tokens: 200000      # input plus output, all roles
   max_calls: 40                 # counts every attempt
-  max_seconds_total: 600
+  max_seconds_total: 900
   chair_reserve:                # only the chair can spend this
     tokens: 10000
     seconds: 60
     calls: 2
   max_tokens_per_call:          # output cap per call
-    specialist: 1500
-    judge: 2500
-    red_team: 2500
-    chair: 3000
+    specialist: 2500
+    judge: 3000
+    red_team: 3000
+    chair: 3500
 
 retries:
   max_repair_retries_per_turn: 1   # shared by bad JSON and bad citations
