@@ -44,7 +44,8 @@ def merge_reasons(derived: Iterable[str], supplied: Iterable[str]) -> list[str]:
 
 
 def bare_report(
-    *, run_id: str, case_id: str, arguments: Sequence[Argument], red_team: RedTeamReport,
+    *, run_id: str, case_id: str, arguments: Sequence[Argument], red_team: RedTeamReport | None,
+    injection_check: InjectionCheck,
     privacy_summary: PrivacySummary, judge_summary: JudgeSummary,
     incomplete_reasons: Sequence[str], failed_turns: Sequence[str] = (),
 ) -> Report:
@@ -55,7 +56,7 @@ def bare_report(
         incomplete_reasons=reasons, failed_turns=turns, recommendation=None,
         recommendation_basis=[], confidence=None, council_warning=None,
         strongest_for=[], strongest_against=[], required_actions=[], role_notes={}, dissent=[],
-        red_team_findings=red_team.findings, injection_check=red_team.injection_check,
+        red_team_findings=red_team.findings if red_team is not None else [], injection_check=injection_check,
         privacy_summary=privacy_summary, judge_summary=judge_summary, narrative="",
         citations_index=collected_citations(arguments), disclaimer=DISCLAIMER, human_decision=None,
     )
@@ -63,13 +64,14 @@ def bare_report(
 
 def full_report(
     *, run_id: str, case_id: str, draft: ReportDraft, arguments: Sequence[Argument],
-    scores: Sequence[Score], red_team: RedTeamReport, privacy_summary: PrivacySummary,
+    scores: Sequence[Score], red_team: RedTeamReport | None, injection_check: InjectionCheck,
+    privacy_summary: PrivacySummary,
     judge_summary: JudgeSummary, incomplete_reasons: Sequence[str] = (),
     failed_turns: Sequence[str] = (),
 ) -> Report:
     reasons = merge_reasons(derived_incomplete_reasons(arguments, judge_summary), incomplete_reasons)
     turns = list(dict.fromkeys([*failed_turn_ids(arguments, judge_summary), *failed_turns]))
-    findings = red_team.findings
+    findings = red_team.findings if red_team is not None else []
     confidence = compute_confidence(draft.recommendation, arguments, scores, findings)
     if confidence is None:
         raise ValueError("a full report needs a non-failed final argument")
@@ -82,7 +84,7 @@ def full_report(
         confidence=confidence, council_warning=council_warning(draft.recommendation, arguments),
         strongest_for=draft.strongest_for, strongest_against=draft.strongest_against,
         required_actions=draft.required_actions, role_notes=draft.role_notes, dissent=dissent,
-        red_team_findings=findings, injection_check=red_team.injection_check,
+        red_team_findings=findings, injection_check=injection_check,
         privacy_summary=privacy_summary, judge_summary=judge_summary, narrative=draft.narrative,
         citations_index=collected_citations(final_arguments(arguments)), disclaimer=DISCLAIMER,
         human_decision=None,

@@ -171,7 +171,8 @@ ENUMS = {
     "TurnStatus": "ok failed", "Round2Status": "ok failed skipped",
     "Criterion": "groundedness logic uncertainty counterarguments",
     "FindingCategory": "missing_info assumption contradiction overconfidence injection",
-    "Level": "low medium high", "InjectionVerdict": "no_sign possible_influence influenced",
+    "Level": "low medium high", "InjectionVerdict": "no_sign possible_influence influenced not_run",
+    "RedTeamInjectionVerdict": "no_sign possible_influence influenced",
     "ReportStatus": "COMPLETE INCOMPLETE",
     "Recommendation": "proceed proceed_with_modifications delay_pending_investigation decline",
     "Decision": "approved rejected comment_only", "Step": "ingest retrieve specialist judge red_team chair human",
@@ -397,6 +398,16 @@ def test_fixed_disclaimer() -> None:
     data = deepcopy(SAMPLES["Report"])
     del data["disclaimer"]
     assert m.Report.model_validate(data).disclaimer == SAMPLES["Report"]["disclaimer"]
+
+
+def test_not_run_injection_verdict_is_code_only() -> None:
+    with pytest.raises(ValidationError):
+        m.InjectionCheckDraft(verdict="not_run", notes="Model must not set this")
+    check = m.InjectionCheck(
+        verdict="not_run", notes="Red team did not run: call budget exhausted.",
+        scanner_flag_count=1, claims_citing_flagged_lines=["R1-SURG-C1"],
+    )
+    assert check.verdict == "not_run"
 
 
 def test_missing_evidence_can_be_preserved() -> None:

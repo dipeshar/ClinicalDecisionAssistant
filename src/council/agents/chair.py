@@ -10,9 +10,10 @@ from council.agents.prompting import RepairIssue
 from council.agents.specialist import call_and_parse_with_repair
 from council.gateway import LLMGateway
 from council.models import (
-    Argument, GroundingStatus, JudgeSummary, PrivacySummary, RedTeamReport, Report,
-    ReportDraft, Role, Score, Step,
+    Argument, CaseContext, GroundingStatus, InjectionCheck, JudgeSummary, PrivacySummary,
+    RedTeamReport, Report, ReportDraft, Role, Score, Step,
 )
+from council.agents.red_team import claims_citing_flagged_lines
 from council.report import bare_report, full_report
 from council.scoring import final_arguments
 
@@ -41,13 +42,13 @@ def narrative_issues(narrative: str, valid_ids: Collection[str]) -> list[RepairI
     return issues
 
 
-def chair_issues(draft: ReportDraft, final: Sequence[Argument], red_team: RedTeamReport) -> list[RepairIssue]:
+def chair_issues(draft: ReportDraft, final: Sequence[Argument], red_team: RedTeamReport | None) -> list[RepairIssue]:
     final_argument_ids = {argument.argument_id for argument in final}
     final_claims = {
         claim.claim_id: claim for argument in final
         for claim in ([*argument.claims, *(argument.rebuttal.response_claims if argument.rebuttal else [])])
     }
-    finding_ids = {finding.finding_id for finding in red_team.findings}
+    finding_ids = {finding.finding_id for finding in red_team.findings} if red_team is not None else set()
     issues: list[RepairIssue] = []
 
     bad_basis = sorted(set(draft.recommendation_basis) - final_argument_ids)
@@ -92,16 +93,29 @@ def chair_issues(draft: ReportDraft, final: Sequence[Argument], red_team: RedTea
 
 def run_chair(
     *, run_id: str, case_id: str, arguments: Sequence[Argument], scores: Sequence[Score],
-    red_team: RedTeamReport, privacy_summary: PrivacySummary, judge_summary: JudgeSummary,
+    red_team: RedTeamReport | None, privacy_summary: PrivacySummary | None, judge_summary: JudgeSummary,
     gateway: LLMGateway, incomplete_reasons: Sequence[str] = (),
     failed_turns: Sequence[str] = (), prompts_dir: str | Path = prompting.DEFAULT_PROMPTS_DIR,
+    case: CaseContext | None = None, red_team_skip_reason: str = "pipeline step was skipped",
 ) -> Report:
     """Call the chair when synthesis is possible; otherwise return a bare report."""
+    if red_team is None:
+        if case is None:
+            raise ValueError("case is required when the red team did not run")
+        injection_check = InjectionCheck(
+            scanner_flag_count=len(case.injection_flags),
+            claims_citing_flagged_lines=claims_citing_flagged_lines(case, arguments),
+            verdict="not_run", notes=f"Red team did not run: {red_team_skip_reason}.",
+        )
+    else:
+        injection_check = red_team.injection_check
     final = final_arguments(arguments)
     if not final:
+        current_privacy = privacy_summary or gateway.privacy_summary()
         return bare_report(
             run_id=run_id, case_id=case_id, arguments=arguments, red_team=red_team,
-            privacy_summary=privacy_summary, judge_summary=judge_summary,
+            injection_check=injection_check,
+            privacy_summary=current_privacy, judge_summary=judge_summary,
             incomplete_reasons=[*incomplete_reasons, "all specialists failed"],
             failed_turns=failed_turns,
         )
@@ -111,7 +125,8 @@ def run_chair(
     data_blocks = [
         ("Final specialist arguments", render_json(final)),
         ("Final-round judge scores", render_json(final_scores)),
-        ("Red-team report", json.dumps(red_team.model_dump(mode="json"), indent=2)),
+        ("Red-team report", json.dumps(red_team.model_dump(mode="json"), indent=2)
+         if red_team is not None else "(red team did not run)"),
     ]
     body = prompting.chair_body(data_blocks, prompts_dir)
     draft, _repair_used, failure_reason, _model = call_and_parse_with_repair(
@@ -121,14 +136,18 @@ def run_chair(
     )
     if draft is None or chair_issues(draft, final, red_team):
         reason = failure_reason or "chair response still failed validation after repair"
+        current_privacy = privacy_summary or gateway.privacy_summary()
         return bare_report(
             run_id=run_id, case_id=case_id, arguments=arguments, red_team=red_team,
-            privacy_summary=privacy_summary, judge_summary=judge_summary,
+            injection_check=injection_check,
+            privacy_summary=current_privacy, judge_summary=judge_summary,
             incomplete_reasons=[*incomplete_reasons, f"chair failed: {reason}"],
             failed_turns=[*failed_turns, Role.CHAIR.value],
         )
+    current_privacy = privacy_summary or gateway.privacy_summary()
     return full_report(
         run_id=run_id, case_id=case_id, draft=draft, arguments=arguments, scores=scores,
-        red_team=red_team, privacy_summary=privacy_summary, judge_summary=judge_summary,
+        red_team=red_team, injection_check=injection_check,
+        privacy_summary=current_privacy, judge_summary=judge_summary,
         incomplete_reasons=incomplete_reasons, failed_turns=failed_turns,
     )

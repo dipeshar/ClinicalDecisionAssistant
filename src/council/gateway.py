@@ -9,11 +9,12 @@ made). Agents never import a provider; this is the only caller.
 """
 
 from dataclasses import dataclass
+from threading import Lock
 from time import perf_counter, sleep
 from typing import Callable
 
 from council.budget import Budget, BudgetExhausted, Reservation
-from council.models import Config, EventType, ModelChoice, Role, Round, Step, TraceEvent
+from council.models import BudgetState, Config, EventType, ModelChoice, PrivacySummary, Role, Round, Step, TraceEvent
 from council.privacy import scan_identifiers
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderTimeout
 from council.trace import TraceWriter
@@ -90,12 +91,19 @@ class LLMGateway:
         self._trace = trace
         self._providers = providers
         self._sleep = sleep_fn
+        self._usage_lock = Lock()
+        self._prompts_checked = 0
+        self._prompts_blocked = 0
+        self._providers_used: set[str] = set()
 
     def call(self, *, role: Role, step: Step, round_number: Round | None, prompt: str,
              repair: bool = False, retrieved_passage_ids: list[str] | None = None) -> GatewayResult:
         role = Role(role)
         choice = model_choice_for(self._config, role)
         model_label = f"{choice.provider}/{choice.model}"
+
+        with self._usage_lock:
+            self._prompts_checked += 1
 
         self._refuse_if_privacy_blocked(role=role, step=step, round_number=round_number,
                                         repair=repair, provider=choice.provider,
@@ -113,6 +121,8 @@ class LLMGateway:
                                                    repair=repair, model_label=model_label,
                                                    tokens_in=tokens_in, cap=cap, attempt=attempt)
             start = perf_counter()
+            with self._usage_lock:
+                self._providers_used.add(choice.provider)
             try:
                 response = provider.complete(model=choice.model, prompt=prompt,
                                              max_tokens=cap, temperature=temperature)
@@ -157,6 +167,21 @@ class LLMGateway:
             attempt=1, repair=False, budget_tokens_used=self._budget.snapshot().tokens_used, error=note,
         ))
 
+    def budget_state(self) -> BudgetState:
+        """A detached snapshot for orchestration decisions."""
+        return self._budget.snapshot()
+
+    def privacy_summary(self) -> PrivacySummary:
+        """Code-owned outbound privacy accounting, safe under parallel calls."""
+        with self._usage_lock:
+            return PrivacySummary(
+                synthetic_marker_found=True, ingest_identifier_hits=0,
+                outbound_prompts_checked=self._prompts_checked,
+                outbound_prompts_blocked=self._prompts_blocked,
+                approved_providers=list(self._config.privacy.approved_providers),
+                providers_used=sorted(self._providers_used),
+            )
+
     def _refuse_if_privacy_blocked(self, *, role: Role, step: Step, round_number: Round | None,
                                    repair: bool, provider: str, prompt: str, model_label: str) -> None:
         """Contracts rule 20: provider approval and the identifier scan, before the budget check."""
@@ -167,6 +192,8 @@ class LLMGateway:
             reason = f"identifier: {hits[0].kind}" if hits else None
         if reason is None:
             return
+        with self._usage_lock:
+            self._prompts_blocked += 1
         self._trace.write(TraceEvent(
             run_id="", seq=0, timestamp="", step=step, event_type=EventType.PRIVACY_BLOCK,
             role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,

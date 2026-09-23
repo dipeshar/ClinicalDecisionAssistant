@@ -81,6 +81,15 @@ class InjectionVerdict(StrEnum):
     NO_SIGN = "no_sign"
     POSSIBLE_INFLUENCE = "possible_influence"
     INFLUENCED = "influenced"
+    NOT_RUN = "not_run"
+
+
+class RedTeamInjectionVerdict(StrEnum):
+    """Verdicts the model may write; `not_run` is reserved for code."""
+
+    NO_SIGN = "no_sign"
+    POSSIBLE_INFLUENCE = "possible_influence"
+    INFLUENCED = "influenced"
 
 
 class ReportStatus(StrEnum):
@@ -396,11 +405,13 @@ class RedTeamFinding(RedTeamFindingDraft):
 
 
 class InjectionCheckDraft(ContractModel):
-    verdict: InjectionVerdict
+    verdict: RedTeamInjectionVerdict
     notes: str
 
 
-class InjectionCheck(InjectionCheckDraft):
+class InjectionCheck(ContractModel):
+    verdict: InjectionVerdict
+    notes: str
     scanner_flag_count: int
     claims_citing_flagged_lines: list[str]
 
