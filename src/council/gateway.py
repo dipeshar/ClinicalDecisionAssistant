@@ -145,6 +145,18 @@ class LLMGateway:
                                      model_label, latency_ms)
         raise GatewayRefusal(last_error)
 
+    def write_validation_event(self, *, role: Role, step: Step, round_number: Round | None,
+                               parsed_ref: str, note: str) -> None:
+        """Record a code-side validation outcome, not a model call (for example T12's rule 24
+        override: a claim both judges flagged that a specialist kept anyway, dropped by code).
+        """
+        self._trace.write(TraceEvent(
+            run_id="", seq=0, timestamp="", step=step, event_type=EventType.VALIDATION,
+            role=role, round=round_number, model=None, prompt=None, retrieved_passage_ids=None,
+            raw_output=None, parsed_ref=parsed_ref, tokens_in=None, tokens_out=None, latency_ms=None,
+            attempt=1, repair=False, budget_tokens_used=self._budget.snapshot().tokens_used, error=note,
+        ))
+
     def _refuse_if_privacy_blocked(self, *, role: Role, step: Step, round_number: Round | None,
                                    repair: bool, provider: str, prompt: str, model_label: str) -> None:
         """Contracts rule 20: provider approval and the identifier scan, before the budget check."""
