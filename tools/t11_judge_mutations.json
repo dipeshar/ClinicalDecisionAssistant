@@ -36,6 +36,12 @@
     "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
   },
   {
+    "rule": "build_score uses the score's own verified argument_id",
+    "old": "judge=judge, argument_id=draft.argument_id, model=model, round=round_number,",
+    "new": "judge=judge, argument_id=\"wrong-id\", model=model, round=round_number,",
+    "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
+  },
+  {
     "rule": "Only arguments of the requested round are eligible",
     "old": "if argument.round == round_number and argument.status != \"failed\"]",
     "new": "if argument.status != \"failed\"]",
@@ -84,15 +90,33 @@
     "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
   },
   {
-    "rule": "A response with the wrong number of scores is treated as an issue needing repair",
-    "old": "if len(scores) != len(shown):",
-    "new": "if False:",
-    "test": "test_array_length_mismatch_triggers_repair"
+    "rule": "A missing argument_id is detected",
+    "old": "        if missing:\n            issues.append(RepairIssue(\"Response\", f\"missing a score for: {', '.join(sorted(missing))}\"))",
+    "new": "        if False:\n            issues.append(RepairIssue(\"Response\", f\"missing a score for: {', '.join(sorted(missing))}\"))",
+    "test": "test_missing_argument_id_triggers_repair"
+  },
+  {
+    "rule": "An unknown argument_id is detected",
+    "old": "        if unknown:\n            issues.append(RepairIssue(\"Response\", f\"scored an argument that was not shown: {', '.join(unknown)}\"))",
+    "new": "        if False:\n            issues.append(RepairIssue(\"Response\", f\"scored an argument that was not shown: {', '.join(unknown)}\"))",
+    "test": "test_unknown_argument_id_triggers_repair"
+  },
+  {
+    "rule": "A duplicated argument_id is detected",
+    "old": "        if duplicated:\n            issues.append(RepairIssue(\"Response\", f\"scored more than once: {', '.join(duplicated)}\"))",
+    "new": "        if False:\n            issues.append(RepairIssue(\"Response\", f\"scored more than once: {', '.join(duplicated)}\"))",
+    "test": "test_duplicate_argument_id_triggers_repair"
+  },
+  {
+    "rule": "An argument_id problem is reported before checking counterarguments",
+    "old": "        if issues:\n            # The argument_id set is wrong; positions can't be trusted yet, so\n            # don't also report per-score problems until this is fixed.\n            return issues",
+    "new": "        if False:\n            return issues",
+    "test": "test_missing_argument_id_triggers_repair"
   },
   {
     "rule": "Round 2 requires a counterarguments score from every argument",
-    "old": "        if round_number == 2:\n            return [RepairIssue(f\"Score for {argument.argument_id}\",\n                                \"counterarguments score is required in Round 2\")\n                    for argument, score in zip(shown, scores) if score.counterarguments is None]",
-    "new": "        if round_number == 1:\n            return [RepairIssue(f\"Score for {argument.argument_id}\",\n                                \"counterarguments score is required in Round 2\")\n                    for argument, score in zip(shown, scores) if score.counterarguments is None]",
+    "old": "        if round_number == 2:\n            return [RepairIssue(f\"Score for {score.argument_id}\",\n                                \"counterarguments score is required in Round 2\")\n                    for score in scores if score.counterarguments is None]",
+    "new": "        if round_number == 1:\n            return [RepairIssue(f\"Score for {score.argument_id}\",\n                                \"counterarguments score is required in Round 2\")\n                    for score in scores if score.counterarguments is None]",
     "test": "test_one_call_scores_every_non_failed_argument_of_the_round"
   },
   {
@@ -108,9 +132,15 @@
     "test": "test_bad_json_twice_fails_the_call"
   },
   {
-    "rule": "Scores are matched to the shuffled argument order, not the original order",
-    "old": "for argument, score_draft in zip(shown, draft)]",
-    "new": "for argument, score_draft in zip(reversed(shown), draft)]",
-    "test": "test_shuffled_order_is_recorded_and_matches_what_was_scored"
+    "rule": "A response still wrong after the repair retry fails the whole call",
+    "old": "    if find_issues(draft):\n        # Still wrong after the one repair retry (rule 25): the call is failed,\n        # not partially accepted, since positions can't be trusted to fall back on.\n        return [], [], True",
+    "new": "    if find_issues(draft):\n        pass",
+    "test": "test_wrong_argument_ids_still_wrong_after_repair_fails_the_call"
+  },
+  {
+    "rule": "Scores are matched to their argument by ID lookup, not response order",
+    "old": "by_id = {score.argument_id: score for score in draft}",
+    "new": "by_id = {argument.argument_id: score for argument, score in zip(shown, reversed(draft))}",
+    "test": "test_scores_are_matched_by_argument_id_not_response_order"
   }
 ]
