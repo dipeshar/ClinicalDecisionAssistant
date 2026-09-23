@@ -1842,3 +1842,43 @@ What went wrong / limits:
 All 6 mutations were detected. Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,084 tests) after each restore.
 
 What I verified by hand:
+
+## T17 follow-up: wire real providers into `python -m council run`
+
+T17 built `GroqProvider` but left a real gap flagged in its own "what went wrong": `__main__.py` calls `cli.main()` with no `providers` argument, and nothing in `cli.py` ever turned a config-named provider (`"groq"`) into a real adapter instance. The only way to run the pipeline for real was to hand-write a script that imports `GroqProvider` directly and injects it — `python -m council run` itself could never do a real run. The human asked for this closed as its own task, not folded into T17.
+
+Added `src/council/providers/factory.py`: `build_provider(name)` looks up which environment variable a provider name needs (`PROVIDER_ENV_VARS = {"groq": "GROQ_API_KEY"}`), reads it with `os.environ.get` (never `os.environ[...]`, so a missing var doesn't itself raise a different, uglier exception), and raises `ProviderConfigurationError` naming the exact variable if it's empty or unset — before constructing anything, so no network call is ever attempted on a bad key. `build_providers(config)` collects the distinct provider names across all five configured roles (specialist/chair/red_team/judge_a/judge_b, not just specialist) and builds one instance per distinct name. The key is read into a local variable and passed straight to `groq.Groq(api_key=api_key)`; nothing else in the function touches it, so it can't end up in a log line or an exception message.
+
+`cli.py`'s `run_command` now takes `providers: Mapping[str, Provider] | None = None`. `None` (what `__main__.py` actually passes) means "build real adapters from config"; an explicit mapping (what every test and `tools/demo_run.py` passes) is used exactly as given, unchanged. Moved the provider-resolution call to right after `load_config`, before `ingest_case`/folder creation/KB loading, so a missing key fails immediately — no half-built run folder is left behind. `main()`'s except clause now also catches `ProviderConfigurationError`, so a missing key prints one `error: GROQ_API_KEY is not set; ...` line and exits 1, not a stack trace.
+
+Per the human's explicit instruction, no live call was attempted in this session; everything was verified against a stub client (factory/adapter tests) or by asserting the CLI's own error path (CLI test), never a real network call or a real key.
+
+What went wrong / limits:
+
+- The first version of `test_unknown_provider_name_is_a_clear_error` cleared `GROQ_API_KEY` before testing an unrecognized provider name, so a mutant that fell back to `GROQ_API_KEY` for any unknown name still raised — for the missing-key reason, not the unknown-name reason — and the test couldn't tell the difference. Found by the mutation audit itself; fixed by setting a synthetic key first, so only the unknown-name path can raise.
+- The first version of `test_build_providers_returns_one_instance_per_distinct_provider_name` set every role's provider to `"groq"`, so a mutant that read only `config.models.specialist.provider` (ignoring chair/red_team/judge_a/judge_b) passed it undetected. Added `test_build_providers_inspects_every_role_not_only_specialist`, which gives `judge_a` a different (and deliberately unbuildable) provider name and asserts it surfaces — proving every role is actually inspected, not just the first one checked.
+- `tools/demo_run.py` was not touched; confirmed it still runs end to end with `FakeProvider` after this change (same command as before).
+
+#### T17 follow-up contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Rule 21: API keys never appear in trace/run.json/report, and (new here) never in a raised error message either | `build_provider` reads the key into a local variable and passes it straight to `groq.Groq(api_key=...)`; no other code path touches it | `test_synthetic_key_builds_a_groq_provider_without_a_network_call`; T17's existing `test_api_key_never_leaks_into_a_raised_error_message` (unchanged, re-run) |
+| AGENTS.md: every model call goes through `LLMGateway`; only `providers/` imports a provider SDK | `factory.py` (which does `import groq`) lives under `providers/`; `cli.py` imports only `council.providers.factory`, never `groq` itself | `test_no_module_outside_providers_imports_a_provider_sdk` (unchanged, re-run) |
+| design.md: each provider adapter is small and config-selected | `build_providers` maps every configured role's provider name to one shared instance per distinct name | `test_build_providers_returns_one_instance_per_distinct_provider_name`, `test_build_providers_inspects_every_role_not_only_specialist` |
+| New rule (this task, from the human): a missing API key fails clearly, before any network call | `build_provider` checks `os.environ.get(env_var)` and raises before ever calling `groq.Groq(...)` | `test_missing_api_key_is_a_clear_error_not_a_stack_trace`, `test_real_cli_invocation_reports_missing_api_key_clearly_not_a_stack_trace` (also asserts no run folder was created) |
+| New rule (this task): `python -m council run` is a real run by default; test/tool callers are unaffected | `providers=None` vs. an explicit mapping in `run_command`/`main` | `test_real_cli_invocation_reports_missing_api_key_clearly_not_a_stack_trace`; existing `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` (still passes, still injects `FakeProvider` explicitly) |
+
+#### T17 follow-up mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Missing key raises, never silently proceeds | `os.environ.get(env_var, "")` instead of checking for empty and raising | `test_missing_api_key_is_a_clear_error_not_a_stack_trace`, `test_real_cli_invocation_reports_missing_api_key_clearly_not_a_stack_trace` |
+| Unknown provider name raises, never falls back to a known one | `PROVIDER_ENV_VARS.get(name, "GROQ_API_KEY")` instead of raising on an unregistered name | `test_unknown_provider_name_is_a_clear_error` (after fixing the test itself — see above) |
+| `build_providers` inspects every role, not only specialist | `names = {config.models.specialist.provider}` | `test_build_providers_inspects_every_role_not_only_specialist` (added after this mutation survived the original test — see above) |
+| `providers=None` builds real adapters; an explicit mapping is used as-is | `resolved_providers = dict(providers or {})`, discarding the `None`/explicit distinction | `test_real_cli_invocation_reports_missing_api_key_clearly_not_a_stack_trace` |
+| `main()` turns `ProviderConfigurationError` into a clean exit, not a stack trace | removed `ProviderConfigurationError` from `main()`'s `except` tuple | `test_real_cli_invocation_reports_missing_api_key_clearly_not_a_stack_trace` |
+
+All 5 mutations were detected (two exposed real test gaps, closed and committed before repeating). Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,090 tests) after each restore.
+
+What I verified by hand:
