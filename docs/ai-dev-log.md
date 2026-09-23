@@ -1798,3 +1798,47 @@ Nothing in `data-contracts.md` had to be implemented differently from how it's w
 All 5 mutations were detected (one required a new test, committed before repeating it). Committed source was restored after every mutation, confirmed by `git diff --stat` matching the pre-mutation draft and the full suite passing (1,074 tests) after each restore.
 
 What I verified by hand:
+
+## T17: Groq provider adapter
+
+`docs/tasks.md`'s repo layout and T17's row call for two provider adapters (`<provider_a>.py`, `<provider_b>.py`) and "both adapters work." `config.yaml` (set in an earlier session) names only one provider, `groq`, for every role, with `approved_providers: [groq]`. Stopped and asked before writing anything, per AGENTS.md rule 1 ("the docs win... if something is missing, stop and ask"), rather than guessing at a second, unconfigured provider. The human chose to build one adapter, matching what's actually configured, rather than name a second real provider or amend the docs first.
+
+Separately, the `groq` SDK (needed for a "small adapter that uses the provider's own SDK," per `design.md`) wasn't installed and isn't declared in `pyproject.toml`; this sandbox has no network access to install it. Stopped and asked again. The human installed `groq==1.7.0` in `.venv` themselves and asked for it to be added to `pyproject.toml`'s dependencies (`"groq>=1,<2"`) and the adapter written against the real SDK.
+
+Implemented `src/council/providers/groq.py` (`GroqProvider`): calls `client.chat.completions.create` with `model`/`messages`/`max_tokens`/`temperature` forwarded exactly as given, maps `groq.APITimeoutError` to `ProviderTimeout` and `groq.RateLimitError` to `ProviderRateLimit` (both retryable per the gateway's existing `RETRYABLE_ERRORS`, unchanged since T8) and every other `groq.GroqError` to a plain `ProviderError`, and returns the API's own reported `usage.prompt_tokens`/`usage.completion_tokens` as `tokens_in`/`tokens_out` — not the gateway's pre-call estimate — so the budget is charged the real usage. A response with no `usage` block is an explicit `ProviderError`, not a silent zero. Every raised exception carries a fixed message (`"groq: request timed out"`, `"groq: {type(error).__name__}"`, …); none of them repeat the SDK's own exception text, so nothing the API might echo back in an error body can reach the trace. The API key itself is never touched by this class at all — `groq.Groq()` reads `GROQ_API_KEY` from the environment internally; this module never calls `os.environ`.
+
+Per T17's own done-when line, re-ran the T8 API-key-leak test against this real adapter (not just the fake `KeyHoldingProvider`): `test_api_key_never_leaks_into_a_raised_error_message` constructs real `groq.APITimeoutError`/`RateLimitError`/`AuthenticationError` instances carrying a fake key in the request/response, via `httpx.Request`/`httpx.Response` (no network), and asserts the fake key is absent from whatever `GroqProvider` raises.
+
+What went wrong / limits:
+
+- Two separate "stop and ask" moments before any code (provider count, then the missing SDK). Both were genuine blockers, not busywork — guessing wrong on either would have meant throwaway code.
+- "One live run on the sample case" and "the trace shows the real prompts" (T17's own done-when lines) are not done by this session. `tasks.md` section 6 says live runs from T17 onward are the human's to run, in their own terminal, with their own key; this sandbox has no network access and must not look for API keys. Everything here was verified against a stub client standing in for `groq.Groq()`, never a real network call.
+- There is still no code path that wires a real provider into `python -m council run` — `__main__.py` calls `cli.main()` with no `providers` argument, and `cli.py` cannot import `council.providers.groq` itself without violating the "only providers/ imports a provider SDK" rule. The human needs a small script outside `src/council` (like `tools/demo_run.py`, but with `GroqProvider` instead of the fake) to actually perform the live run; not built here since T17's own files are just the adapter(s), and it wasn't asked for.
+- `response.choices[0].message.content` can be `None` in principle (e.g. a tool-call-only response); treated as an empty string rather than a special error, on the same reasoning `providers/fake.py` already documents: bad or empty output is the caller's problem (repair retry, then failed turn), not this layer's.
+
+#### T17 contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Design.md: gateway retries timeouts and rate limits, other API errors are not retried | `GroqProvider.complete` maps to `ProviderTimeout`/`ProviderRateLimit`/`ProviderError` distinctly; gateway's `RETRYABLE_ERRORS` (T8, unchanged) decides retry from the exception type | `test_timeout_is_mapped_to_provider_timeout`, `test_rate_limit_is_mapped_to_provider_rate_limit`, `test_other_groq_error_is_a_generic_provider_error` |
+| Rule 21: API keys never appear in trace/run.json/report | Adapter never reads/prints/logs the key; every raised message is fixed text, never the SDK's own error string | `test_api_key_never_leaks_into_a_raised_error_message` (re-run of T8's leak test against the real adapter, per T17's own line) |
+| T17 done-when: token count checked against the budget | Returns the API's real `usage.prompt_tokens`/`usage.completion_tokens`, consumed unchanged by `Budget.complete` (T7/T8) | `test_good_response_returns_content_and_reported_usage`; existing T7/T8 budget tests exercise `Budget.complete` against any `Provider` |
+| Provider base contract: bad/empty output is returned as-is, not this layer's job | `content or ""` returned verbatim, no parsing | `test_missing_message_content_becomes_empty_string`, `test_good_response_returns_content_and_reported_usage` |
+| Only `providers/` may import a provider SDK | `groq.py` lives under `providers/`; nothing outside it imports `groq` | `test_no_module_outside_providers_imports_a_provider_sdk` (unchanged, re-run) |
+| T17 done-when: "both adapters work" | Not implemented as written — see "What went wrong" above; one adapter built, matching the config the human actually set | n/a — flagged and confirmed with the human before proceeding |
+| T17 done-when: one live run on the sample case; trace shows real prompts | Not done by this session; reserved for the human, per `tasks.md` section 6 | n/a |
+
+#### T17 mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Timeout maps to `ProviderTimeout`, not `ProviderRateLimit` | swapped the exception raised in the `APITimeoutError` branch | `test_timeout_is_mapped_to_provider_timeout`, one leak-test case |
+| Rate limit maps to `ProviderRateLimit`, not a generic error | swapped the exception raised in the `RateLimitError` branch | `test_rate_limit_is_mapped_to_provider_rate_limit`, one leak-test case |
+| No exception message repeats the SDK's own error text | used `f"groq: {error}"` instead of a fixed message | `test_api_key_never_leaks_into_a_raised_error_message` |
+| `tokens_in`/`tokens_out` are the API's real usage, not a fixed value | hardcoded `ProviderResponse(content, 1, 1, latency_ms)` | `test_good_response_returns_content_and_reported_usage` |
+| Missing `usage` is an explicit error, not a silent zero | replaced the `raise` with `tokens_in = 0 if response.usage is None else ...` | `test_missing_usage_is_a_provider_error` |
+| `temperature` is forwarded to the API call | dropped the `temperature=` keyword from `chat.completions.create` | all 10 tests (the stub's `create` requires the keyword) |
+
+All 6 mutations were detected. Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,084 tests) after each restore.
+
+What I verified by hand:
