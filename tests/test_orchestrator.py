@@ -201,6 +201,7 @@ def test_budget_exhausted_after_round1_skips_to_chair_with_not_run_check(
     assert result.scorecard.scores == []
     assert result.red_team is None
     assert result.report.status == "INCOMPLETE"
+    assert result.report.recommendation == "proceed_with_modifications"
     assert "call budget exhausted" in result.report.incomplete_reasons
     assert result.report.injection_check.verdict == "not_run"
     assert result.report.injection_check.scanner_flag_count == 1
