@@ -348,6 +348,32 @@ def test_binding_requires_both_judges_not_just_one(config: Config, tmp_path: Pat
     assert not any(event["event_type"] == "validation" for event in events)
 
 
+def test_binding_claim_revised_immediately_needs_no_repair(config: Config, tmp_path: Path) -> None:
+    """Both judges flag C1; the specialist revises it (not kept) on the first attempt.
+    That's already a valid response to a binding concern -- no repair should be needed."""
+    scores = [
+        Score(judge="JUDGE_A", argument_id="R1-SURG", model="fake/judge", round=1,
+             groundedness=2, logic=3, uncertainty=3, counterarguments=None, justification={},
+             untraceable_claims=[UntraceableClaim(claim_id="R1-SURG-C1", reason="Doesn't support the claim.")],
+             feedback=[]),
+        Score(judge="JUDGE_B", argument_id="R1-SURG", model="fake/judge", round=1,
+             groundedness=2, logic=3, uncertainty=3, counterarguments=None, justification={},
+             untraceable_claims=[], feedback=[FeedbackNote(claim_id="R1-SURG-C1", note="Citation looks weak.")]),
+    ]
+    revised_first_try = [revision("R1-SURG-C1", "revised", 1), revision("R1-SURG-C2", "dropped", None)]
+    gateway, trace_path = make_gateway(config, tmp_path,
+                                       [Scripted(raw_output=round2_json(revised_first_try), tokens_in=5, tokens_out=5)])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), ALL_ROUND1, scores, REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "ok"
+    assert argument.repair_used is False
+    events = trace_events(trace_path)
+    assert len(events) == 1
+    assert not any(event["event_type"] == "validation" for event in events)
+
+
 def test_no_claims_kept_fails_the_turn_if_still_empty_after_repair(config: Config, tmp_path: Path) -> None:
     revisions = [revision("R1-SURG-C1", "dropped", None), revision("R1-SURG-C2", "dropped", None)]
     empty = round2_json(revisions, claims=[])

@@ -57,7 +57,7 @@
     "rule": "binding_kept_issues only flags claims actually marked kept",
     "old": "if revision.round1_claim_id in binding_ids and revision.action == RevisionAction.KEPT]",
     "new": "if revision.round1_claim_id in binding_ids]",
-    "test": "test_binding_requires_both_judges_not_just_one"
+    "test": "test_binding_claim_revised_immediately_needs_no_repair"
   },
   {
     "rule": "rebuttal_issues requires a rebuttal every Round 2 turn",
