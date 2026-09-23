@@ -75,7 +75,7 @@
     "rule": "rebuttal_issues checks the target_claim_id is inside the targeted argument",
     "old": "if draft.rebuttal.target_claim_id not in {claim.claim_id for claim in target.claims}:",
     "new": "if False:",
-    "test": "test_good_output_produces_an_ok_round2_argument"
+    "test": "test_rebuttal_targeting_a_nonexistent_claim_triggers_repair"
   },
   {
     "rule": "apply_binding_overrides drops the overridden claim from the final claims list",

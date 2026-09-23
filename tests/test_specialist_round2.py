@@ -250,6 +250,29 @@ def test_rebuttal_targeting_own_role_triggers_repair(config: Config, tmp_path: P
     assert [event["repair"] for event in events] == [False, True]
 
 
+def test_rebuttal_targeting_a_nonexistent_claim_triggers_repair(config: Config, tmp_path: Path) -> None:
+    revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
+    grounded_claim = {"text": "A grounded response claim.",
+                      "citations": [{"passage_id": "SURG-KB-01",
+                                    "quote": "Operative risk is low when renal function is normal"}]}
+    bad_rebuttal = {"target_argument_id": "R1-PHYS", "target_claim_id": "R1-PHYS-C99",  # doesn't exist
+                    "why_strongest": "Invalid: no such claim.", "response_claims": [grounded_claim]}
+    good_rebuttal = {"target_argument_id": "R1-PHYS", "target_claim_id": "R1-PHYS-C1",
+                     "why_strongest": "It is the clearest opposing claim.", "response_claims": [grounded_claim]}
+    gateway, trace_path = make_gateway(config, tmp_path, [
+        Scripted(raw_output=round2_json(revisions, rebuttal=bad_rebuttal), tokens_in=5, tokens_out=5),
+        Scripted(raw_output=round2_json(revisions, rebuttal=good_rebuttal), tokens_in=5, tokens_out=5),
+    ])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), ALL_ROUND1, [], REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "ok"
+    assert argument.rebuttal.target_claim_id == "R1-PHYS-C1"
+    events = trace_events(trace_path)
+    assert [event["repair"] for event in events] == [False, True]
+
+
 def test_no_rebuttal_fails_the_turn_if_still_missing_after_repair(config: Config, tmp_path: Path) -> None:
     revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
     no_rebuttal = round2_json(revisions, rebuttal=None)
