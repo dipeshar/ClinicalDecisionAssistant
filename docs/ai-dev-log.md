@@ -1702,3 +1702,57 @@ No data-contract field was changed. The strongest-claim-text wording described a
 All 15 mutations were detected by their named tests. One required a test improvement, committed before repeating it. The committed source was restored after every mutation. Final verification: 1,064 tests passed.
 
 What I verified by hand:
+
+## T15: orchestrator
+
+`run_council` (`src/council/orchestrator.py`) runs the fixed pipeline: four Round 1 specialists in a `ThreadPoolExecutor`, two Round 1 judges, eligible Round 2 specialists in parallel, two fresh Round 2 judges, red team, then chair. There is no round-count input or third-round call site. Results return in deterministic role order even though specialist calls overlap. Failed Round 1 arguments remain collected, are skipped by judges, and produce no Round 2 turn; the other roles continue.
+
+Between stages, the orchestrator reads the gateway's locked budget snapshot. Once exhausted, it starts no further non-chair stage, records the reason, and calls the chair through its reserve. If every specialist fails, both red team and chair model calls are skipped and a bare report is built. The orchestrator also builds the code-owned scorecard and judge summary: raw scores, presentation orders, failed/skipped calls, means, gaps, ungrounded claims, and round comparisons.
+
+The human-approved rule 26 is implemented with separate verdict enums: `RedTeamInjectionVerdict` has only model-writeable values, while full `InjectionVerdict` also has code-only `not_run`. With no red-team report, code computes scanner count and flagged-line claim IDs, adds a fixed reason-bearing note, and supplies empty findings without inventing a `RedTeamReport`. Gateway privacy counters are locked and snapshotted after the chair attempt, so the final count includes that prompt.
+
+What went wrong / limits:
+
+- The new verdict enum increased T1's generated mutation count from 117 to 118; its exact self-test was updated.
+- Review found the privacy snapshot initially occurred before the chair. It now occurs after chair success/failure; tests assert 14 checked prompts on the happy path and 6 on the budget path.
+- Pytest's Windows temporary directory required the existing approved test access. No network or real provider was used.
+- The pre-existing untracked `tools/t6_check_failed_specialist.py` was preserved. Git still warns that `.test-tmp/t13/` and `pytest-cache-files-dh8x9g56/` are unreadable; tracked files had no diff after each mutation.
+- A successful Round 1 role with no Round 2 record because the budget stopped the stage receives `round2_status=failed`; the contract reserves `skipped` specifically for failed Round 1.
+- `CouncilRun` is in memory. T16 owns `RunBundle` and artifact writing. End-to-end responses came from an adaptive subclass of `FakeProvider`.
+
+#### T15 contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| T15: two rounds, parallel specialists, two judges per completed round, red team, chair; no third round | `run_council`, `parallel_map` | `test_happy_path_runs_two_parallel_rounds_and_all_agents` |
+| Rule 16: failed Round 1 specialist stays failed and skips Round 2 | `run_round2` guard and orchestration collection | `test_one_failed_specialist_continues_and_skips_its_round2` |
+| Rule 10: budget exhaustion skips remaining non-chair stages and uses chair reserve; report is INCOMPLETE | `budget_reason` stage gates and final chair call | `test_budget_exhausted_after_round1_skips_to_chair_with_not_run_check` |
+| Section 8 second bare trigger: every specialist failed skips chair | `final_arguments` gates in orchestrator/chair | `test_every_specialist_failed_skips_red_team_and_chair` |
+| New rule 26: code-only `not_run`, real scanner/claim data, fixed note, empty findings | split verdict enums; optional red team in chair/report | both short-circuit tests; `test_not_run_injection_verdict_is_code_only` |
+| Scorecard and JudgeSummary fields | `build_scorecard`, `score_summary`, `round_comparison`, `build_judge_summary` | happy path score/order assertions and failed-specialist assertions |
+| PrivacySummary includes parallel calls and chair | locked gateway counters; post-chair snapshot | exact happy/budget prompt counts |
+| Shared counters under parallel specialists | existing locked budget/trace plus gateway `_usage_lock` | T7 race tests and T15 overlap assertion |
+
+No data-contract field was changed beyond the separately committed, human-authorized rule-26 documentation update.
+
+#### T15 mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Specialists run in parallel | replace thread pool with sequential calls | `test_happy_path_runs_two_parallel_rounds_and_all_agents` |
+| Failed Round 1 role skips Round 2 | disable failed-own-turn guard | `test_one_failed_specialist_continues_and_skips_its_round2` |
+| Round 1 judges run before Round 2 | disable Round 1 judging | `test_happy_path_runs_two_parallel_rounds_and_all_agents` |
+| Budget exhaustion skips Round 2 | remove Round 2 budget gate | budget short-circuit test |
+| Budget exhaustion skips red team | remove red-team budget gate | budget short-circuit test |
+| Chair reserve remains usable | call chair with non-chair RED role | budget short-circuit test |
+| Skipped red team uses `not_run` | substitute `no_sign` | budget short-circuit test |
+| Scanner flags survive skipped red team | hardcode count zero | budget short-circuit test |
+| Flagged-line claim IDs survive skipped red team | replace with empty list | budget short-circuit test |
+| Model cannot emit `not_run` | use full verdict enum in draft | `test_not_run_injection_verdict_is_code_only` |
+| Scorecard retains raw scores | replace score list with empty | happy-path test |
+| Privacy count includes chair | snapshot before chair | happy-path test |
+| Every specialist failed skips chair model | disable empty-final branch | all-failed test |
+
+All 13 mutations were detected. Committed source was restored after every mutation. Final verification: 1,070 tests passed.
+
+What I verified by hand:
