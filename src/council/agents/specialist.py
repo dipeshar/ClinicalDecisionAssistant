@@ -32,7 +32,7 @@ from council.grounding import ground_claim
 from council.kb import KnowledgeBase, build_query
 from council.models import (
     Argument, ArgumentDraft, CaseContext, Claim, Config, GroundingStatus, Passage, Rebuttal,
-    Revision, RevisionAction, Role, Round, Score, Step,
+    RetrievalResult, Revision, RevisionAction, Role, Round, Score, Step,
 )
 
 
@@ -152,12 +152,15 @@ def failed_argument(argument_id: str, role: Role, round_number: Round, retrieved
 
 
 def run_round1(role: Role, case: CaseContext, kb: KnowledgeBase, config: Config, gateway: LLMGateway,
-               prompts_dir: str | Path = prompting.DEFAULT_PROMPTS_DIR) -> Argument:
+               prompts_dir: str | Path = prompting.DEFAULT_PROMPTS_DIR,
+               retrieval_callback: Callable[[RetrievalResult], None] | None = None) -> Argument:
     """One specialist's Round 1 turn. Never raises for a bad model response; returns
     a `failed` Argument instead, per contracts rule 17."""
     argument_id = f"R1-{role.value}"
     query = build_query(role, 1, case, config)
     retrieval = kb.retrieve(role, 1, query)
+    if retrieval_callback is not None:
+        retrieval_callback(retrieval)
     retrieved_ids = [passage.id for passage in retrieval.passages]
 
     sources: dict[str, str] = {section.id: section.text for section in case.sections}
@@ -350,7 +353,8 @@ def apply_binding_overrides(
 
 def run_round2(role: Role, case: CaseContext, kb: KnowledgeBase, config: Config, gateway: LLMGateway,
               own_round1: Argument, round1_arguments: Sequence[Argument], round1_scores: Sequence[Score],
-              prompts_dir: str | Path = prompting.DEFAULT_PROMPTS_DIR) -> Argument | None:
+              prompts_dir: str | Path = prompting.DEFAULT_PROMPTS_DIR,
+              retrieval_callback: Callable[[RetrievalResult], None] | None = None) -> Argument | None:
     """One specialist's Round 2 turn. Returns `None` when Round 1 itself failed (rule 16:
     a specialist whose Round 1 turn failed does not take part in Round 2). Never raises for
     a bad model response; returns a `failed` Argument instead, per contracts rule 17.
@@ -367,6 +371,8 @@ def run_round2(role: Role, case: CaseContext, kb: KnowledgeBase, config: Config,
 
     query = build_query(role, 2, case, config, arguments=round1_arguments, scores=round1_scores)
     retrieval = kb.retrieve(role, 2, query)
+    if retrieval_callback is not None:
+        retrieval_callback(retrieval)
     passages = kb.round2_passages(retrieval, own_round1)
     retrieved_ids = [passage.id for passage in passages]
 

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
+from threading import Lock
 
 from council.agents import prompting
 from council.agents.chair import run_chair
@@ -16,7 +17,7 @@ from council.kb import KnowledgeBase
 from council.models import (
     Argument, ArgumentScoreSummary, CaseContext, Claim, Config, Criterion, CriterionGaps,
     CriterionMeans, FailedJudgeCall, JudgeParticipation, JudgeSummary, RedTeamReport,
-    Report, RevisionCounts, Role, RoundComparison, RoundMeans, Round2Status, Score, Scorecard,
+    Report, RetrievalResult, RevisionCounts, Role, RoundComparison, RoundMeans, Round2Status, Score, Scorecard,
     SharedScore, UngroundedCounts,
 )
 from council.scoring import SPECIALIST_ROLES, disagreement_count, final_arguments
@@ -26,6 +27,7 @@ JUDGES = (Role.JUDGE_A, Role.JUDGE_B)
 
 @dataclass(frozen=True)
 class CouncilRun:
+    retrievals: list[RetrievalResult]
     arguments: list[Argument]
     scorecard: Scorecard
     red_team: RedTeamReport | None
@@ -162,14 +164,20 @@ def run_council(
     prompts_dir: str | Path = prompting.DEFAULT_PROMPTS_DIR,
 ) -> CouncilRun:
     """Run exactly two specialist rounds, or short-circuit to the reserved chair."""
+    retrievals: list[RetrievalResult] = []
+    retrieval_lock = Lock()
     arguments: list[Argument] = []
     scores: list[Score] = []
     orders: dict[str, list[str]] = {}
     failed_judges: list[FailedJudgeCall] = []
     incomplete_reasons: list[str] = []
 
+    def collect_retrieval(retrieval: RetrievalResult) -> None:
+        with retrieval_lock:
+            retrievals.append(retrieval)
+
     round1 = parallel_map(SPECIALIST_ROLES, lambda role: run_round1(
-        role, case, kb, config, gateway, prompts_dir))
+        role, case, kb, config, gateway, prompts_dir, collect_retrieval))
     arguments.extend(round1)
 
     def budget_reason() -> str | None:
@@ -196,7 +204,8 @@ def run_council(
     if budget_reason() is None and final_arguments(arguments):
         round2 = parallel_map(SPECIALIST_ROLES, lambda role: run_round2(
             role, case, kb, config, gateway,
-            next(argument for argument in round1 if argument.role == role), round1, scores, prompts_dir))
+            next(argument for argument in round1 if argument.role == role), round1, scores, prompts_dir,
+            collect_retrieval))
         arguments.extend(round2)
         if budget_reason() is None:
             judge_round(2)
@@ -220,4 +229,6 @@ def run_council(
         gateway=gateway, incomplete_reasons=incomplete_reasons, prompts_dir=prompts_dir,
         red_team_skip_reason=skip_reason,
     )
-    return CouncilRun(arguments=arguments, scorecard=scorecard, red_team=red_team, report=report)
+    retrievals.sort(key=lambda item: (item.round, item.role))
+    return CouncilRun(retrievals=retrievals, arguments=arguments, scorecard=scorecard,
+                      red_team=red_team, report=report)

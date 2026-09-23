@@ -1756,3 +1756,45 @@ No data-contract field was changed beyond the separately committed, human-author
 All 13 mutations were detected. Committed source was restored after every mutation. Final verification: 1,070 tests passed.
 
 What I verified by hand:
+
+## T16: CLI and human gate
+
+Inherited an unfinished, uncommitted draft of `cli.py` (new), plus small edits to `orchestrator.py` and `agents/specialist.py`, none of it audited by a prior session (no dev-log entry, no mutation run). Read it as a pull request against `data-contracts.md`/`docs/tasks.md` before trusting any of it.
+
+The `orchestrator.py`/`specialist.py` changes were in scope for a CLI task because `RunBundle.retrievals` (section 14) must hold every specialist's `RetrievalResult` from both rounds, and `run_council` previously discarded them — `kb.retrieve()` was called inside `run_round1`/`run_round2` and the result used locally, never returned. The draft adds an optional `retrieval_callback` parameter to both specialist entry points and a lock-guarded list in `run_council` that collects every call, exposed as `CouncilRun.retrievals`, sorted by `(round, role)` for determinism across the parallel specialist threads. This is the minimum plumbing needed for T16's `write_artifacts`/`build_bundle` to produce a contract-shaped `run.json`; nothing else in either file changed.
+
+Ran the existing suite first (1,074 passed, unchanged by my review). Read `cli.py` end to end against section 14 (`RunBundle`), section 9 (`HumanDecision`), section 10 (the trace `decision` event), and section 3 (the ingest privacy-rejection path). The privacy-rejection concern turned out to be already handled below `ingest_case` — `ingest.py` calls `write_privacy_rejection` (T3b) before raising, so a rejected case still gets its own run folder and one `privacy_block` trace event even though `run_command` never reaches its own folder-creation code for that case. Not a T16 gap.
+
+One real gap: `collect_sources` builds `sources` from every citation across both rounds' claims/rebuttals plus red-team evidence, matching "cited by a claim or used as red-team evidence" — but no test asserted the *exclusion* half of that rule (no test failed when I mutated it to include every case section regardless of citation). Added `assert set(bundle.sources) == {"CASE-tests"}` to `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` (the fixture's fake provider always cites exactly `CASE-tests`, never the other 7 sections), confirmed it fails against the mutation and passes against the real code, then committed it as part of this task.
+
+What went wrong: while reverting a one-line mutation in `cli.py`, I ran `git checkout -- src/council/cli.py` instead of a scoped edit revert. Since the whole file was an uncommitted draft (not just my mutation), this discarded the entire T16 draft back to the committed T0 skeleton, not just the mutation. Recovered it intact from a dangling git blob (`git fsck --dangling` surfaced `2c3a475...`, the exact blob hash `git diff`'s own header had already shown for this file); confirmed byte-identical by matching diff stat against the pre-loss diff and re-running the full suite (1,074 passed, same as before the mistake). No data was permanently lost, but it was closer than it should have been — every mutation revert after that point used `Edit` on the specific lines, never `git checkout`/`git restore`, on files with pre-existing uncommitted changes.
+
+#### T16 contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 14: run folder holds exactly `trace.jsonl`, `run.json`, `scorecard.json`, `report.md` (no `report.html` before T19) | `write_artifacts`, `run_command` (`cli.py`) | `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` |
+| Section 14: `RunBundle` shape (`run_id`, `case_id`, `created_at`, `config_snapshot`, `case_context`, `retrievals`, `arguments`, `scorecard`, `red_team`, `report`, `sources`) | `build_bundle` (`cli.py`) | same test; round-trips through `RunBundle.model_validate_json` |
+| Section 14: `sources` holds only text cited by a claim or used as red-team evidence | `collect_sources` (`cli.py`) | same test, `set(bundle.sources) == {"CASE-tests"}` (added this task) |
+| Section 4: `RetrievalResult` collected for every specialist turn, both rounds | `retrieval_callback` (`agents/specialist.py`), `collect_retrieval`/lock (`orchestrator.py`), exposed as `CouncilRun.retrievals` | `test_happy_path_runs_two_parallel_rounds_and_all_agents` (order/content), `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` (`len(bundle.retrievals) == 8`) |
+| Section 9: `HumanDecision` (`run_id`, `decision`, `comment`, `reviewer`, `decided_at`, `report_hash`) | `ask_human_decision` (`cli.py`) | `test_human_gate_accepts_each_decision_and_hashes_displayed_report`, full-run test |
+| Section 9: `report_hash` is the hash of the exact report the human saw | hashes `report_bytes` (the bytes written to `report.md` and shown via `output_fn`) before the decision is asked | both tests above, hash-equality assertions |
+| Section 10: trace event for the decision (`step=human`, `event_type=decision`, `parsed_ref=<decision value>`) | final `trace.write(TraceEvent(...))` in `run_command` | `test_run_command_writes_pre_t19_folder_and_hash_bound_comment`, `trace[-1]` assertions |
+| Section 3 / rule 19: rejected case still writes a run folder with one `privacy_block` event | already implemented by `ingest_case`/`write_privacy_rejection` (T3b); `cli.py` adds nothing here | pre-existing T3b tests; not re-tested this task |
+| Rule 21: `config_snapshot` never contains secrets | `Config` (T1/T2 models) has no secret-holding field, so `config.model_dump(mode="json")` is safe by construction | inherited from T1/T2; no new test needed or added |
+
+Nothing in `data-contracts.md` had to be implemented differently from how it's written; the one thing not implemented by this task (the privacy-rejection run folder) was already implemented by an earlier one.
+
+#### T16 mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| `report_hash` is the hash of the exact displayed report | hashed a fixed placeholder instead of `report_bytes` | `test_human_gate_accepts_each_decision_and_hashes_displayed_report` (all 3 cases), `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` |
+| Run folder holds no `report.html` before T19 | wrote a spurious `report.html` in `write_artifacts` | `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` |
+| Every specialist retrieval (both rounds) is collected | dropped the Round 2 `retrieval_callback` call in `run_round2` | `test_happy_path_runs_two_parallel_rounds_and_all_agents`, `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` |
+| Decision trace event uses `step=human` | changed to `step=chair` | `test_run_command_writes_pre_t19_folder_and_hash_bound_comment` |
+| `sources` holds only cited text, not every case section | added every case section ID to `collect_sources`' `wanted` set regardless of citation | no test failed initially; added `assert set(bundle.sources) == {"CASE-tests"}`, confirmed it then catches this mutation |
+
+All 5 mutations were detected (one required a new test, committed before repeating it). Committed source was restored after every mutation, confirmed by `git diff --stat` matching the pre-mutation draft and the full suite passing (1,074 tests) after each restore.
+
+What I verified by hand:

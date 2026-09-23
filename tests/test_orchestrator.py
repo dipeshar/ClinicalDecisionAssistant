@@ -161,6 +161,10 @@ def test_happy_path_runs_two_parallel_rounds_and_all_agents(config: Config, tmp_
     assert [(argument.round, argument.role) for argument in result.arguments] == [
         *((1, role) for role in SPECIALISTS), *((2, role) for role in SPECIALISTS),
     ]
+    assert [(retrieval.round, retrieval.role) for retrieval in result.retrievals] == [
+        *((1, role.value) for role in sorted(SPECIALISTS, key=lambda item: item.value)),
+        *((2, role.value) for role in sorted(SPECIALISTS, key=lambda item: item.value)),
+    ]
     assert provider.max_active >= 2
     assert len(result.scorecard.scores) == 16  # 4 arguments x 2 judges x 2 rounds
     assert result.red_team is not None
