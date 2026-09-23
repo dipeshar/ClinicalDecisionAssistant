@@ -140,7 +140,7 @@
   {
     "rule": "Scores are matched to their argument by ID lookup, not response order",
     "old": "by_id = {score.argument_id: score for score in draft}",
-    "new": "by_id = {argument.argument_id: score for argument, score in zip(shown, reversed(draft))}",
+    "new": "by_id = dict(zip((argument.argument_id for argument in shown), draft))",
     "test": "test_scores_are_matched_by_argument_id_not_response_order"
   }
 ]
