@@ -1,0 +1,158 @@
+[
+  {
+    "rule": "render_other_arguments shows each claim's grounding status",
+    "old": "lines.append(f\"- [{claim.claim_id}] ({claim.grounding_status.value}) {claim.text}\")",
+    "new": "lines.append(f\"- [{claim.claim_id}] {claim.text}\")",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "render_own_argument_with_checks reports the citation check result",
+    "old": "check = \"verified\" if citation.verified else f\"check failed: {citation.verify_note}\"",
+    "new": "check = \"verified\"",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "render_judge_notes carries no numeric scores",
+    "old": "lines = [f\"### {score.judge}\"]",
+    "new": "lines = [f\"### {score.judge}: groundedness {score.groundedness}\"]",
+    "test": "test_judge_notes_never_include_scores"
+  },
+  {
+    "rule": "binding_claim_ids requires both judges to independently flag the same claim",
+    "old": "return judge_a & judge_b",
+    "new": "return judge_a | judge_b",
+    "test": "test_binding_claim_ids_requires_both_judges"
+  },
+  {
+    "rule": "binding_claim_ids needs at least two judges to bind anything",
+    "old": "if len(by_judge) < 2:\n        return set()",
+    "new": "if len(by_judge) < 1:\n        return set()",
+    "test": "test_binding_claim_ids_requires_both_judges"
+  },
+  {
+    "rule": "ground_round2 continues claim_id numbering into the rebuttal",
+    "old": "start = len(claims) + 1",
+    "new": "start = 1",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "revision_structure_issues detects a missing Round 1 claim decision",
+    "old": "    if missing:\n        issues.append(RepairIssue(\"Revisions\", f\"missing a decision for: {', '.join(sorted(missing))}\"))",
+    "new": "    if False:\n        issues.append(RepairIssue(\"Revisions\", f\"missing a decision for: {', '.join(sorted(missing))}\"))",
+    "test": "test_missing_revision_fails_the_turn_if_still_missing_after_repair"
+  },
+  {
+    "rule": "revision_structure_issues checks new_claim_index is within the Round 2 claims list",
+    "old": "if revision.new_claim_index is None or not 1 <= revision.new_claim_index <= num_claims:",
+    "new": "if False:",
+    "test": "test_no_claims_kept_fails_the_turn_if_still_empty_after_repair"
+  },
+  {
+    "rule": "revision_structure_issues requires at least one claim kept overall",
+    "old": "    if not draft.claims:\n        issues.append(RepairIssue(\"Claims\", \"you must keep at least one claim overall\"))",
+    "new": "    if False:\n        issues.append(RepairIssue(\"Claims\", \"you must keep at least one claim overall\"))",
+    "test": "test_no_claims_kept_fails_the_turn_if_still_empty_after_repair"
+  },
+  {
+    "rule": "binding_kept_issues only flags claims actually marked kept",
+    "old": "if revision.round1_claim_id in binding_ids and revision.action == RevisionAction.KEPT]",
+    "new": "if revision.round1_claim_id in binding_ids]",
+    "test": "test_binding_requires_both_judges_not_just_one"
+  },
+  {
+    "rule": "rebuttal_issues requires a rebuttal every Round 2 turn",
+    "old": "    if draft.rebuttal is None:\n        return [RepairIssue(\"Rebuttal\", \"a rebuttal is required in Round 2\")]",
+    "new": "    if False:\n        return [RepairIssue(\"Rebuttal\", \"a rebuttal is required in Round 2\")]",
+    "test": "test_no_rebuttal_fails_the_turn_if_still_missing_after_repair"
+  },
+  {
+    "rule": "rebuttal_issues rejects a target from the specialist's own role",
+    "old": "if target is None or target.role == own_role:",
+    "new": "if target is None:",
+    "test": "test_rebuttal_targeting_own_role_triggers_repair"
+  },
+  {
+    "rule": "rebuttal_issues checks the target_claim_id is inside the targeted argument",
+    "old": "if draft.rebuttal.target_claim_id not in {claim.claim_id for claim in target.claims}:",
+    "new": "if False:",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "apply_binding_overrides drops the overridden claim from the final claims list",
+    "old": "if revision.new_claim_index is not None:\n                dropped_indices.add(revision.new_claim_index)",
+    "new": "pass",
+    "test": "test_binding_judge_concern_kept_gets_overridden"
+  },
+  {
+    "rule": "apply_binding_overrides records a trace validation event for each override",
+    "old": "gateway.write_validation_event(\n                role=role, step=Step.SPECIALIST, round_number=2, parsed_ref=revision.round1_claim_id,\n                note=\"both judges flagged this claim in Round 1; Round 2 kept it anyway, so code dropped it\",\n            )",
+    "new": "pass",
+    "test": "test_binding_judge_concern_kept_gets_overridden"
+  },
+  {
+    "rule": "apply_binding_overrides marks the override as dropped, not kept",
+    "old": "round1_claim_id=revision.round1_claim_id, action=RevisionAction.DROPPED, new_claim_index=None,",
+    "new": "round1_claim_id=revision.round1_claim_id, action=RevisionAction.KEPT, new_claim_index=revision.new_claim_index,",
+    "test": "test_binding_judge_concern_kept_gets_overridden"
+  },
+  {
+    "rule": "apply_binding_overrides computes new_claim_id from new_claim_index for non-overridden revisions",
+    "old": "new_claim_id = f\"{argument_id}-C{revision.new_claim_index}\" if revision.new_claim_index is not None else None",
+    "new": "new_claim_id = None",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "A specialist whose Round 1 turn failed is skipped entirely in Round 2",
+    "old": "    if own_round1.status == \"failed\":\n        return None",
+    "new": "    if False:\n        return None",
+    "test": "test_round1_failure_skips_round2"
+  },
+  {
+    "rule": "Other Round 1 arguments exclude the specialist's own role",
+    "old": "if argument.round == 1 and argument.role != role and argument.status != \"failed\"]",
+    "new": "if argument.round == 1 and argument.status != \"failed\"]",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "Other Round 1 arguments exclude failed arguments",
+    "old": "others = [argument for argument in round1_arguments\n             if argument.round == 1 and argument.role != role and argument.status != \"failed\"]",
+    "new": "others = [argument for argument in round1_arguments\n             if argument.round == 1 and argument.role != role]",
+    "test": "test_failed_other_argument_excluded_from_prompt"
+  },
+  {
+    "rule": "Judge notes are filtered to the specialist's own Round 1 argument",
+    "old": "own_scores = [score for score in round1_scores\n                 if score.round == 1 and score.argument_id == own_round1.argument_id]",
+    "new": "own_scores = list(round1_scores)",
+    "test": "test_judge_notes_filter_to_own_round1_argument"
+  },
+  {
+    "rule": "Retrieved passages are added to the citable sources",
+    "old": "sources.update({passage.id: passage.text for passage in passages})",
+    "new": "pass",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "The prompt includes the other arguments data block",
+    "old": "(\"Other Round 1 arguments\", render_other_arguments(others)),",
+    "new": "(\"Other Round 1 arguments\", \"(omitted)\"),",
+    "test": "test_good_output_produces_an_ok_round2_argument"
+  },
+  {
+    "rule": "The prompt includes the judge notes data block",
+    "old": "(\"Judge notes on your Round 1 argument\", render_judge_notes(own_scores)),",
+    "new": "(\"Judge notes on your Round 1 argument\", \"(omitted)\"),",
+    "test": "test_judge_notes_never_include_scores"
+  },
+  {
+    "rule": "A still-wrong revision structure after repair fails the turn",
+    "old": "    if hard_issues:\n        # Still structurally wrong after the one repair retry: unlike an ungrounded claim,\n        # this can't be left as-is, and unlike a binding \"kept\" claim, code has no safe fix.\n        reasons = \"; \".join(f\"{issue.location}: {issue.reason}\" for issue in hard_issues)\n        return failed_argument(argument_id, role, 2, retrieved_ids, repair_used, reasons)",
+    "new": "    if False:\n        reasons = \"; \".join(f\"{issue.location}: {issue.reason}\" for issue in hard_issues)\n        return failed_argument(argument_id, role, 2, retrieved_ids, repair_used, reasons)",
+    "test": "test_missing_revision_fails_the_turn_if_still_missing_after_repair"
+  },
+  {
+    "rule": "stance_changed compares the Round 2 stance against the Round 1 stance",
+    "old": "stance_changed=draft.stance != own_round1.stance,",
+    "new": "stance_changed=False,",
+    "test": "test_stance_changed_is_recorded_when_stance_differs"
+  }
+]
