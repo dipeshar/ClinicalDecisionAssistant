@@ -145,6 +145,7 @@ def test_good_output_produces_an_ok_round2_argument(config: Config, tmp_path: Pa
     assert "R1-PHYS" in prompt and "R1-ANAES" in prompt and "R1-ADMIN" in prompt  # other arguments
     assert "### R1-PHYS (PHYS)" in prompt  # the "other argument" heading format
     assert "### R1-SURG (SURG)" not in prompt  # own role must not appear as an "other" argument
+    assert "[R1-PHYS-C1] (ungrounded)" in prompt  # other arguments show each claim's grounding status
     assert "----- BEGIN Your Round 1 argument" in prompt  # the labeled data block itself
     assert "R1-SURG-C1" in prompt and "R1-SURG-C2" in prompt
     assert "SURG-KB-01" in prompt and "Operative risk is low" in prompt  # retrieved passages block
