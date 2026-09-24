@@ -361,6 +361,25 @@ def test_role_selects_configured_model_temperature_and_reasoning_effort(config: 
     ]
 
 
+def test_system_and_user_reach_the_provider_unmodified_and_separate(config: Config, tmp_path: Path) -> None:
+    """The gateway must forward system/user to the provider exactly as given, never
+    combined into one string (design.md, "Prompt injection defense")."""
+    captured: list[tuple[str, str]] = []
+
+    class SpyProvider(Provider):
+        name = "fake"
+
+        def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
+                    reasoning_effort: str | None = None) -> ProviderResponse:
+            captured.append((system, user))
+            return ProviderResponse("{}", 1, 1, 1)
+
+    gateway, _ = make_gateway(config, tmp_path, {"fake": SpyProvider()})
+    gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1,
+                system="trusted instructions", user="untrusted case data")
+    assert captured == [("trusted instructions", "untrusted case data")]
+
+
 def test_gateway_construction_requires_a_provider_for_every_configured_role(config: Config, tmp_path: Path) -> None:
     trace = TraceWriter(tmp_path / "trace.jsonl", "run-synthetic")
     with pytest.raises(ValueError, match="no provider registered"):

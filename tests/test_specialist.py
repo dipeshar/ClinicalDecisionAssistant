@@ -141,6 +141,12 @@ def test_bad_json_then_fixed_uses_the_repair_retry(config: Config, tmp_path: Pat
     events = trace_events(trace_path)
     assert len(events) == 2
     assert [event["repair"] for event in events] == [False, True]
+    # design.md, "LLM gateway": a repair call resends the exact same user
+    # message (data plus schema) unchanged; only system grows.
+    users = [event["prompt"].split("[USER]\n", 1)[1] for event in events]
+    systems = [event["prompt"].split("[USER]\n", 1)[0] for event in events]
+    assert users[0] == users[1]
+    assert systems[0] != systems[1] and systems[0] in systems[1]
 
 
 def test_bad_json_twice_fails_the_turn(config: Config, tmp_path: Path) -> None:
