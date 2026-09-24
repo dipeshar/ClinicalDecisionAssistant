@@ -82,15 +82,17 @@ def round2_output(role: Role) -> str:
 
 def judge_output(prompt: str) -> str:
     ids = list(dict.fromkeys(re.findall(r"### (R[12]-(?:SURG|PHYS|ANAES|ADMIN)) ", prompt)))
-    round2 = any(id.startswith("R2-") for id in ids)
-    return json.dumps([{
-        "argument_id": id, "groundedness": 4, "logic": 4, "uncertainty": 4,
+    assert len(ids) == 1, f"a judge prompt now shows exactly one argument, found {ids}"
+    argument_id = ids[0]
+    round2 = argument_id.startswith("R2-")
+    return json.dumps({
+        "argument_id": argument_id, "groundedness": 4, "logic": 4, "uncertainty": 4,
         "counterarguments": 4 if round2 else None,
         "justification": {"groundedness": "Grounded.", "logic": "Coherent.",
                           "uncertainty": "Honest.",
                           **({"counterarguments": "Addressed."} if round2 else {})},
         "untraceable_claims": [], "feedback": [],
-    } for id in ids])
+    })
 
 
 def chair_output(prompt: str) -> str:
@@ -108,9 +110,11 @@ def chair_output(prompt: str) -> str:
 class AdaptiveFakeProvider(FakeProvider):
     """A FakeProvider that chooses deterministic JSON from the prompt being tested."""
 
-    def __init__(self, *, fail_round1_roles: set[Role] | None = None) -> None:
+    def __init__(self, *, fail_round1_roles: set[Role] | None = None,
+                fail_judging_for: set[str] | None = None) -> None:
         super().__init__("fake", [Scripted()])
         self.fail_round1_roles = fail_round1_roles or set()
+        self.fail_judging_for = fail_judging_for or set()
         self._adaptive_calls = 0
         self._active = 0
         self.max_active = 0
@@ -135,7 +139,11 @@ class AdaptiveFakeProvider(FakeProvider):
                 output = json.dumps({"findings": [],
                                      "injection_check": {"verdict": "no_sign", "notes": "No influence."}})
             elif "# Judge instructions" in prompt:
-                output = judge_output(prompt)
+                shown = re.findall(r"### (R[12]-(?:SURG|PHYS|ANAES|ADMIN)) ", prompt)
+                if any(id in self.fail_judging_for for id in shown):
+                    output = "not valid JSON"
+                else:
+                    output = judge_output(prompt)
             else:
                 role = specialist_role(prompt)
                 is_round2 = "Round 2" in prompt
@@ -181,11 +189,9 @@ def test_happy_path_runs_two_parallel_rounds_and_all_agents(config: Config, tmp_
     assert result.red_team is not None
     assert result.report.status == "COMPLETE"
     assert result.report.injection_check.verdict == "no_sign"
-    assert result.report.privacy_summary.outbound_prompts_checked == 14
+    # 4 specialists x 2 rounds + 2 judges x 4 arguments x 2 rounds + 1 red team + 1 chair
+    assert result.report.privacy_summary.outbound_prompts_checked == 26
     assert result.report.privacy_summary.providers_used == ["fake"]
-    assert set(result.scorecard.presented_order) == {
-        "JUDGE_A-R1", "JUDGE_B-R1", "JUDGE_A-R2", "JUDGE_B-R2",
-    }
     assert all(argument.round in (1, 2) for argument in result.arguments)
 
 
@@ -202,6 +208,25 @@ def test_one_failed_specialist_continues_and_skips_its_round2(config: Config, tm
     assert result.report.status == "INCOMPLETE"
     assert "R1-SURG" in result.report.failed_turns
     assert result.report.recommendation is not None
+
+
+def test_one_failed_judge_call_does_not_affect_other_arguments_or_judges(config: Config, tmp_path: Path) -> None:
+    """Judging is one call per non-failed argument, per judge; a call that fails
+    for one argument (both judges, since the fake provider can't tell them apart
+    here) must not stop the other three arguments' calls in the same round."""
+    provider = AdaptiveFakeProvider(fail_judging_for={"R1-PHYS"})
+    result = run_council(run_id="run-synthetic", case=case_context(), kb=knowledge_base(), config=config,
+                         gateway=gateway(config, tmp_path, provider), prompts_dir=REAL_PROMPTS)
+
+    round1_scores = [score for score in result.scorecard.scores if score.round == 1]
+    assert {score.argument_id for score in round1_scores} == {"R1-SURG", "R1-ANAES", "R1-ADMIN"}
+    assert len(round1_scores) == 6  # 3 non-failing arguments x 2 judges
+    assert {call.judge for call in result.scorecard.failed_judge_calls} == {"JUDGE_A", "JUDGE_B"}
+    assert all(call.round == 1 for call in result.scorecard.failed_judge_calls)
+    # R1-PHYS's own turn did not fail; only its judge calls did.
+    assert next(a for a in result.arguments if a.argument_id == "R1-PHYS").status == "ok"
+    round2_scores = [score for score in result.scorecard.scores if score.round == 2]
+    assert {score.argument_id for score in round2_scores} == {"R2-SURG", "R2-PHYS", "R2-ANAES", "R2-ADMIN"}
 
 
 def test_budget_exhausted_after_round1_skips_to_chair_with_not_run_check(

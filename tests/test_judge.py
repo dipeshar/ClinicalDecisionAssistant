@@ -1,9 +1,11 @@
-"""Judges: one call per round, shuffled order, skipped failed arguments, feedback limits,
+"""Judges: one call per non-failed argument, skipped failed arguments, feedback limits,
 argument_id-based score matching. FakeProvider only; judges call real models starting at T17.
 """
 
 import json
 from pathlib import Path
+
+import pytest
 
 from council.agents import judge as j
 from council.budget import Budget
@@ -46,21 +48,18 @@ PASSAGE_SOURCES = {"SURG-KB-01": "Operative risk is low when renal function is n
                                 "major comorbidities are present in this synthetic patient population."}
 
 
-def score_json(argument_ids: list[str], *, counterarguments: bool = False, feedback: list | None = None) -> str:
-    entries = []
-    for argument_id in argument_ids:
-        entry = {
-            "argument_id": argument_id,
-            "groundedness": 5, "logic": 5, "uncertainty": 5,
-            "counterarguments": 4 if counterarguments else None,
-            "justification": {"groundedness": "Well cited.", "logic": "Coherent.", "uncertainty": "Clear."},
-            "untraceable_claims": [],
-            "feedback": feedback if feedback is not None else [],
-        }
-        if counterarguments:
-            entry["justification"]["counterarguments"] = "Engages the opposing claim."
-        entries.append(entry)
-    return json.dumps(entries)
+def score_json(argument_id: str, *, counterarguments: bool = False, feedback: list | None = None) -> str:
+    entry = {
+        "argument_id": argument_id,
+        "groundedness": 5, "logic": 5, "uncertainty": 5,
+        "counterarguments": 4 if counterarguments else None,
+        "justification": {"groundedness": "Well cited.", "logic": "Coherent.", "uncertainty": "Clear."},
+        "untraceable_claims": [],
+        "feedback": feedback if feedback is not None else [],
+    }
+    if counterarguments:
+        entry["justification"]["counterarguments"] = "Engages the opposing claim."
+    return json.dumps(entry)
 
 
 def make_gateway(config: Config, tmp_path: Path, script: list) -> tuple[LLMGateway, Path]:
@@ -75,247 +74,109 @@ def trace_events(trace_path: Path) -> list[dict]:
     return [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines()]
 
 
-def reverse_shuffle(items: list) -> None:
-    items.reverse()
+def run_one(config: Config, tmp_path: Path, script: list, *, shown: Argument | None = None):
+    gateway, trace_path = make_gateway(config, tmp_path, script)
+    score, failed = j.run_judge(
+        Role.JUDGE_A, shown or argument(Role.SURG), case_context(), PASSAGE_SOURCES,
+        config, gateway, REAL_PROMPTS,
+    )
+    return score, failed, trace_path
 
 
-def test_one_call_scores_every_non_failed_argument_of_the_round(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG), argument(Role.PHYS)]
-    gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R1-SURG", "R1-PHYS"]), tokens_in=5, tokens_out=5),
+def test_one_call_scores_one_argument_with_single_object_schema(config: Config, tmp_path: Path) -> None:
+    score, failed, trace_path = run_one(config, tmp_path, [
+        Scripted(raw_output=score_json("R1-SURG"), tokens_in=5, tokens_out=5),
     ])
 
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert len(scores) == 2
-    assert order == ["R1-SURG", "R1-PHYS"]
-    assert {score.argument_id for score in scores} == {"R1-SURG", "R1-PHYS"}
-    assert all(score.judge == "JUDGE_A" and score.round == 1 for score in scores)
-    assert all(score.model == "fake/judge" for score in scores)
-    assert all(score.groundedness == 5 and score.logic == 5 and score.uncertainty == 5 for score in scores)
+    assert failed is False and score is not None
+    assert score.argument_id == "R1-SURG" and score.judge == "JUDGE_A" and score.round == 1
+    assert score.model == "fake/judge"
     prompt = trace_events(trace_path)[0]["prompt"]
-    assert "Creatinine 1.1 mg/dL, eGFR 78." in prompt
-    assert "R1-SURG" in prompt and "R1-PHYS" in prompt
-    assert prompt.count(PASSAGE_SOURCES["SURG-KB-01"]) == 1
-    assert prompt.count('cites SURG-KB-01: "Operative risk is low when renal function is normal"') == 2
+    assert "### R1-SURG (SURG, round 1)" in prompt
+    assert "### R1-PHYS" not in prompt
+    schema = json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0])
+    assert schema["type"] == "object" and "items" not in schema
 
 
-def test_shuffled_order_is_recorded_and_matches_what_was_scored(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG), argument(Role.PHYS), argument(Role.ANAES)]
-    gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R1-SURG", "R1-PHYS", "R1-ANAES"]), tokens_in=5, tokens_out=5),
-    ])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=reverse_shuffle)
-
-    assert failed is False
-    assert order == ["R1-ANAES", "R1-PHYS", "R1-SURG"]
-    # The response listed scores in the original (unshuffled) order; matching is by
-    # argument_id, not position, so the returned scores still follow the shown order.
-    assert [score.argument_id for score in scores] == order
-    # judge.md itself now mentions "R1-SURG" as an inline example, so search for the
-    # argument-block heading specifically, not the bare ID, to avoid that collision.
-    prompt = trace_events(trace_path)[0]["prompt"]
-    assert prompt.index("### R1-ANAES") < prompt.index("### R1-PHYS") < prompt.index("### R1-SURG")
-
-
-def test_failed_and_wrong_round_arguments_are_skipped(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG), argument(Role.PHYS, status="failed"), argument(Role.ANAES, round_number=2)]
-    gateway, _ = make_gateway(config, tmp_path, [Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5)])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert order == ["R1-SURG"]
-    assert [score.argument_id for score in scores] == ["R1-SURG"]
-
-
-def test_no_eligible_arguments_makes_no_gateway_call(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG, status="failed")]
-    provider = FakeProvider("fake", [Scripted()])
-    gateway, _ = (LLMGateway(config, Budget(config.budget), TraceWriter(tmp_path / "trace.jsonl", "run-synthetic"),
-                             {"fake": provider}, sleep_fn=lambda s: None), None)
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS)
-
-    assert scores == [] and order == [] and failed is False
-    assert provider.calls_made == 0
+def test_failed_argument_is_rejected_before_gateway(config: Config, tmp_path: Path) -> None:
+    gateway, _ = make_gateway(config, tmp_path, [Scripted()])
+    with pytest.raises(ValueError, match="failed argument"):
+        j.run_judge(Role.JUDGE_A, argument(Role.SURG, status="failed"), case_context(),
+                    PASSAGE_SOURCES, config, gateway, REAL_PROMPTS)
 
 
 def test_feedback_is_cut_to_the_configured_limits(config: Config, tmp_path: Path) -> None:
     notes = [{"claim_id": None, "note": "word " * 41} for _ in range(7)]
-    args = [argument(Role.SURG)]
-    gateway, _ = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R1-SURG"], feedback=notes), tokens_in=5, tokens_out=5),
+    score, failed, _ = run_one(config, tmp_path, [
+        Scripted(raw_output=score_json("R1-SURG", feedback=notes), tokens_in=5, tokens_out=5),
     ])
-
-    scores, _order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                         REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert len(scores[0].feedback) == config.judging.feedback_max_notes
-    assert all(len(note.note.split()) == config.judging.feedback_max_words for note in scores[0].feedback)
+    assert failed is False and score is not None
+    assert len(score.feedback) == config.judging.feedback_max_notes
+    assert all(len(note.note.split()) == config.judging.feedback_max_words for note in score.feedback)
 
 
 def test_round2_feedback_is_forced_empty(config: Config, tmp_path: Path) -> None:
     notes = [{"claim_id": None, "note": "Should not appear."}]
-    args = [argument(Role.SURG, round_number=2)]
-    gateway, _ = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R2-SURG"], counterarguments=True, feedback=notes), tokens_in=5, tokens_out=5),
-    ])
-
-    scores, _order, failed = j.run_judge(Role.JUDGE_A, 2, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                         REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert scores[0].feedback == []
-    assert scores[0].counterarguments == 4
+    score, failed, _ = run_one(config, tmp_path, [
+        Scripted(raw_output=score_json("R2-SURG", counterarguments=True, feedback=notes)),
+    ], shown=argument(Role.SURG, round_number=2))
+    assert failed is False and score is not None
+    assert score.feedback == [] and score.counterarguments == 4
 
 
 def test_round1_counterarguments_is_forced_null(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG)]
-    entry = json.loads(score_json(["R1-SURG"]))
-    entry[0]["counterarguments"] = 3  # the model wrongly scores counterarguments in Round 1
-    gateway, _ = make_gateway(config, tmp_path, [Scripted(raw_output=json.dumps(entry), tokens_in=5, tokens_out=5)])
-
-    scores, _order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                         REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert scores[0].counterarguments is None
+    entry = json.loads(score_json("R1-SURG"))
+    entry["counterarguments"] = 3
+    score, failed, _ = run_one(config, tmp_path, [Scripted(raw_output=json.dumps(entry))])
+    assert failed is False and score is not None and score.counterarguments is None
 
 
 def test_round2_missing_counterarguments_triggers_repair(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG, round_number=2)]
-    gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R2-SURG"], counterarguments=False), tokens_in=5, tokens_out=5),
-        Scripted(raw_output=score_json(["R2-SURG"], counterarguments=True), tokens_in=5, tokens_out=5),
-    ])
-
-    scores, _order, failed = j.run_judge(Role.JUDGE_A, 2, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                         REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert scores[0].counterarguments == 4
-    events = trace_events(trace_path)
-    assert [event["repair"] for event in events] == [False, True]
-
-
-def test_scores_are_matched_by_argument_id_not_response_order(config: Config, tmp_path: Path) -> None:
-    """The model's response can list scores in any order; matching is by argument_id."""
-    args = [argument(Role.SURG), argument(Role.PHYS)]
-    reordered = json.dumps(list(reversed(json.loads(score_json(["R1-SURG", "R1-PHYS"])))))
-    gateway, _ = make_gateway(config, tmp_path, [Scripted(raw_output=reordered, tokens_in=5, tokens_out=5)])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert order == ["R1-SURG", "R1-PHYS"]
-    assert [score.argument_id for score in scores] == ["R1-SURG", "R1-PHYS"]
+    score, failed, trace_path = run_one(config, tmp_path, [
+        Scripted(raw_output=score_json("R2-SURG")),
+        Scripted(raw_output=score_json("R2-SURG", counterarguments=True)),
+    ], shown=argument(Role.SURG, round_number=2))
+    assert failed is False and score is not None and score.counterarguments == 4
+    assert [event["repair"] for event in trace_events(trace_path)] == [False, True]
 
 
 def test_missing_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
-    """PHYS was shown but not scored at all: isolated from duplication or an unknown ID."""
-    args = [argument(Role.SURG), argument(Role.PHYS)]
-    gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),  # PHYS missing
-        Scripted(raw_output=score_json(["R1-SURG", "R1-PHYS"]), tokens_in=5, tokens_out=5),
+    missing = json.loads(score_json("R1-SURG"))
+    del missing["argument_id"]
+    score, failed, trace_path = run_one(config, tmp_path, [
+        Scripted(raw_output=json.dumps(missing)), Scripted(raw_output=score_json("R1-SURG")),
     ])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert order == ["R1-SURG", "R1-PHYS"]
-    assert {score.argument_id for score in scores} == {"R1-SURG", "R1-PHYS"}
-    events = trace_events(trace_path)
-    assert [event["repair"] for event in events] == [False, True]
-    assert "missing a score for" in events[1]["prompt"] and "R1-PHYS" in events[1]["prompt"]
-
-
-def test_duplicate_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
-    """SURG scored twice: isolated from any missing or unknown argument."""
-    args = [argument(Role.SURG)]
-    duplicated = score_json(["R1-SURG", "R1-SURG"])
-    gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=duplicated, tokens_in=5, tokens_out=5),
-        Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),
-    ])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert order == ["R1-SURG"]
-    assert [score.argument_id for score in scores] == ["R1-SURG"]
-    events = trace_events(trace_path)
-    assert [event["repair"] for event in events] == [False, True]
-    assert "scored more than once" in events[1]["prompt"] and "R1-SURG" in events[1]["prompt"]
+    assert failed is False and score is not None and score.argument_id == "R1-SURG"
+    assert [event["repair"] for event in trace_events(trace_path)] == [False, True]
 
 
 def test_unknown_argument_id_triggers_repair(config: Config, tmp_path: Path) -> None:
-    """PHYS was scored despite never being shown: isolated from any missing or duplicate ID."""
-    args = [argument(Role.SURG)]
-    gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R1-SURG", "R1-PHYS"]), tokens_in=5, tokens_out=5),
-        Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),
+    score, failed, trace_path = run_one(config, tmp_path, [
+        Scripted(raw_output=score_json("R1-PHYS")), Scripted(raw_output=score_json("R1-SURG")),
     ])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is False
-    assert order == ["R1-SURG"]
-    assert [score.argument_id for score in scores] == ["R1-SURG"]
+    assert failed is False and score is not None and score.argument_id == "R1-SURG"
     events = trace_events(trace_path)
     assert [event["repair"] for event in events] == [False, True]
-    assert "not shown" in events[1]["prompt"] and "R1-PHYS" in events[1]["prompt"]
+    assert "must match the one argument shown: R1-SURG" in events[1]["prompt"]
 
 
-def test_wrong_argument_ids_still_wrong_after_repair_fails_the_call(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG), argument(Role.PHYS)]
-    duplicated = score_json(["R1-SURG", "R1-SURG"])
-    gateway, _ = make_gateway(config, tmp_path, [
-        Scripted(raw_output=duplicated, tokens_in=5, tokens_out=5),
-        Scripted(raw_output=duplicated, tokens_in=5, tokens_out=5),
+def test_wrong_argument_id_still_wrong_after_repair_fails_only_that_call(config: Config, tmp_path: Path) -> None:
+    score, failed, _ = run_one(config, tmp_path, [
+        Scripted(raw_output=score_json("R1-PHYS")), Scripted(raw_output=score_json("R1-PHYS")),
     ])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is True
-    assert scores == [] and order == []
+    assert failed is True and score is None
 
 
 def test_bad_json_twice_fails_the_call(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG)]
-    gateway, _ = make_gateway(config, tmp_path, [
-        Scripted(raw_output="not valid json"),
-        Scripted(raw_output="still not valid json"),
+    score, failed, _ = run_one(config, tmp_path, [
+        Scripted(raw_output="not valid json"), Scripted(raw_output="still not valid json"),
     ])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is True
-    assert scores == [] and order == []
+    assert failed is True and score is None
 
 
 def test_gateway_refusal_fails_the_call(config: Config, tmp_path: Path) -> None:
-    args = [argument(Role.SURG)]
-    gateway, _ = make_gateway(config, tmp_path, [ProviderError])
-
-    scores, order, failed = j.run_judge(Role.JUDGE_A, 1, args, case_context(), PASSAGE_SOURCES, config, gateway,
-                                        REAL_PROMPTS, shuffle=lambda items: None)
-
-    assert failed is True
-    assert scores == [] and order == []
+    score, failed, _ = run_one(config, tmp_path, [ProviderError])
+    assert failed is True and score is None
 
 
 def test_render_argument_shows_citation_id_and_quote_without_source_text() -> None:
@@ -343,15 +204,14 @@ def test_cited_case_section_moves_to_shared_sources_without_duplication(config: 
         })],
     })
     gateway, trace_path = make_gateway(config, tmp_path, [
-        Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),
+        Scripted(raw_output=score_json("R1-SURG"), tokens_in=5, tokens_out=5),
     ])
 
-    _scores, _order, failed = j.run_judge(
-        Role.JUDGE_A, 1, [shown], case_context(), PASSAGE_SOURCES, config, gateway,
-        REAL_PROMPTS, shuffle=lambda items: None,
+    score, failed = j.run_judge(
+        Role.JUDGE_A, shown, case_context(), PASSAGE_SOURCES, config, gateway, REAL_PROMPTS,
     )
 
-    assert failed is False
+    assert failed is False and score is not None
     prompt = trace_events(trace_path)[0]["prompt"]
     assert prompt.count("Creatinine 1.1 mg/dL, eGFR 78.") == 1
     assert "### CASE-tests\nCreatinine 1.1 mg/dL, eGFR 78." in prompt

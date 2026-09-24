@@ -383,7 +383,6 @@ class RoundComparison(ContractModel):
 class Scorecard(ContractModel):
     run_id: str
     scores: list[Score]
-    presented_order: dict[str, list[str]]
     skipped_arguments: list[str]
     failed_judge_calls: list[FailedJudgeCall]
     per_argument: list[ArgumentScoreSummary]

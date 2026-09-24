@@ -1,36 +1,20 @@
-"""Judges: one call per judge per round, scoring every non-failed argument at once.
+"""Judges: one provider call per non-failed argument, per judge.
 
-One judge call: skip failed arguments, shuffle the non-failed arguments of
-the round (recording the shuffled order, to reduce position bias per
-design.md), assemble the prompt with each argument's cited passages shown in
-full, call the gateway, parse the response as one `ScoreDraft` per argument
-(rule 1's shared repair retry applies here too), and turn each into a
-CODE-owned `Score`. Round 1 feedback is truncated to the configured limits;
-Round 2 feedback is always empty, and Round 2 always needs a counterarguments
-score, regardless of what the model wrote for either (contracts section 6).
-
-Scores are matched to arguments by the `argument_id` each `ScoreDraft` names,
-never by array position (contracts section 6, rule 25): a response naming
-anything other than exactly the set of arguments shown — missing, duplicate,
-or unknown — is a validation failure. If it is still wrong after the one
-repair retry, the whole call is treated as failed (rule 18), the same as bad
-JSON that never parses; the run continues with the other judge.
+Each call contains one argument and its uniquely cited sources, parses one
+`ScoreDraft`, and verifies that its `argument_id` matches the argument sent.
+The shared repair retry applies to bad shape and mismatched IDs. Round 1
+feedback is truncated to configured limits; Round 2 feedback is forced empty
+and requires a counterarguments score (contracts section 6).
 """
 
-from collections.abc import Callable, Mapping, MutableSequence, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-import random
-
-from pydantic import TypeAdapter
 
 from council.agents import prompting
 from council.agents.prompting import RepairIssue
 from council.agents.specialist import call_and_parse_with_repair, render_case
 from council.gateway import LLMGateway
 from council.models import Argument, CaseContext, Claim, Config, Round, Score, ScoreDraft, Step, Role
-
-JUDGE_SCHEMA: TypeAdapter[list[ScoreDraft]] = TypeAdapter(list[ScoreDraft])
-
 
 def argument_claims(argument: Argument) -> list[Claim]:
     """Return main and rebuttal-response claims in their displayed order."""
@@ -90,9 +74,8 @@ def build_score(judge: Role, model: str, round_number: Round, draft: ScoreDraft,
     """Force the round-dependent fields (contracts section 6) rather than trust the
     model: Round 1 never has a counterarguments score, Round 2 never has feedback.
 
-    `draft.argument_id` is used as-is: by the time this is called, `run_judge`
-    has already verified the full set of argument_ids in the response exactly
-    matches the arguments shown (rule 25).
+    `draft.argument_id` is used as-is after `run_judge` verifies that it matches
+    the one argument sent (rule 25).
     """
     counterarguments = None if round_number == 1 else draft.counterarguments
     feedback = [] if round_number == 2 else truncate_feedback(
@@ -108,28 +91,15 @@ def build_score(judge: Role, model: str, round_number: Round, draft: ScoreDraft,
 
 
 def run_judge(
-    judge: Role, round_number: Round, arguments: Sequence[Argument], case: CaseContext,
+    judge: Role, argument: Argument, case: CaseContext,
     passage_sources: Mapping[str, str], config: Config, gateway: LLMGateway,
     prompts_dir: str | Path = prompting.DEFAULT_PROMPTS_DIR,
-    shuffle: Callable[[MutableSequence[Argument]], None] = random.shuffle,
-) -> tuple[list[Score], list[str], bool]:
-    """One judge's call for one round. Returns (scores, presented_order, failed).
-
-    `presented_order` is the shuffled argument IDs actually shown, in the order
-    shown (contracts: `Scorecard.presented_order["<judge>-R<round>"]`). Empty
-    scores and an empty order with `failed=False` mean there was nothing to
-    score (every argument of that round failed, or none exist yet); `failed=True`
-    means the call itself could not be used (rule 18: the run continues with the
-    other judge).
-    """
-    eligible = [argument for argument in arguments
-               if argument.round == round_number and argument.status != "failed"]
-    if not eligible:
-        return [], [], False
-
-    shown = list(eligible)
-    shuffle(shown)
-    presented_order = [argument.argument_id for argument in shown]
+) -> tuple[Score | None, bool]:
+    """Score one non-failed argument. Return (score, failed)."""
+    if argument.status == "failed":
+        raise ValueError("a failed argument must not be sent to a judge")
+    round_number = argument.round
+    shown = [argument]
 
     sources: dict[str, str] = {section.id: section.text for section in case.sections}
     sources.update(passage_sources)
@@ -141,49 +111,33 @@ def run_judge(
     data_blocks = [
         ("Case sections not repeated below", render_case(uncited_case)),
         ("Cited sources", render_shared_sources(shown, sources)),
+        (argument.argument_id, render_argument(argument)),
     ]
-    data_blocks.extend((argument.argument_id, render_argument(argument)) for argument in shown)
     body = prompting.judge_body(data_blocks, prompts_dir)
 
-    expected_ids = {argument.argument_id for argument in shown}
-
-    def find_issues(scores: list[ScoreDraft]) -> list[RepairIssue]:
-        seen_ids = [score.argument_id for score in scores]
-        missing = expected_ids - set(seen_ids)
-        unknown = sorted(set(seen_ids) - expected_ids)
-        duplicated = sorted({id for id in seen_ids if seen_ids.count(id) > 1})
-        issues = []
-        if missing:
-            issues.append(RepairIssue("Response", f"missing a score for: {', '.join(sorted(missing))}"))
-        if unknown:
-            issues.append(RepairIssue("Response", f"scored an argument that was not shown: {', '.join(unknown)}"))
-        if duplicated:
-            issues.append(RepairIssue("Response", f"scored more than once: {', '.join(duplicated)}"))
-        if issues:
-            # The argument_id set is wrong; positions can't be trusted yet, so
-            # don't also report per-score problems until this is fixed.
-            return issues
-        if round_number == 2:
-            return [RepairIssue(f"Score for {score.argument_id}",
-                                "counterarguments score is required in Round 2")
-                    for score in scores if score.counterarguments is None]
+    def find_issues(score: ScoreDraft) -> list[RepairIssue]:
+        if score.argument_id != argument.argument_id:
+            return [RepairIssue(
+                "argument_id",
+                f"must match the one argument shown: {argument.argument_id}",
+            )]
+        if round_number == 2 and score.counterarguments is None:
+            return [RepairIssue(
+                f"Score for {score.argument_id}",
+                "counterarguments score is required in Round 2",
+            )]
         return []
 
     draft, _repair_used, failure_reason, model = call_and_parse_with_repair(
         gateway, role=judge, step=Step.JUDGE, round_number=round_number, body=body,
-        schema_model=JUDGE_SCHEMA, prompts_dir=prompts_dir, retrieved_ids=[], find_issues=find_issues,
+        schema_model=ScoreDraft, prompts_dir=prompts_dir, retrieved_ids=[], find_issues=find_issues,
     )
 
     if draft is None:
-        assert failure_reason is not None  # call_and_parse_with_repair always explains a None draft
-        return [], [], True
-
+        assert failure_reason is not None
+        return None, True
     if find_issues(draft):
-        # Still wrong after the one repair retry (rule 25): the call is failed,
-        # not partially accepted, since positions can't be trusted to fall back on.
-        return [], [], True
+        return None, True
 
-    assert model is not None  # a successful draft always came from a real gateway call
-    by_id = {score.argument_id: score for score in draft}
-    scores = [build_score(judge, model, round_number, by_id[argument.argument_id], config) for argument in shown]
-    return scores, presented_order, False
+    assert model is not None
+    return build_score(judge, model, round_number, draft, config), False

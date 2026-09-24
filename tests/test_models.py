@@ -58,7 +58,7 @@ def contract_samples() -> dict[str, dict[str, Any]]:
     s["RoundComparison"] = dict(role="SURG", shared_score=s["SharedScore"], ungrounded_claims=s["UngroundedCounts"],
                                 revisions=s["RevisionCounts"], round2_status="failed")
     s["Scorecard"] = dict(run_id="run-20260919-1030-synthetic01", scores=[s["Score"]],
-                          presented_order={"JUDGE_A-R1": ["R1-SURG"]}, skipped_arguments=["R1-PHYS"],
+                          skipped_arguments=["R1-PHYS"],
                           failed_judge_calls=[s["FailedJudgeCall"]], per_argument=[s["ArgumentScoreSummary"]],
                           code_ungrounded_claims=["R1-SURG-C1"], round_comparison=[s["RoundComparison"]])
     s["RedTeamFindingDraft"] = dict(category="missing_info", severity="low", description="Synthetic missing source",

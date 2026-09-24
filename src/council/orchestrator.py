@@ -122,14 +122,14 @@ def round_comparison(role: Role, arguments: Sequence[Argument],
 
 def build_scorecard(
     run_id: str, arguments: Sequence[Argument], scores: Sequence[Score],
-    presented_order: dict[str, list[str]], failed_judges: Sequence[FailedJudgeCall], config: Config,
+    failed_judges: Sequence[FailedJudgeCall], config: Config,
 ) -> Scorecard:
     summaries = [summary for argument in arguments
                  if (summary := score_summary(argument, scores, config.judging.disagreement_gap)) is not None]
     ungrounded = [claim.claim_id for argument in arguments for claim in claims_for(argument)
                   if claim.grounding_status == "ungrounded"]
     return Scorecard(
-        run_id=run_id, scores=list(scores), presented_order=presented_order,
+        run_id=run_id, scores=list(scores),
         skipped_arguments=[argument.argument_id for argument in arguments if argument.status == "failed"],
         failed_judge_calls=list(failed_judges), per_argument=summaries,
         code_ungrounded_claims=list(dict.fromkeys(ungrounded)),
@@ -168,7 +168,6 @@ def run_council(
     retrieval_lock = Lock()
     arguments: list[Argument] = []
     scores: list[Score] = []
-    orders: dict[str, list[str]] = {}
     failed_judges: list[FailedJudgeCall] = []
     incomplete_reasons: list[str] = []
 
@@ -185,18 +184,22 @@ def run_council(
         return state.reason if state.exhausted else None
 
     def judge_round(round_number: int) -> None:
+        eligible = [argument for argument in arguments
+                    if argument.round == round_number and argument.status != "failed"]
+        passage_sources = {
+            passage.id: passage.text for passages in kb.passages.values() for passage in passages
+        }
         for judge in JUDGES:
-            if budget_reason() is not None:
-                break
-            result, order, failed = run_judge(
-                judge, round_number, arguments, case,
-                {passage.id: passage.text for passages in kb.passages.values() for passage in passages},
-                config, gateway, prompts_dir,
-            )
-            orders[f"{judge.value}-R{round_number}"] = order
-            scores.extend(result)
-            if failed:
-                failed_judges.append(FailedJudgeCall(judge=judge, round=round_number))
+            for argument in eligible:
+                if budget_reason() is not None:
+                    return
+                score, failed = run_judge(
+                    judge, argument, case, passage_sources, config, gateway, prompts_dir,
+                )
+                if score is not None:
+                    scores.append(score)
+                if failed:
+                    failed_judges.append(FailedJudgeCall(judge=judge, round=round_number))
 
     if final_arguments(arguments):
         judge_round(1)
@@ -220,7 +223,7 @@ def run_council(
         if red_team is None:
             incomplete_reasons.append("red team failed")
 
-    scorecard = build_scorecard(run_id, arguments, scores, orders, failed_judges, config)
+    scorecard = build_scorecard(run_id, arguments, scores, failed_judges, config)
     judge_summary = build_judge_summary(scorecard, arguments)
     skip_reason = reason or ("all specialists failed" if not final_arguments(arguments) else "red team failed")
     report = run_chair(
