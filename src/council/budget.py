@@ -32,7 +32,8 @@ class Budget:
     Admission holds a conservative input-token bound plus the output cap.
     Actual token usage is settled once; outstanding reservations also consume
     room, so concurrent attempts cannot spend the same remaining tokens.
-    Each API/repair attempt needs its own reservation, including failed calls.
+    Each API/repair attempt needs its own reservation. Success settles actual
+    usage; failure releases the reservation while retaining the attempt count.
     The gateway must enforce seconds_remaining as a timeout and supply usage
     within the reserved bounds. This class does not call providers or retry.
     """
@@ -103,9 +104,8 @@ class Budget:
     def complete(self, reservation: Reservation, tokens_in: int, tokens_out: int) -> BudgetState:
         """Settle known usage, release unused room, retain the attempt count.
 
-        A failed API attempt with known zero usage settles with zeroes. Unknown
-        usage must not be presented as zero by the future gateway; leaving the
-        reservation outstanding conservatively keeps that room unavailable.
+        Failed attempts use `release` instead, because reservations represent
+        only attempts that are currently in flight.
         """
         nonnegative_integer(tokens_in)
         nonnegative_integer(tokens_out)
@@ -115,5 +115,13 @@ class Budget:
             if tokens_in > reservation.tokens_in or tokens_out > reservation.max_tokens_out:
                 raise ValueError("actual usage exceeds the reserved bounds")
             self._state.tokens_used += tokens_in + tokens_out
+            del self._pending[reservation]
+            return self._state.model_copy(deep=True)
+
+    def release(self, reservation: Reservation) -> BudgetState:
+        """Release a failed attempt's held tokens while retaining its call count."""
+        with self._lock:
+            if reservation not in self._pending:
+                raise ValueError("unknown or already settled reservation")
             del self._pending[reservation]
             return self._state.model_copy(deep=True)

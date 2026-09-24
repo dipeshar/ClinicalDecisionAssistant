@@ -165,6 +165,24 @@ def test_timeout_twice_exhausts_attempts_and_refuses(config: Config, tmp_path: P
     assert len(sleeps) == 1
 
 
+def test_failed_attempt_releases_token_reservation(config: Config, tmp_path: Path) -> None:
+    budget = Budget(BudgetConfig(
+        max_total_tokens=32, max_calls=6, max_seconds_total=60,
+        chair_reserve=dict(tokens=2, calls=1, seconds=10),
+        max_tokens_per_call=dict(specialist=20, judge=20, red_team=20, chair=20),
+    ))
+    provider = FakeProvider("fake", [ProviderError, Scripted(raw_output="ok", tokens_in=1, tokens_out=1)])
+    gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, budget=budget)
+
+    with pytest.raises(GatewayRefusal):
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="abcdefghij")
+    result = gateway.call(role=Role.PHYS, step=Step.SPECIALIST, round_number=1, prompt="abcdefghij")
+
+    assert result.raw_output == "ok"
+    assert budget.snapshot().tokens_used == 2
+    assert budget.snapshot().calls_used == 2
+
+
 def test_non_timeout_provider_error_does_not_retry(config: Config, tmp_path: Path) -> None:
     provider = FakeProvider("fake", [ProviderError, Scripted()])
     sleeps: list[float] = []

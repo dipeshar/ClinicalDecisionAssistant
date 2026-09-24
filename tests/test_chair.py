@@ -208,6 +208,24 @@ def test_narrative_unknown_id_alone_triggers_repair(config: Config, tmp_path: Pa
     assert "uses IDs that do not exist: NOPE" in events(path)[1]["prompt"]
 
 
+def test_narrative_comma_separated_ids_in_one_tag_are_valid(config: Config, tmp_path: Path) -> None:
+    args = [argument(Role.SURG, 1), argument(Role.PHYS, 1, stance="conditional")]
+    output = draft_json(
+        basis=["R1-SURG", "R1-PHYS"], strongest=["R1-SURG-C1"],
+        notes={"SURG": "Supports proceeding.", "PHYS": "Conditional support."},
+        narrative="Proceed with both perspectives [R1-SURG-C1, R1-PHYS-C1].",
+    )
+
+    report, path, provider = run(
+        config, tmp_path, [Scripted(raw_output=output)], arguments=args,
+        scores=[score("R1-SURG", 1), score("R1-PHYS", 1)],
+    )
+
+    assert report.recommendation == "proceed_with_modifications"
+    assert provider.calls_made == 1
+    assert len(events(path)) == 1
+
+
 def test_narrative_missing_end_tag_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
     bad = draft_json(narrative="The sentence mentions [RT-1] before uncited closing words.")
     report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])

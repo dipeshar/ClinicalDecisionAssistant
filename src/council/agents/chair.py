@@ -31,7 +31,8 @@ def narrative_issues(narrative: str, valid_ids: Collection[str]) -> list[RepairI
     if not sentences:
         return [RepairIssue("narrative", "must contain at least one sentence ending with a real ID tag")]
     for index, sentence in enumerate(sentences, start=1):
-        tags = ID_TAG.findall(sentence)
+        tags = [item.strip() for contents in ID_TAG.findall(sentence)
+                for item in contents.split(",")]
         ending = re.search(r"(?:\[[^\[\]]+\])+(?:[.!?]+)?$", sentence)
         if ending is None:
             issues.append(RepairIssue(f"narrative sentence {index}", "must end with at least one ID tag"))

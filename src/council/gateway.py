@@ -142,12 +142,13 @@ class LLMGateway:
             except ProviderError as error:
                 latency_ms = _elapsed_ms(start)
                 last_error = str(error)
+                state = self._budget.release(reservation)
                 self._trace.write(TraceEvent(
                     run_id="", seq=0, timestamp="", step=step, event_type=EventType.LLM_CALL,
                     role=role, round=round_number, model=model_label, prompt=prompt,
                     retrieved_passage_ids=retrieved_passage_ids, raw_output=None, parsed_ref=None,
                     tokens_in=None, tokens_out=None, latency_ms=latency_ms, attempt=attempt,
-                    repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used, error=last_error,
+                    repair=repair, budget_tokens_used=state.tokens_used, error=last_error,
                     finish_reason=None, reasoning=None,
                 ))
                 if isinstance(error, RETRYABLE_ERRORS) and attempt < max_attempts:

@@ -84,6 +84,18 @@ def test_settlement_releases_unused_room_and_counts_both_token_directions() -> N
     assert budget.snapshot().tokens_used == 14
 
 
+def test_failed_attempt_release_makes_reserved_tokens_available_again() -> None:
+    budget = Budget(settings())
+    failed = budget.check_and_reserve(Role.SURG, 60)  # holds 70 of the non-chair 80
+
+    budget.release(failed)
+
+    replacement = budget.check_and_reserve(Role.PHYS, 60)
+    state = budget.complete(replacement, 2, 3)
+    assert state.tokens_used == 5
+    assert state.calls_used == 2  # the failed attempt still counts as a call
+
+
 def test_call_limit_counts_every_attempt_even_zero_usage_failures() -> None:
     budget = Budget(settings())
     for _ in range(8):
