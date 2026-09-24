@@ -31,8 +31,8 @@ reasoning_effort:
 
 budget:
   max_total_tokens: 200000      # input plus output, all roles
-  max_calls: 40                 # counts every attempt
-  max_seconds_total: 900
+  max_calls: 60                 # counts every attempt
+  max_seconds_total: 1800
   chair_reserve:                # only the chair can spend this
     tokens: 10000
     seconds: 60

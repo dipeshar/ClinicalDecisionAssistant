@@ -143,8 +143,8 @@ Rubric, 1 to 5 each:
 
 How judges work:
 
-- Each judge scores all non-failed specialist arguments of a round in one call. That is 4 judge calls in total (2 judges, 2 rounds).
-- Code shuffles the argument order for each judge and round, and records the order, to reduce position bias.
+- Each judge scores one argument per call. A judge's work for a round is however many non-failed arguments that round has, one call each — up to 4 judge calls per round, 2 judges times up to 4 arguments, rather than a fixed number.
+- There is no shuffling and no position bias to guard against, since a call only ever contains one argument. The judge still writes the argument's ID with its score, and code confirms it matches the argument actually sent — a cheap, direct check, not a set-matching problem.
 - Each score in the response names which argument it's for; code checks this matches the arguments shown exactly, so a score can never be silently misattributed to the wrong argument.
 - The two judges do not see each other's scores.
 - Judges list any claim they cannot trace to a source.
