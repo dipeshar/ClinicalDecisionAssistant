@@ -38,10 +38,12 @@ def chat_completion(content: str | None = "hello", prompt_tokens: int = 10, comp
     return SimpleNamespace(choices=[choice], usage=usage)
 
 
-def http_error(cls: type[groq.APIStatusError], text: str) -> groq.APIStatusError:
+def http_error(cls: type[groq.APIStatusError], text: str, *, status: int = 429,
+               headers: dict[str, str] | None = None) -> groq.APIStatusError:
     request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
-    response = httpx.Response(429, request=request, text=text)
-    return cls(text, response=response, body=None)
+    body = {"error": {"message": text}}
+    response = httpx.Response(status, request=request, headers=headers, json=body)
+    return cls(text, response=response, body=body)
 
 
 def test_good_response_returns_content_and_reported_usage() -> None:
@@ -103,18 +105,36 @@ def test_timeout_is_mapped_to_provider_timeout() -> None:
 
 
 def test_rate_limit_is_mapped_to_provider_rate_limit() -> None:
-    client, _ = stub_client(http_error(groq.RateLimitError, "rate limited"))
+    client, _ = stub_client(http_error(
+        groq.RateLimitError, "Requests exceeded the project limit.", headers={"Retry-After": "17"},
+    ))
     provider = GroqProvider(client=client)
-    with pytest.raises(ProviderRateLimit):
+    with pytest.raises(ProviderRateLimit) as excinfo:
         provider.complete(model="m", prompt="p", max_tokens=10, temperature=0)
+    assert str(excinfo.value) == (
+        "groq: rate limited (status 429): Requests exceeded the project limit.; Retry-After: 17"
+    )
+
+
+def test_rate_limit_without_retry_after_does_not_invent_header() -> None:
+    client, _ = stub_client(http_error(groq.RateLimitError, "Requests exceeded the project limit."))
+    provider = GroqProvider(client=client)
+    with pytest.raises(ProviderRateLimit) as excinfo:
+        provider.complete(model="m", prompt="p", max_tokens=10, temperature=0)
+    assert "Retry-After" not in str(excinfo.value)
 
 
 def test_other_groq_error_is_a_generic_provider_error() -> None:
-    client, _ = stub_client(http_error(groq.AuthenticationError, "invalid api key"))
+    client, _ = stub_client(http_error(
+        groq.AuthenticationError, "The supplied credential is invalid.", status=401,
+    ))
     provider = GroqProvider(client=client)
     with pytest.raises(ProviderError) as excinfo:
         provider.complete(model="m", prompt="p", max_tokens=10, temperature=0)
     assert not isinstance(excinfo.value, (ProviderTimeout, ProviderRateLimit))
+    assert str(excinfo.value) == (
+        "groq: AuthenticationError (status 401): The supplied credential is invalid."
+    )
 
 
 @pytest.mark.parametrize(("error_factory", "expected"), [

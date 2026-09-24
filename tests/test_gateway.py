@@ -4,7 +4,10 @@ import ast
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
+import groq
+import httpx
 import pytest
 
 from council.budget import Budget
@@ -12,6 +15,7 @@ from council.gateway import GatewayRefusal, LLMGateway, model_choice_for, temper
 from council.models import BudgetConfig, Config, Role, Step
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderResponse, ProviderTimeout
 from council.providers.fake import FakeProvider, Scripted
+from council.providers.groq import GroqProvider
 from council.trace import TraceWriter
 
 
@@ -323,3 +327,26 @@ def test_api_keys_never_appear_in_trace_or_run_bundle(
         "trace_events": read_events(trace_path),
     })
     assert fake_key not in run_bundle_like
+
+    groq_key = "gsk_synthetic_fake_key_9f3c7a21e8"
+    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    body = {"error": {"message": f"Invalid request; credential {groq_key} was rejected."}}
+    response = httpx.Response(400, request=request, json=body)
+    detailed_error = groq.APIStatusError("bad request", response=response, body=body)
+
+    class ErrorCompletions:
+        def create(self, **kwargs: object) -> object:
+            raise detailed_error
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=ErrorCompletions()))
+    detailed_trace = tmp_path / "detailed-trace.jsonl"
+    detailed_gateway = LLMGateway(
+        config, Budget(config.budget), TraceWriter(detailed_trace, "run-detailed-error"),
+        {"fake": GroqProvider(client=client)}, sleep_fn=lambda seconds: None,
+    )
+    with pytest.raises(GatewayRefusal, match="status 400"):
+        detailed_gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1,
+                              prompt="Synthetic prompt")
+    trace_text = detailed_trace.read_text(encoding="utf-8")
+    assert "Invalid request" in trace_text and "status 400" in trace_text
+    assert groq_key not in trace_text
