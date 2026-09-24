@@ -38,6 +38,16 @@ def argument_claims(argument: Argument) -> list[Claim]:
     return [*argument.claims, *response_claims]
 
 
+def cited_passage_ids(arguments: Sequence[Argument]) -> list[str]:
+    """Return cited source IDs once each, preserving their first displayed use."""
+    return list(dict.fromkeys(
+        citation.passage_id
+        for argument in arguments
+        for claim in argument_claims(argument)
+        for citation in claim.citations
+    ))
+
+
 def render_argument(argument: Argument) -> str:
     """Render argument content with citation IDs and quotes, but no repeated sources."""
     lines = [f"### {argument.argument_id} ({argument.role.value}, round {argument.round})",
@@ -63,15 +73,9 @@ def render_argument(argument: Argument) -> str:
 
 def render_shared_sources(arguments: Sequence[Argument], sources: Mapping[str, str]) -> str:
     """Render every source cited across the shown arguments exactly once."""
-    passage_ids = dict.fromkeys(
-        citation.passage_id
-        for argument in arguments
-        for claim in argument_claims(argument)
-        for citation in claim.citations
-    )
     return "\n\n".join(
         f"### {passage_id}\n{sources.get(passage_id, '(source not available)')}"
-        for passage_id in passage_ids
+        for passage_id in cited_passage_ids(arguments)
     )
 
 
@@ -130,7 +134,14 @@ def run_judge(
     sources: dict[str, str] = {section.id: section.text for section in case.sections}
     sources.update(passage_sources)
 
-    data_blocks = [("Case", render_case(case)), ("Cited sources", render_shared_sources(shown, sources))]
+    cited_ids = set(cited_passage_ids(shown))
+    uncited_case = case.model_copy(update={
+        "sections": [section for section in case.sections if section.id not in cited_ids],
+    })
+    data_blocks = [
+        ("Case sections not repeated below", render_case(uncited_case)),
+        ("Cited sources", render_shared_sources(shown, sources)),
+    ]
     data_blocks.extend((argument.argument_id, render_argument(argument)) for argument in shown)
     body = prompting.judge_body(data_blocks, prompts_dir)
 

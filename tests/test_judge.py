@@ -329,3 +329,29 @@ def test_render_shared_sources_writes_each_cited_source_once() -> None:
     text = j.render_shared_sources([argument(Role.SURG), argument(Role.PHYS)], PASSAGE_SOURCES)
     assert text.count("### SURG-KB-01") == 1
     assert text.count(PASSAGE_SOURCES["SURG-KB-01"]) == 1
+
+
+def test_cited_case_section_moves_to_shared_sources_without_duplication(config: Config, tmp_path: Path) -> None:
+    shown = argument(Role.SURG)
+    case_citation = Citation(
+        passage_id="CASE-tests", quote="Creatinine 1.1 mg/dL", source_type="case",
+        verified=True, verify_note="",
+    )
+    shown = shown.model_copy(update={
+        "claims": [shown.claims[0].model_copy(update={
+            "citations": [*shown.claims[0].citations, case_citation],
+        })],
+    })
+    gateway, trace_path = make_gateway(config, tmp_path, [
+        Scripted(raw_output=score_json(["R1-SURG"]), tokens_in=5, tokens_out=5),
+    ])
+
+    _scores, _order, failed = j.run_judge(
+        Role.JUDGE_A, 1, [shown], case_context(), PASSAGE_SOURCES, config, gateway,
+        REAL_PROMPTS, shuffle=lambda items: None,
+    )
+
+    assert failed is False
+    prompt = trace_events(trace_path)[0]["prompt"]
+    assert prompt.count("Creatinine 1.1 mg/dL, eGFR 78.") == 1
+    assert "### CASE-tests\nCreatinine 1.1 mg/dL, eGFR 78." in prompt
