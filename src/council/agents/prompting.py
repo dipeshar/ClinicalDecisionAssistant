@@ -6,25 +6,36 @@ untrusted data (case text, retrieved passages, other arguments, judge notes)
 in delimited blocks that say plainly they are data and not instructions, and
 appends a JSON schema built from the relevant draft model in `models.py`.
 
+Every call is sent as two separate messages, never one flattened string
+(design.md, "Prompt injection defense"): `system` carries only our own
+trusted instructions (persona, round or role instructions, rubric, and for a
+repair, the repair instructions too); `user` carries the untrusted data, with
+the JSON schema appended at the end. This gives the model's own trained
+instruction hierarchy, which weighs system content more heavily than user
+content, as a real second layer, not just the textual "this is data" framing
+inside the prompt.
+
 File combination, confirmed against what each prompt file itself says about
 what precedes it (`grep -n "above" prompts/*.md`):
 
-- A specialist call is `persona_<role>.md` then `specialist_round<N>.md`:
+- A specialist call's system is `persona_<role>.md` then `specialist_round<N>.md`:
   both round files say "combined with your persona instructions above", so
   the persona must be loaded first.
-- A judge call is `rubric.md` then `judge.md`: judge.md says "the rubric
-  provided above", so the rubric must be loaded first.
-- `chair.md` and `red_team.md` stand alone: neither references another
-  prompt file's content, only "the schema provided after this prompt" (the
-  JSON schema this module appends at the end, not a preceding file).
-- A repair call is the original assembled body, then `repair_intro.md`, then
-  a code-generated list of what failed, then `repair_fix.md`: the intro says
-  the list is "listed below" and the fix file refers back to "the problems
-  above", so the list has to sit between the two files. repair_fix.md says
-  "the same instructions, rules, and schema you were given for your
-  original task", and our providers are single-shot (one prompt in, one
-  completion out, no conversation history), so that original context has
-  to be resent.
+- A judge call's system is `rubric.md` then `judge.md`: judge.md says "the
+  rubric provided above", so the rubric must be loaded first.
+- `chair.md` and `red_team.md` are a call's whole system, standing alone:
+  neither references another prompt file's content, only "the schema
+  provided after this prompt" (the JSON schema this module appends to
+  `user`, at the end, not a preceding file).
+- A repair call's system is the original system content, then
+  `repair_intro.md`, then a code-generated list of what failed, then
+  `repair_fix.md`: the intro says the list is "listed below" and the fix
+  file refers back to "the problems above", so the list has to sit between
+  the two files. repair_fix.md says "the same instructions, rules, and
+  schema you were given for your original task", and our providers are
+  single-shot (one call in, one completion out, no conversation history),
+  so that original system content has to be resent in full; `user` is the
+  exact same data and schema as the original attempt, unchanged.
 """
 
 from dataclasses import dataclass
@@ -34,7 +45,7 @@ from typing import Any, Sequence
 
 from pydantic import BaseModel, TypeAdapter
 
-from council.models import ArgumentDraft, RedTeamReportDraft, ReportDraft, Role, Round, ScoreDraft
+from council.models import Role, Round
 
 DEFAULT_PROMPTS_DIR = Path("prompts")
 
@@ -50,6 +61,14 @@ SchemaSource = type[BaseModel] | TypeAdapter[Any]
 
 class PromptFileMissing(RuntimeError):
     """A required prompt file could not be loaded. Never send a partial prompt."""
+
+
+@dataclass(frozen=True)
+class PromptParts:
+    """One call's two messages, before the response schema is appended to `user`."""
+
+    system: str
+    user: str
 
 
 def load_prompt(name: str, prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
@@ -91,78 +110,57 @@ def strip_schema_titles(value: Any) -> Any:
 
 
 def schema_block(schema_source: SchemaSource) -> str:
-    """The JSON schema, appended after the prompt text, built from a draft model."""
+    """The JSON schema, appended after the user data, built from a draft model."""
     schema = schema_source.model_json_schema() if isinstance(schema_source, type) else schema_source.json_schema()
     schema = strip_schema_titles(schema)
     return ("## Response schema\n\nRespond only with JSON matching this schema. No text outside the JSON.\n\n"
             "```json\n" + json.dumps(schema, indent=2) + "\n```")
 
 
-def compose_body(instructions: Sequence[str], data_blocks: Sequence[tuple[str, str]]) -> str:
-    """Join already-loaded instruction texts, in the given order, with wrapped data blocks."""
-    sections = list(instructions) + [wrap_data(label, text) for label, text in data_blocks]
+def join_sections(sections: Sequence[str]) -> str:
+    """Join already-stripped text sections with a blank line, dropping any empty ones."""
     return "\n\n".join(section.strip() for section in sections if section.strip())
 
 
-def render(body: str, schema_source: SchemaSource) -> str:
-    """The final prompt: assembled body, then the JSON schema."""
-    return f"{body}\n\n{schema_block(schema_source)}"
+def user_data(data_blocks: Sequence[tuple[str, str]]) -> str:
+    """Every data block, wrapped as data; no instructions here."""
+    return join_sections([wrap_data(label, text) for label, text in data_blocks])
 
 
-def build_prompt(instructions: Sequence[str], data_blocks: Sequence[tuple[str, str]],
-                 schema_source: SchemaSource) -> str:
-    """Compose and render in one step, for the common case with no repair follow-up."""
-    return render(compose_body(instructions, data_blocks), schema_source)
+def render_user(data: str, schema_source: SchemaSource) -> str:
+    """The final user message: the data, then the JSON schema, right at the end."""
+    return f"{data}\n\n{schema_block(schema_source)}"
 
 
-def specialist_body(role: Role, round_number: Round, data_blocks: Sequence[tuple[str, str]],
-                    prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    """persona_<role>.md, then specialist_round<N>.md; see the module docstring."""
+def specialist_parts(role: Role, round_number: Round, data_blocks: Sequence[tuple[str, str]],
+                     prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> PromptParts:
+    """system: persona_<role>.md, then specialist_round<N>.md; see the module docstring."""
     if role not in PERSONA_FILES:
         raise ValueError(f"{role} is not a specialist role")
     persona = load_prompt(PERSONA_FILES[role], prompts_dir)
     round_file = "specialist_round1.md" if round_number == 1 else "specialist_round2.md"
     instructions = load_prompt(round_file, prompts_dir)
-    return compose_body([persona, instructions], data_blocks)
+    return PromptParts(system=join_sections([persona, instructions]), user=user_data(data_blocks))
 
 
-def specialist_prompt(role: Role, round_number: Round, data_blocks: Sequence[tuple[str, str]],
-                      prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    return render(specialist_body(role, round_number, data_blocks, prompts_dir), ArgumentDraft)
-
-
-def judge_body(data_blocks: Sequence[tuple[str, str]], prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    """rubric.md, then judge.md; see the module docstring."""
+def judge_parts(data_blocks: Sequence[tuple[str, str]],
+                prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> PromptParts:
+    """system: rubric.md, then judge.md; see the module docstring."""
     rubric = load_prompt("rubric.md", prompts_dir)
     instructions = load_prompt("judge.md", prompts_dir)
-    return compose_body([rubric, instructions], data_blocks)
+    return PromptParts(system=join_sections([rubric, instructions]), user=user_data(data_blocks))
 
 
-def judge_schema() -> TypeAdapter[Any]:
-    """A judge scores every non-failed argument of a round in one call: a list of ScoreDraft."""
-    return TypeAdapter(list[ScoreDraft])
+def chair_parts(data_blocks: Sequence[tuple[str, str]],
+                prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> PromptParts:
+    """system: chair.md, standing alone; see the module docstring."""
+    return PromptParts(system=load_prompt("chair.md", prompts_dir), user=user_data(data_blocks))
 
 
-def judge_prompt(data_blocks: Sequence[tuple[str, str]], prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    return render(judge_body(data_blocks, prompts_dir), judge_schema())
-
-
-def chair_body(data_blocks: Sequence[tuple[str, str]], prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    """chair.md stands alone; see the module docstring."""
-    return compose_body([load_prompt("chair.md", prompts_dir)], data_blocks)
-
-
-def chair_prompt(data_blocks: Sequence[tuple[str, str]], prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    return render(chair_body(data_blocks, prompts_dir), ReportDraft)
-
-
-def red_team_body(data_blocks: Sequence[tuple[str, str]], prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    """red_team.md stands alone; see the module docstring."""
-    return compose_body([load_prompt("red_team.md", prompts_dir)], data_blocks)
-
-
-def red_team_prompt(data_blocks: Sequence[tuple[str, str]], prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    return render(red_team_body(data_blocks, prompts_dir), RedTeamReportDraft)
+def red_team_parts(data_blocks: Sequence[tuple[str, str]],
+                   prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> PromptParts:
+    """system: red_team.md, standing alone; see the module docstring."""
+    return PromptParts(system=load_prompt("red_team.md", prompts_dir), user=user_data(data_blocks))
 
 
 @dataclass(frozen=True)
@@ -185,19 +183,16 @@ def format_issues(issues: Sequence[RepairIssue]) -> str:
     return "\n".join(lines)
 
 
-def repair_prompt(original_body: str, issues: Sequence[RepairIssue], schema_source: SchemaSource,
+def repair_system(original_system: str, issues: Sequence[RepairIssue],
                   prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
-    """The original assembled body, then repair_intro.md, the issue list, then repair_fix.md.
+    """The original system content, then repair_intro.md, the issue list, then repair_fix.md.
 
-    `original_body` is whatever `compose_body`/`*_body` produced for the turn being
-    repaired (no schema attached yet). repair_intro.md introduces the problem list
-    ("listed below"); repair_fix.md refers back to it ("the problems above"), so the
-    list has to sit between the two files, not after both. repair_fix.md itself says
-    the model needs "the same instructions, rules, and schema you were given for your
-    original task", and providers are single-shot, so that context has to be resent
-    in full.
+    `original_system` is whatever `*_parts` produced for the turn being repaired.
+    repair_intro.md introduces the problem list ("listed below"); repair_fix.md
+    refers back to it ("the problems above"), so the list has to sit between
+    the two files, not after both. `user` is not touched here: the caller resends
+    the exact same rendered user message (data plus schema) unchanged.
     """
     intro = load_prompt("repair_intro.md", prompts_dir)
     fix = load_prompt("repair_fix.md", prompts_dir)
-    body = "\n\n".join([original_body.strip(), intro, format_issues(issues), fix])
-    return render(body, schema_source)
+    return join_sections([original_system, intro, format_issues(issues), fix])

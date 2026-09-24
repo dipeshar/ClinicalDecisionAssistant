@@ -40,7 +40,7 @@ class GatewayResult:
     latency_ms: int
 
 
-def estimate_tokens_in(prompt: str) -> int:
+def estimate_tokens_in(text: str) -> int:
     """A safe upper bound on the input token count, used only to size the reservation.
 
     No tokenizer is available (AGENTS.md keeps dependencies minimal), and
@@ -50,7 +50,13 @@ def estimate_tokens_in(prompt: str) -> int:
     safe, if loose, bound; the reservation over-reserves briefly and
     `Budget.complete` releases the unused room once real usage is known.
     """
-    return max(1, len(prompt))
+    return max(1, len(text))
+
+
+def combined_for_trace(system: str, user: str) -> str:
+    """One string for the trace's single `prompt` field (contracts section 10),
+    labeled so the real system/user split sent to the provider stays visible."""
+    return f"[SYSTEM]\n{system}\n\n[USER]\n{user}"
 
 
 def model_choice_for(config: Config, role: Role) -> ModelChoice:
@@ -118,22 +124,23 @@ class LLMGateway:
         self._prompts_blocked = 0
         self._providers_used: set[str] = set()
 
-    def call(self, *, role: Role, step: Step, round_number: Round | None, prompt: str,
+    def call(self, *, role: Role, step: Step, round_number: Round | None, system: str, user: str,
              repair: bool = False, retrieved_passage_ids: list[str] | None = None) -> GatewayResult:
         role = Role(role)
         choice = model_choice_for(self._config, role)
         model_label = f"{choice.provider}/{choice.model}"
+        prompt = combined_for_trace(system, user)
 
         with self._usage_lock:
             self._prompts_checked += 1
 
         self._refuse_if_privacy_blocked(role=role, step=step, round_number=round_number,
                                         repair=repair, provider=choice.provider,
-                                        prompt=prompt, model_label=model_label)
+                                        system=system, user=user, model_label=model_label)
 
         provider = self._providers[choice.provider]
         cap = self._budget.output_cap(role)
-        tokens_in = estimate_tokens_in(prompt)
+        tokens_in = estimate_tokens_in(system) + estimate_tokens_in(user)
         temperature = temperature_for(self._config, role)
         reasoning_effort = reasoning_effort_for(self._config, role)
         max_attempts = self._config.retries.max_api_attempts
@@ -151,7 +158,7 @@ class LLMGateway:
                 with self._provider_lock:
                     try:
                         response = provider.complete(
-                            model=choice.model, prompt=prompt, max_tokens=cap,
+                            model=choice.model, system=system, user=user, max_tokens=cap,
                             temperature=temperature, reasoning_effort=reasoning_effort,
                         )
                     except ProviderError as error:
@@ -223,12 +230,13 @@ class LLMGateway:
             )
 
     def _refuse_if_privacy_blocked(self, *, role: Role, step: Step, round_number: Round | None,
-                                   repair: bool, provider: str, prompt: str, model_label: str) -> None:
+                                   repair: bool, provider: str, system: str, user: str,
+                                   model_label: str) -> None:
         """Contracts rule 20: provider approval and the identifier scan, before the budget check."""
         if provider not in self._config.privacy.approved_providers:
             reason = "provider not approved"
         else:
-            hits = scan_identifiers(prompt)
+            hits = scan_identifiers(system) + scan_identifiers(user)
             reason = f"identifier: {hits[0].kind}" if hits else None
         if reason is None:
             return

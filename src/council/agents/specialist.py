@@ -77,12 +77,16 @@ def ground_argument(draft: ArgumentDraft, argument_id: str, sources: Mapping[str
 
 
 def call_and_parse_with_repair(
-    gateway: LLMGateway, *, role: Role, step: Step, round_number: Round | None, body: str,
-    schema_model: SchemaSource, prompts_dir: str | Path, retrieved_ids: Sequence[str],
-    find_issues: Callable[[Any], list[RepairIssue]],
+    gateway: LLMGateway, *, role: Role, step: Step, round_number: Round | None,
+    parts: prompting.PromptParts, schema_model: SchemaSource, prompts_dir: str | Path,
+    retrieved_ids: Sequence[str], find_issues: Callable[[Any], list[RepairIssue]],
 ) -> tuple[Any | None, bool, str | None, str | None]:
     """One gateway call, parsed against `schema_model` (a draft model class, or a
     `TypeAdapter` such as `list[ScoreDraft]` for T11's judge response).
+
+    `parts.system`/`parts.user` are sent as two separate messages (design.md,
+    "Prompt injection defense"); the schema is appended to `user` once, and the
+    same rendered `user` is resent unchanged on a repair, only `system` grows.
 
     If parsing fails, or `find_issues(draft)` reports any problem with an
     otherwise-valid draft, one repair retry follows (rule 1: bad JSON and
@@ -92,10 +96,10 @@ def call_and_parse_with_repair(
     the returned draft (None if no draft was produced), for CODE-owned fields
     like `Score.model` that record which model scored.
     """
-    prompt = prompting.render(body, schema_model)
+    user = prompting.render_user(parts.user, schema_model)
     try:
-        result = gateway.call(role=role, step=step, round_number=round_number, prompt=prompt,
-                              retrieved_passage_ids=list(retrieved_ids))
+        result = gateway.call(role=role, step=step, round_number=round_number,
+                              system=parts.system, user=user, retrieved_passage_ids=list(retrieved_ids))
     except GatewayRefusal as error:
         return None, False, f"gateway refused the call: {error}", None
 
@@ -107,10 +111,11 @@ def call_and_parse_with_repair(
     repair_issues = issues if draft is not None else [
         RepairIssue("Response", parse_error or "could not parse as JSON matching the schema"),
     ]
-    repair_text = prompting.repair_prompt(body, repair_issues, schema_model, prompts_dir)
+    repair_system = prompting.repair_system(parts.system, repair_issues, prompts_dir)
     try:
-        repaired = gateway.call(role=role, step=step, round_number=round_number, prompt=repair_text,
-                                repair=True, retrieved_passage_ids=list(retrieved_ids))
+        repaired = gateway.call(role=role, step=step, round_number=round_number,
+                                system=repair_system, user=user, repair=True,
+                                retrieved_passage_ids=list(retrieved_ids))
     except GatewayRefusal as error:
         return None, True, f"gateway refused the repair attempt: {error}", None
 
@@ -168,10 +173,10 @@ def run_round1(role: Role, case: CaseContext, kb: KnowledgeBase, config: Config,
     shown_ids = set(sources)
 
     data_blocks = [("Case", render_case(case)), ("Retrieved passages", render_passages(retrieval.passages))]
-    body = prompting.specialist_body(role, 1, data_blocks, prompts_dir)
+    parts = prompting.specialist_parts(role, 1, data_blocks, prompts_dir)
 
     draft, repair_used, failure_reason, _model = call_and_parse_with_repair(
-        gateway, role=role, step=Step.SPECIALIST, round_number=1, body=body, schema_model=ArgumentDraft,
+        gateway, role=role, step=Step.SPECIALIST, round_number=1, parts=parts, schema_model=ArgumentDraft,
         prompts_dir=prompts_dir, retrieved_ids=retrieved_ids,
         find_issues=lambda d: citation_issues(d, argument_id, sources, shown_ids),
     )
@@ -387,7 +392,7 @@ def run_round2(role: Role, case: CaseContext, kb: KnowledgeBase, config: Config,
         ("Judge notes on your Round 1 argument", render_judge_notes(own_scores)),
         ("Retrieved passages", render_passages(passages)),
     ]
-    body = prompting.specialist_body(role, 2, data_blocks, prompts_dir)
+    parts = prompting.specialist_parts(role, 2, data_blocks, prompts_dir)
 
     def find_issues(draft: ArgumentDraft) -> list[RepairIssue]:
         claims, rebuttal = ground_round2(draft, argument_id, sources, shown_ids)
@@ -400,7 +405,7 @@ def run_round2(role: Role, case: CaseContext, kb: KnowledgeBase, config: Config,
         return issues
 
     draft, repair_used, failure_reason, _model = call_and_parse_with_repair(
-        gateway, role=role, step=Step.SPECIALIST, round_number=2, body=body, schema_model=ArgumentDraft,
+        gateway, role=role, step=Step.SPECIALIST, round_number=2, parts=parts, schema_model=ArgumentDraft,
         prompts_dir=prompts_dir, retrieved_ids=retrieved_ids, find_issues=find_issues,
     )
 

@@ -82,17 +82,19 @@ def round2_output(role: Role) -> str:
     })
 
 
-def judge_output(prompt: str) -> str:
-    ids = list(dict.fromkeys(re.findall(r"### (R[12]-(?:SURG|PHYS|ANAES|ADMIN)) ", prompt)))
-    round2 = any(id.startswith("R2-") for id in ids)
-    return json.dumps([{
-        "argument_id": id, "groundedness": 4, "logic": 4, "uncertainty": 4,
+def judge_output(user: str) -> str:
+    ids = list(dict.fromkeys(re.findall(r"### (R[12]-(?:SURG|PHYS|ANAES|ADMIN)) ", user)))
+    assert len(ids) == 1, f"a judge call now shows exactly one argument, found {ids}"
+    argument_id = ids[0]
+    round2 = argument_id.startswith("R2-")
+    return json.dumps({
+        "argument_id": argument_id, "groundedness": 4, "logic": 4, "uncertainty": 4,
         "counterarguments": 4 if round2 else None,
         "justification": {"groundedness": "Grounded.", "logic": "Coherent.",
                           "uncertainty": "Honest.",
                           **({"counterarguments": "Addressed."} if round2 else {})},
         "untraceable_claims": [], "feedback": [],
-    } for id in ids])
+    })
 
 
 def chair_output(prompt: str) -> str:
@@ -120,20 +122,20 @@ class DemoFakeProvider(Provider):
         self._lock = Lock()
         self.calls_made = 0
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+    def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                 reasoning_effort: str | None = None) -> ProviderResponse:
         with self._lock:
             self.calls_made += 1
-        if "# Chair instructions" in prompt:
-            output = chair_output(prompt)
-        elif "# Red team instructions" in prompt:
+        if "# Chair instructions" in system:
+            output = chair_output(user)
+        elif "# Red team instructions" in system:
             output = json.dumps({"findings": [],
                                  "injection_check": {"verdict": "no_sign", "notes": "No influence."}})
-        elif "# Judge instructions" in prompt:
-            output = judge_output(prompt)
+        elif "# Judge instructions" in system:
+            output = judge_output(user)
         else:
-            role = specialist_role(prompt)
-            output = round2_output(role) if "Round 2" in prompt else round1_output()
+            role = specialist_role(system)
+            output = round2_output(role) if "Round 2" in system else round1_output()
         return ProviderResponse(output, 1, 1, 1)
 
 

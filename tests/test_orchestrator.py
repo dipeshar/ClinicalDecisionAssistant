@@ -125,7 +125,7 @@ class AdaptiveFakeProvider(FakeProvider):
         with self._adaptive_lock:
             return self._adaptive_calls
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+    def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                 reasoning_effort: str | None = None) -> ProviderResponse:
         with self._adaptive_lock:
             self._adaptive_calls += 1
@@ -133,20 +133,20 @@ class AdaptiveFakeProvider(FakeProvider):
             self.max_active = max(self.max_active, self._active)
         try:
             sleep(0.005)
-            if "# Chair instructions" in prompt:
-                output = chair_output(prompt)
-            elif "# Red team instructions" in prompt:
+            if "# Chair instructions" in system:
+                output = chair_output(user)
+            elif "# Red team instructions" in system:
                 output = json.dumps({"findings": [],
                                      "injection_check": {"verdict": "no_sign", "notes": "No influence."}})
-            elif "# Judge instructions" in prompt:
-                shown = re.findall(r"### (R[12]-(?:SURG|PHYS|ANAES|ADMIN)) ", prompt)
+            elif "# Judge instructions" in system:
+                shown = re.findall(r"### (R[12]-(?:SURG|PHYS|ANAES|ADMIN)) ", user)
                 if any(id in self.fail_judging_for for id in shown):
                     output = "not valid JSON"
                 else:
-                    output = judge_output(prompt)
+                    output = judge_output(user)
             else:
-                role = specialist_role(prompt)
-                is_round2 = "Round 2" in prompt
+                role = specialist_role(system)
+                is_round2 = "Round 2" in system
                 if role in self.fail_round1_roles and not is_round2:
                     output = "not valid JSON"
                 else:

@@ -113,7 +113,7 @@ def run_judge(
         ("Cited sources", render_shared_sources(shown, sources)),
         (argument.argument_id, render_argument(argument)),
     ]
-    body = prompting.judge_body(data_blocks, prompts_dir)
+    parts = prompting.judge_parts(data_blocks, prompts_dir)
 
     def find_issues(score: ScoreDraft) -> list[RepairIssue]:
         if score.argument_id != argument.argument_id:
@@ -129,7 +129,7 @@ def run_judge(
         return []
 
     draft, _repair_used, failure_reason, model = call_and_parse_with_repair(
-        gateway, role=judge, step=Step.JUDGE, round_number=round_number, body=body,
+        gateway, role=judge, step=Step.JUDGE, round_number=round_number, parts=parts,
         schema_model=ScoreDraft, prompts_dir=prompts_dir, retrieved_ids=[], find_issues=find_issues,
     )
 

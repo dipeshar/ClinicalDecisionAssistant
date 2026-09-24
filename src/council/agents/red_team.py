@@ -106,10 +106,10 @@ def run_red_team(
         ("Injection check inputs", render_injection_inputs(len(case.injection_flags), citing_flagged)),
         ("Red-team knowledge-base passages", render_passages(red_passages)),
     ]
-    body = prompting.red_team_body(data_blocks, prompts_dir)
+    parts = prompting.red_team_parts(data_blocks, prompts_dir)
     allowed_ids = valid_evidence_ids(case, arguments, red_passages)
     draft, _repair_used, _failure_reason, _model = call_and_parse_with_repair(
-        gateway, role=Role.RED, step=Step.RED_TEAM, round_number=None, body=body,
+        gateway, role=Role.RED, step=Step.RED_TEAM, round_number=None, parts=parts,
         schema_model=RedTeamReportDraft, prompts_dir=prompts_dir,
         retrieved_ids=[passage.id for passage in red_passages],
         find_issues=lambda report: evidence_issues(report, allowed_ids),

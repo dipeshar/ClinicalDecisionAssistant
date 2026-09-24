@@ -46,7 +46,8 @@ def test_successful_call_returns_output_and_writes_one_llm_call_event(config: Co
     provider = FakeProvider("fake", [Scripted(raw_output='{"ok": true}', tokens_in=3, tokens_out=4, latency_ms=7,
                                               finish_reason="length", reasoning="Synthetic reasoning trace")])
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
-    result = gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="Synthetic prompt")
+    result = gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1,
+                          system="Synthetic instructions", user="Synthetic prompt")
     assert result.raw_output == '{"ok": true}'
     assert (result.tokens_in, result.tokens_out, result.latency_ms) == (3, 4, 7)
     assert result.model == "fake/specialist"
@@ -55,7 +56,10 @@ def test_successful_call_returns_output_and_writes_one_llm_call_event(config: Co
     event = events[0]
     assert event["event_type"] == "llm_call" and event["attempt"] == 1 and event["repair"] is False
     assert event["error"] is None and event["role"] == "SURG" and event["round"] == 1
-    assert event["prompt"] == "Synthetic prompt" and event["raw_output"] == '{"ok": true}'
+    # The trace's single `prompt` field carries the real system/user split sent
+    # to the provider, clearly labeled, not one flattened string.
+    assert event["prompt"] == "[SYSTEM]\nSynthetic instructions\n\n[USER]\nSynthetic prompt"
+    assert event["raw_output"] == '{"ok": true}'
     assert (event["tokens_in"], event["tokens_out"], event["latency_ms"]) == (3, 4, 7)
     assert event["budget_tokens_used"] == 7
     assert event["finish_reason"] == "length" and event["reasoning"] == "Synthetic reasoning trace"
@@ -65,7 +69,7 @@ def test_successful_call_returns_output_and_writes_one_llm_call_event(config: Co
 def test_bad_json_output_is_returned_as_is_grounding_is_not_gateways_job(config: Config, tmp_path: Path) -> None:
     provider = FakeProvider("fake", [Scripted(raw_output="not valid json {{{")])
     gateway, _ = make_gateway(config, tmp_path, {"fake": provider})
-    result = gateway.call(role=Role.PHYS, step=Step.SPECIALIST, round_number=1, prompt="p")
+    result = gateway.call(role=Role.PHYS, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     assert result.raw_output == "not valid json {{{"
 
 
@@ -75,7 +79,7 @@ def test_privacy_blocks_unapproved_provider_before_any_attempt(config: Config, t
     config.privacy.approved_providers = []
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
     with pytest.raises(GatewayRefusal, match="not approved"):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     events = read_events(trace_path)
     assert len(events) == 1
     assert events[0]["event_type"] == "privacy_block" and events[0]["prompt"] is None
@@ -87,9 +91,9 @@ def test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it(
 ) -> None:
     provider = FakeProvider("fake", [Scripted()])
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
-    prompt = "Contact patient at synthetic.demo.patient@example.com for follow-up"
+    user = "Contact patient at synthetic.demo.patient@example.com for follow-up"
     with pytest.raises(GatewayRefusal, match="identifier"):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt=prompt)
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user=user)
     events = read_events(trace_path)
     assert len(events) == 1
     event = events[0]
@@ -107,7 +111,7 @@ def test_privacy_check_runs_before_the_budget_check(config: Config, tmp_path: Pa
     config.privacy.approved_providers = []
     gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, budget=budget)
     with pytest.raises(GatewayRefusal, match="not approved"):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     assert budget.snapshot().calls_used == 0
 
 
@@ -116,7 +120,7 @@ def test_tiny_budget_refuses_the_call_and_writes_one_budget_event(config: Config
     budget = tiny_budget()
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider}, budget=budget)
     with pytest.raises(GatewayRefusal, match="token budget"):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     events = read_events(trace_path)
     assert len(events) == 1
     assert events[0]["event_type"] == "budget" and events[0]["prompt"] is None
@@ -133,7 +137,7 @@ def test_reservation_accounts_for_prompt_length_not_just_the_output_cap(config: 
     provider = FakeProvider("fake", [Scripted()])
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider}, budget=budget)
     with pytest.raises(GatewayRefusal, match="token budget"):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="x" * 10)
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="x" * 10)
     assert provider.calls_made == 0
 
 
@@ -141,7 +145,7 @@ def test_timeout_retries_once_then_succeeds(config: Config, tmp_path: Path) -> N
     provider = FakeProvider("fake", [ProviderTimeout, Scripted(raw_output="ok", tokens_in=1, tokens_out=2)])
     sleeps: list[float] = []
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=sleeps.append)
-    result = gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+    result = gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     assert result.raw_output == "ok"
     events = read_events(trace_path)
     assert [event["attempt"] for event in events] == [1, 2]
@@ -154,7 +158,7 @@ def test_rate_limit_retries_once_then_succeeds(config: Config, tmp_path: Path) -
     provider = FakeProvider("fake", [ProviderRateLimit, Scripted(raw_output="ok", tokens_in=1, tokens_out=2)])
     sleeps: list[float] = []
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=sleeps.append)
-    result = gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+    result = gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     assert result.raw_output == "ok"
     events = read_events(trace_path)
     assert [event["attempt"] for event in events] == [1, 2]
@@ -168,7 +172,7 @@ def test_rate_limit_retry_after_overrides_flat_wait_with_margin(config: Config, 
         def __init__(self) -> None:
             self.calls = 0
 
-        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+        def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                      reasoning_effort: str | None = None) -> ProviderResponse:
             self.calls += 1
             if self.calls == 1:
@@ -182,7 +186,7 @@ def test_rate_limit_retry_after_overrides_flat_wait_with_margin(config: Config, 
     gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=sleeps.append)
 
     assert gateway.call(role=Role.SURG, step=Step.SPECIALIST,
-                        round_number=1, prompt="p").raw_output == "ok"
+                        round_number=1, system="s", user="p").raw_output == "ok"
     assert sleeps == [7.75]
 
 
@@ -197,7 +201,7 @@ def test_rate_limit_wait_blocks_another_roles_outbound_request(config: Config, t
             self.lock = Lock()
             self.calls = 0
 
-        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+        def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                      reasoning_effort: str | None = None) -> ProviderResponse:
             with self.lock:
                 self.calls += 1
@@ -215,10 +219,10 @@ def test_rate_limit_wait_blocks_another_roles_outbound_request(config: Config, t
     gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=controlled_sleep)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(gateway.call, role=Role.SURG, step=Step.SPECIALIST,
-                            round_number=1, prompt="p")
+                            round_number=1, system="s", user="p")
         assert wait_started.wait(timeout=2)
         second = pool.submit(gateway.call, role=Role.PHYS, step=Step.SPECIALIST,
-                             round_number=1, prompt="p")
+                             round_number=1, system="s", user="p")
         sleep(0.02)
         assert provider.calls == 1
         allow_retry.set()
@@ -235,7 +239,7 @@ def test_only_one_provider_request_is_in_flight(config: Config, tmp_path: Path) 
             self.active = 0
             self.max_active = 0
 
-        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+        def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                      reasoning_effort: str | None = None) -> ProviderResponse:
             with self.lock:
                 self.active += 1
@@ -249,7 +253,7 @@ def test_only_one_provider_request_is_in_flight(config: Config, tmp_path: Path) 
     gateway, _ = make_gateway(config, tmp_path, {"fake": provider})
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(gateway.call, role=role, step=Step.SPECIALIST,
-                               round_number=1, prompt="p")
+                               round_number=1, system="s", user="p")
                    for role in (Role.SURG, Role.PHYS)]
         assert [future.result().raw_output for future in futures] == ["ok", "ok"]
     assert provider.max_active == 1
@@ -260,15 +264,18 @@ def test_timeout_twice_exhausts_attempts_and_refuses(config: Config, tmp_path: P
     sleeps: list[float] = []
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=sleeps.append)
     with pytest.raises(GatewayRefusal):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     events = read_events(trace_path)
     assert [event["attempt"] for event in events] == [1, 2]
     assert len(sleeps) == 1
 
 
 def test_failed_attempt_releases_token_reservation(config: Config, tmp_path: Path) -> None:
+    # +1 over the tightest-possible total: system="s" and user="abcdefghij" (10 chars)
+    # each cost at least 1 estimated token (estimate_tokens_in's floor), so the
+    # reservation is tokens_in=11, not 10, plus the cap of 20.
     budget = Budget(BudgetConfig(
-        max_total_tokens=32, max_calls=6, max_seconds_total=60,
+        max_total_tokens=33, max_calls=6, max_seconds_total=60,
         chair_reserve=dict(tokens=2, calls=1, seconds=10),
         max_tokens_per_call=dict(specialist=20, judge=20, red_team=20, chair=20),
     ))
@@ -276,8 +283,8 @@ def test_failed_attempt_releases_token_reservation(config: Config, tmp_path: Pat
     gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, budget=budget)
 
     with pytest.raises(GatewayRefusal):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="abcdefghij")
-    result = gateway.call(role=Role.PHYS, step=Step.SPECIALIST, round_number=1, prompt="abcdefghij")
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="abcdefghij")
+    result = gateway.call(role=Role.PHYS, step=Step.SPECIALIST, round_number=1, system="s", user="abcdefghij")
 
     assert result.raw_output == "ok"
     assert budget.snapshot().tokens_used == 2
@@ -289,7 +296,7 @@ def test_non_timeout_provider_error_does_not_retry(config: Config, tmp_path: Pat
     sleeps: list[float] = []
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=sleeps.append)
     with pytest.raises(GatewayRefusal):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     events = read_events(trace_path)
     assert len(events) == 1 and events[0]["attempt"] == 1
     assert sleeps == []
@@ -300,7 +307,7 @@ def test_every_attempt_counts_against_the_budget(config: Config, tmp_path: Path)
     provider = FakeProvider("fake", [ProviderTimeout, Scripted(tokens_in=1, tokens_out=1)])
     budget = Budget(config.budget)
     gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, budget=budget, sleep_fn=lambda s: None)
-    gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+    gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     assert budget.snapshot().calls_used == 2
 
 
@@ -337,14 +344,14 @@ def test_role_selects_configured_model_temperature_and_reasoning_effort(config: 
     class SpyProvider(Provider):
         name = "fake"
 
-        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+        def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                     reasoning_effort: str | None = None) -> ProviderResponse:
             captured.append((model, temperature, reasoning_effort))
             return ProviderResponse("{}", 1, 1, 1)
 
     gateway, _ = make_gateway(config, tmp_path, {"fake": SpyProvider()})
     for role in (Role.SURG, Role.JUDGE_A, Role.JUDGE_B, Role.RED, Role.CHAIR):
-        gateway.call(role=role, step=Step.SPECIALIST, round_number=None, prompt="p")
+        gateway.call(role=role, step=Step.SPECIALIST, round_number=None, system="s", user="p")
     assert captured == [
         ("specialist", config.temperature.specialist, "low"),
         ("judge", config.temperature.judge, "medium"),
@@ -364,7 +371,7 @@ def test_output_cap_is_enforced_on_the_reservation_not_just_the_provider(config:
     provider = FakeProvider("fake", [Scripted(tokens_out=config.budget.max_tokens_per_call.specialist + 1)])
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
     with pytest.raises(GatewayRefusal):
-        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="p")
+        gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="p")
     events = read_events(trace_path)
     assert events[0]["error"] is not None
 
@@ -405,7 +412,7 @@ def test_api_keys_never_appear_in_trace_or_run_bundle(
         def __init__(self, api_key: str) -> None:
             self._api_key = api_key  # held, never returned or logged
 
-        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+        def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                     reasoning_effort: str | None = None) -> ProviderResponse:
             if not self._api_key:
                 raise ProviderError("missing credentials")
@@ -414,7 +421,7 @@ def test_api_keys_never_appear_in_trace_or_run_bundle(
     import os
     provider = KeyHoldingProvider(os.environ["FAKE_PROVIDER_API_KEY"])
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
-    gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="Synthetic prompt")
+    gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="Synthetic prompt")
 
     raw_trace = trace_path.read_bytes()
     assert fake_key.encode() not in raw_trace
@@ -443,7 +450,7 @@ def test_api_keys_never_appear_in_trace_or_run_bundle(
     )
     with pytest.raises(GatewayRefusal, match="status 400"):
         detailed_gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1,
-                              prompt="Synthetic prompt")
+                              system="s", user="Synthetic prompt")
     trace_text = detailed_trace.read_text(encoding="utf-8")
     assert "Invalid request" in trace_text and "status 400" in trace_text
     assert groq_key not in trace_text

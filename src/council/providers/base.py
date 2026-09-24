@@ -38,6 +38,12 @@ class Provider(ABC):
     name: str
 
     @abstractmethod
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+    def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                 reasoning_effort: str | None = None) -> ProviderResponse:
-        """Return one completion, or raise ProviderError / ProviderTimeout."""
+        """Return one completion, or raise ProviderError / ProviderTimeout.
+
+        `system` and `user` are sent as two separate messages, never concatenated
+        into one: our own trusted instructions (persona, role instructions, rubric,
+        repair text) in `system`, untrusted data (case text, retrieved passages,
+        other arguments, judge notes) plus the response schema in `user`.
+        """

@@ -155,9 +155,9 @@ def run_chair(
         ("Red-team report", json.dumps(red_team.model_dump(mode="json"), indent=2)
          if red_team is not None else "(red team did not run)"),
     ]
-    body = prompting.chair_body(data_blocks, prompts_dir)
+    parts = prompting.chair_parts(data_blocks, prompts_dir)
     draft, _repair_used, failure_reason, _model = call_and_parse_with_repair(
-        gateway, role=Role.CHAIR, step=Step.CHAIR, round_number=None, body=body,
+        gateway, role=Role.CHAIR, step=Step.CHAIR, round_number=None, parts=parts,
         schema_model=ReportDraft, prompts_dir=prompts_dir, retrieved_ids=[],
         find_issues=lambda report: chair_issues(report, final, red_team),
     )

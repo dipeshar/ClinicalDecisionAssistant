@@ -39,7 +39,7 @@ class FakeProvider(Provider):
         self._index = 0
         self._lock = Lock()
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+    def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                 reasoning_effort: str | None = None) -> ProviderResponse:
         with self._lock:
             if self._index >= len(self._script):

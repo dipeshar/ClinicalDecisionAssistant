@@ -59,12 +59,13 @@ class GroqProvider(Provider):
     def __init__(self, *, client: "groq.Groq | None" = None) -> None:
         self._client = client if client is not None else groq.Groq()
 
-    def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+    def complete(self, *, model: str, system: str, user: str, max_tokens: int, temperature: float,
                 reasoning_effort: str | None = None) -> ProviderResponse:
         start = perf_counter()
         try:
             response = self._client.chat.completions.create(
-                model=model, messages=[{"role": "user", "content": prompt}],
+                model=model,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
                 max_tokens=max_tokens, temperature=temperature,
                 reasoning_effort=reasoning_effort, include_reasoning=True,
             )
