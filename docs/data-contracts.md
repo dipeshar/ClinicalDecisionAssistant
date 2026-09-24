@@ -166,7 +166,7 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | run_id | str | CODE | |
 | scores | list[Score] | CODE | All raw scores |
 | skipped_arguments | list[argument_id] | CODE | Failed arguments that were not judged |
-| failed_judge_calls | list of `{judge, round}` | CODE | Judge calls that still failed after the repair retry (rule 18) |
+| failed_judge_calls | list of `{judge, round, argument_id}` | CODE | Judge calls that still failed after the repair retry (rule 18). A judge can have more than one failed call in the same round, one per argument; each is its own distinct entry. |
 | per_argument | list[ArgumentScoreSummary] | CODE | Shape below |
 | code_ungrounded_claims | list[claim_id] | CODE | Claim IDs our own check marked ungrounded, so we can compare with what the judges flagged |
 | round_comparison | list[RoundComparison] | CODE | Shape below |
@@ -281,7 +281,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | mean_score | `{round1, round2}`, each a float or null | CODE | Mean of every criterion score, across judges and arguments, per round |
 | disagreement_count | int | CODE | Disagreements in the final round |
 | judges | list of `{judge, model, rounds_scored}` | CODE | `rounds_scored` is a list of round numbers |
-| failed_judge_calls | list of `{judge, round}` | CODE | Copied from the scorecard |
+| failed_judge_calls | list of `{judge, round, argument_id}` | CODE | Copied from the scorecard |
 | round_comparison | list[RoundComparison] | CODE | Copied from the scorecard |
 | code_ungrounded_claims | list[claim_id] | CODE | Copied from the scorecard |
 
