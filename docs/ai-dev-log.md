@@ -1957,3 +1957,39 @@ No contract field or human-owned prompt was changed.
 All 3 mutations were detected. Committed source was restored after every mutation, and the full suite passed afterward: 1,103 tests.
 
 What I verified by hand:
+
+## Groq error visibility without credential leakage
+
+`GroqProvider.complete` now preserves safe failure diagnostics. HTTP failures include the SDK exception type, numeric status code, and the API response body's `error.message`. Rate-limit failures include those fields and add the response's `Retry-After` value when present. Timeout mapping and all gateway retry timing/backoff behavior are unchanged.
+
+Before any response-body or header text reaches `ProviderError`, `safe_error_text` replaces Groq-shaped `gsk_...` credentials with a fixed redaction marker. The existing adapter exception leak test still covers timeout, rate-limit, and generic HTTP paths; T8's gateway test now sends a detailed simulated Groq API error through `LLMGateway` into `trace.jsonl` and confirms the useful status/message survive while the fake key does not.
+
+What went wrong / limits:
+
+- The old adapter deliberately reduced generic failures to `groq: <ExceptionType>` and rate limits to `groq: rate limited`, so neither status, body message, nor response headers were recoverable from live-run artifacts. This change improves future runs only; it cannot reconstruct discarded details from an earlier trace.
+- Response parsing accepts the SDK's parsed body or falls back to response JSON/plain text. It extracts only the API response body, never request headers or request content.
+- Credential redaction recognizes Groq's `gsk_` key shape. The adversarial tests place a fake Groq key in both generic and rate-limit response bodies, despite normal Groq error bodies not echoing credentials.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 10 trace `error`: provider failures retain useful safe diagnostics | `api_error_message`, `api_error_detail`, and exception mapping in `providers/groq.py`; gateway's existing error trace path | `test_other_groq_error_is_a_generic_provider_error`, extended `test_api_keys_never_appear_in_trace_or_run_bundle` |
+| Design gateway rule: timeouts/rate limits retain their typed provider errors | existing timeout branch; detailed `ProviderRateLimit` branch | `test_timeout_is_mapped_to_provider_timeout`, `test_rate_limit_is_mapped_to_provider_rate_limit` |
+| Rule 21: API keys never appear in trace, run output, report, or raised adapter errors | `safe_error_text` before captured body/header text enters an exception | `test_api_key_never_leaks_into_a_raised_error_message`, extended gateway trace leak test |
+| Retry timing and backoff are unchanged | no changes outside error formatting/extraction in the adapter | existing gateway retry tests, full suite |
+
+No contract field, prompt, retry delay, or backoff rule changed.
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| HTTP status code is included | replaced the numeric status with `unknown` | generic-error and rate-limit detail tests |
+| API response-body message is included | discarded the extracted message | `test_other_groq_error_is_a_generic_provider_error` |
+| `Retry-After` is included only when supplied | disabled header capture | `test_rate_limit_is_mapped_to_provider_rate_limit` |
+| Groq credentials are redacted before exception/trace output | bypassed `GROQ_KEY.sub` | adapter key-leak cases and extended gateway trace leak test |
+
+All 4 mutations were detected. Committed source was restored after every mutation, and the full suite passed afterward: 1,104 tests.
+
+What I verified by hand:
