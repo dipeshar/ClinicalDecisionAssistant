@@ -46,7 +46,7 @@ def contract_samples() -> dict[str, dict[str, Any]]:
                            justification=dict(groundedness="No source", logic="Coherent", uncertainty="Explicit"),
                            untraceable_claims=[s["UntraceableClaim"]], feedback=[s["FeedbackNote"]])
     s["Score"] = dict(**s["ScoreDraft"], judge="JUDGE_A", model="fake-judge", round=1)
-    s["FailedJudgeCall"] = dict(judge="JUDGE_B", round=1)
+    s["FailedJudgeCall"] = dict(judge="JUDGE_B", round=1, argument_id="R1-SURG")
     s["CriterionMeans"] = dict(groundedness=1.0, logic=3.0, uncertainty=5.0, counterarguments=None)
     s["CriterionGaps"] = dict(groundedness=None, logic=None, uncertainty=None, counterarguments=None)
     s["ArgumentScoreSummary"] = dict(argument_id="R1-SURG", role="SURG", round=1, judges_scored=["JUDGE_A"],
@@ -427,7 +427,8 @@ def test_no_judge_or_red_team_data_round_trip() -> None:
     data["red_team"] = None
     data["arguments"] = [failed_argument()]
     data["scorecard"].update(scores=[], per_argument=[], failed_judge_calls=[
-        dict(judge="JUDGE_A", round=1), dict(judge="JUDGE_B", round=1)])
+        dict(judge="JUDGE_A", round=1, argument_id="R1-SURG"),
+        dict(judge="JUDGE_B", round=1, argument_id="R1-SURG")])
     data["report"] = bare_report()
     data["report"]["judge_summary"].update(mean_score=dict(round1=None, round2=None), judges=[])
     inputs = dict(SAMPLES["ConfidenceInputs"], judge_round_used=None, judge_part=0.0)

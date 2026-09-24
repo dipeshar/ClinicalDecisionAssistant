@@ -229,6 +229,28 @@ def test_one_failed_judge_call_does_not_affect_other_arguments_or_judges(config:
     assert {score.argument_id for score in round2_scores} == {"R2-SURG", "R2-PHYS", "R2-ANAES", "R2-ADMIN"}
 
 
+def test_two_failed_arguments_for_the_same_judge_and_round_are_distinct_entries(
+    config: Config, tmp_path: Path,
+) -> None:
+    """Two different arguments failing for the same judge in the same round must
+    each keep their own argument_id, not collapse into one {judge, round} entry."""
+    provider = AdaptiveFakeProvider(fail_judging_for={"R1-PHYS", "R1-ANAES"})
+    result = run_council(run_id="run-synthetic", case=case_context(), kb=knowledge_base(), config=config,
+                         gateway=gateway(config, tmp_path, provider), prompts_dir=REAL_PROMPTS)
+
+    for judge in ("JUDGE_A", "JUDGE_B"):
+        entries = [call for call in result.scorecard.failed_judge_calls
+                  if call.judge == judge and call.round == 1]
+        assert {call.argument_id for call in entries} == {"R1-PHYS", "R1-ANAES"}
+        assert len(entries) == 2  # two distinct failures, not collapsed into one
+
+    reasons = result.report.incomplete_reasons
+    assert "JUDGE_A failed on R1-PHYS in Round 1" in reasons
+    assert "JUDGE_A failed on R1-ANAES in Round 1" in reasons
+    assert "JUDGE_B failed on R1-PHYS in Round 1" in reasons
+    assert "JUDGE_B failed on R1-ANAES in Round 1" in reasons
+
+
 def test_budget_exhausted_after_round1_skips_to_chair_with_not_run_check(
     config: Config, tmp_path: Path,
 ) -> None:

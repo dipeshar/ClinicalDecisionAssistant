@@ -33,9 +33,14 @@ def failed_turn_ids(arguments: Sequence[Argument], judge_summary: JudgeSummary) 
 
 
 def derived_incomplete_reasons(arguments: Sequence[Argument], judge_summary: JudgeSummary) -> list[str]:
+    """Each `FailedJudgeCall` is its own real, distinct failure (one per argument a
+    judge failed to score), so each gets its own reason naming that argument -
+    this must not rely on `merge_reasons`'s generic text dedup to collapse what
+    would otherwise look like the same {judge, round} reason repeated."""
     reasons = [f"{argument.argument_id} failed: {argument.failure_reason}"
                for argument in arguments if argument.status == "failed"]
-    reasons.extend(f"{call.judge} failed in Round {call.round}" for call in judge_summary.failed_judge_calls)
+    reasons.extend(f"{call.judge} failed on {call.argument_id} in Round {call.round}"
+                   for call in judge_summary.failed_judge_calls)
     return reasons
 
 

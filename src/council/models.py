@@ -326,6 +326,7 @@ class Score(ScoreDraft):
 class FailedJudgeCall(ContractModel):
     judge: Judge
     round: Round
+    argument_id: str
 
 
 class CriterionMeans(ContractModel):

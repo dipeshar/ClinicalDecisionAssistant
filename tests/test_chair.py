@@ -75,7 +75,9 @@ PRIVACY = PrivacySummary(
 def judge_summary(failed: bool = False) -> JudgeSummary:
     return JudgeSummary(
         mean_score=RoundMeans(round1=4.0, round2=4.0), disagreement_count=0,
-        judges=[], failed_judge_calls=[FailedJudgeCall(judge="JUDGE_B", round=2)] if failed else [],
+        judges=[], failed_judge_calls=[
+            FailedJudgeCall(judge="JUDGE_B", round=2, argument_id="R2-SURG"),
+        ] if failed else [],
         round_comparison=[], code_ungrounded_claims=[],
     )
 
@@ -302,7 +304,8 @@ def test_failed_turns_and_supplied_reasons_make_full_report_incomplete(config: C
     assert report.status == "INCOMPLETE"
     assert report.failed_turns == ["R1-PHYS", "JUDGE_B"]
     assert report.incomplete_reasons == [
-        "R1-PHYS failed: Synthetic failure", "JUDGE_B failed in Round 2", "budget exhausted after Round 1",
+        "R1-PHYS failed: Synthetic failure", "JUDGE_B failed on R2-SURG in Round 2",
+        "budget exhausted after Round 1",
     ]
 
 

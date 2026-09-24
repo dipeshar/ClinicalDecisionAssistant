@@ -199,7 +199,9 @@ def run_council(
                 if score is not None:
                     scores.append(score)
                 if failed:
-                    failed_judges.append(FailedJudgeCall(judge=judge, round=round_number))
+                    failed_judges.append(FailedJudgeCall(
+                        judge=judge, round=round_number, argument_id=argument.argument_id,
+                    ))
 
     if final_arguments(arguments):
         judge_round(1)
