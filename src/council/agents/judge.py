@@ -27,23 +27,25 @@ from council.agents import prompting
 from council.agents.prompting import RepairIssue
 from council.agents.specialist import call_and_parse_with_repair, render_case
 from council.gateway import LLMGateway
-from council.models import Argument, CaseContext, Config, Round, Score, ScoreDraft, Step, Role
+from council.models import Argument, CaseContext, Claim, Config, Round, Score, ScoreDraft, Step, Role
 
 JUDGE_SCHEMA: TypeAdapter[list[ScoreDraft]] = TypeAdapter(list[ScoreDraft])
 
 
-def render_argument(argument: Argument, sources: Mapping[str, str]) -> str:
-    """The argument's full content, with each citation's actual source text
-    alongside it, per judge.md: "the actual text of those passages, not just
-    their IDs, so you can check whether a citation really supports what it's
-    used for."""
+def argument_claims(argument: Argument) -> list[Claim]:
+    """Return main and rebuttal-response claims in their displayed order."""
+    response_claims = argument.rebuttal.response_claims if argument.rebuttal is not None else []
+    return [*argument.claims, *response_claims]
+
+
+def render_argument(argument: Argument) -> str:
+    """Render argument content with citation IDs and quotes, but no repeated sources."""
     lines = [f"### {argument.argument_id} ({argument.role.value}, round {argument.round})",
              f"Stance: {argument.stance}", f"Summary: {argument.summary}", "", "Claims:"]
     for claim in argument.claims:
         lines.append(f"- [{claim.claim_id}] {claim.text}")
         for citation in claim.citations:
-            source_text = sources.get(citation.passage_id, "(source not available)")
-            lines.append(f"  - cites {citation.passage_id}: \"{citation.quote}\" — source: {source_text}")
+            lines.append(f"  - cites {citation.passage_id}: \"{citation.quote}\"")
     if argument.conditions:
         lines.append("Conditions: " + "; ".join(argument.conditions))
     if argument.uncertainties:
@@ -54,7 +56,23 @@ def render_argument(argument: Argument, sources: Mapping[str, str]) -> str:
                      f"{rebuttal.why_strongest}")
         for claim in rebuttal.response_claims:
             lines.append(f"- [{claim.claim_id}] {claim.text}")
+            for citation in claim.citations:
+                lines.append(f"  - cites {citation.passage_id}: \"{citation.quote}\"")
     return "\n".join(lines)
+
+
+def render_shared_sources(arguments: Sequence[Argument], sources: Mapping[str, str]) -> str:
+    """Render every source cited across the shown arguments exactly once."""
+    passage_ids = dict.fromkeys(
+        citation.passage_id
+        for argument in arguments
+        for claim in argument_claims(argument)
+        for citation in claim.citations
+    )
+    return "\n\n".join(
+        f"### {passage_id}\n{sources.get(passage_id, '(source not available)')}"
+        for passage_id in passage_ids
+    )
 
 
 def truncate_feedback(feedback: Sequence[dict], max_notes: int, max_words: int) -> list[dict]:
@@ -112,8 +130,8 @@ def run_judge(
     sources: dict[str, str] = {section.id: section.text for section in case.sections}
     sources.update(passage_sources)
 
-    data_blocks = [("Case", render_case(case))]
-    data_blocks.extend((argument.argument_id, render_argument(argument, sources)) for argument in shown)
+    data_blocks = [("Case", render_case(case)), ("Cited sources", render_shared_sources(shown, sources))]
+    data_blocks.extend((argument.argument_id, render_argument(argument)) for argument in shown)
     body = prompting.judge_body(data_blocks, prompts_dir)
 
     expected_ids = {argument.argument_id for argument in shown}

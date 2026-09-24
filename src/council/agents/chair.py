@@ -25,6 +25,32 @@ def render_json(items: Sequence[object]) -> str:
     return json.dumps([item.model_dump(mode="json") for item in items], indent=2)  # type: ignore[attr-defined]
 
 
+def argument_view(argument: Argument) -> dict[str, object]:
+    """Project an argument to only the evidence the chair is instructed to use."""
+    response_claims = argument.rebuttal.response_claims if argument.rebuttal is not None else []
+    claims = [
+        {
+            "claim_id": claim.claim_id,
+            "text": claim.text,
+            "grounding_status": claim.grounding_status.value,
+        }
+        for claim in [*argument.claims, *response_claims]
+    ]
+    view: dict[str, object] = {
+        "argument_id": argument.argument_id,
+        "role": argument.role.value,
+        "stance": argument.stance.value if argument.stance is not None else None,
+        "claims": claims,
+    }
+    if argument.stance == "conditional":
+        view["conditions"] = argument.conditions
+    return view
+
+
+def render_argument_views(arguments: Sequence[Argument]) -> str:
+    return json.dumps([argument_view(argument) for argument in arguments], indent=2)
+
+
 def narrative_issues(narrative: str, valid_ids: Collection[str]) -> list[RepairIssue]:
     issues: list[RepairIssue] = []
     sentences = [match.group().strip() for match in SENTENCE.finditer(narrative) if match.group().strip()]
@@ -124,7 +150,7 @@ def run_chair(
     final_ids = {argument.argument_id for argument in final}
     final_scores = [score for score in scores if score.argument_id in final_ids]
     data_blocks = [
-        ("Final specialist arguments", render_json(final)),
+        ("Final specialist arguments", render_argument_views(final)),
         ("Final-round judge scores", render_json(final_scores)),
         ("Red-team report", json.dumps(red_team.model_dump(mode="json"), indent=2)
          if red_team is not None else "(red team did not run)"),

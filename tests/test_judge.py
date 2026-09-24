@@ -98,7 +98,8 @@ def test_one_call_scores_every_non_failed_argument_of_the_round(config: Config, 
     prompt = trace_events(trace_path)[0]["prompt"]
     assert "Creatinine 1.1 mg/dL, eGFR 78." in prompt
     assert "R1-SURG" in prompt and "R1-PHYS" in prompt
-    assert PASSAGE_SOURCES["SURG-KB-01"] in prompt
+    assert prompt.count(PASSAGE_SOURCES["SURG-KB-01"]) == 1
+    assert prompt.count('cites SURG-KB-01: "Operative risk is low when renal function is normal"') == 2
 
 
 def test_shuffled_order_is_recorded_and_matches_what_was_scored(config: Config, tmp_path: Path) -> None:
@@ -317,8 +318,14 @@ def test_gateway_refusal_fails_the_call(config: Config, tmp_path: Path) -> None:
     assert scores == [] and order == []
 
 
-def test_render_argument_shows_citation_source_text() -> None:
-    text = j.render_argument(argument(Role.SURG), PASSAGE_SOURCES)
+def test_render_argument_shows_citation_id_and_quote_without_source_text() -> None:
+    text = j.render_argument(argument(Role.SURG))
     assert "R1-SURG" in text
-    assert "cites SURG-KB-01" in text
-    assert PASSAGE_SOURCES["SURG-KB-01"] in text
+    assert 'cites SURG-KB-01: "Operative risk is low when renal function is normal"' in text
+    assert PASSAGE_SOURCES["SURG-KB-01"] not in text
+
+
+def test_render_shared_sources_writes_each_cited_source_once() -> None:
+    text = j.render_shared_sources([argument(Role.SURG), argument(Role.PHYS)], PASSAGE_SOURCES)
+    assert text.count("### SURG-KB-01") == 1
+    assert text.count(PASSAGE_SOURCES["SURG-KB-01"]) == 1

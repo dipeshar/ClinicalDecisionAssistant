@@ -144,6 +144,34 @@ def test_good_chair_result_uses_final_arguments_and_code_owned_fields(config: Co
     assert '"argument_id": "R1-SURG"' not in prompt
     assert '"argument_id": "R2-SURG"' in prompt
     assert '"confidence":' not in prompt and '"dissent":' not in prompt and '"disclaimer":' not in prompt
+    assert "Synthetic tests support this council claim" not in prompt
+    assert '"uncertainties":' not in prompt and '"rebuttal":' not in prompt and '"revisions":' not in prompt
+
+
+def test_chair_argument_view_contains_only_contract_fields() -> None:
+    conditional = argument(Role.PHYS, 1, stance="conditional").model_copy(update={
+        "conditions": ["Synthetic condition."],
+        "uncertainties": ["Synthetic uncertainty."],
+    })
+    view = chair.argument_view(conditional)
+
+    assert view == {
+        "argument_id": "R1-PHYS",
+        "role": "PHYS",
+        "stance": "conditional",
+        "claims": [{
+            "claim_id": "R1-PHYS-C1",
+            "text": "Synthetic claim from R1-PHYS.",
+            "grounding_status": "grounded",
+        }],
+        "conditions": ["Synthetic condition."],
+    }
+    assert "Synthetic tests support this council claim" not in json.dumps(view)
+
+
+def test_chair_argument_view_omits_conditions_for_nonconditional_stance() -> None:
+    nonconditional = argument(Role.SURG, 2).model_copy(update={"conditions": ["Must not be shown."]})
+    assert "conditions" not in chair.argument_view(nonconditional)
 
 
 def test_invalid_chair_ids_share_one_repair_retry(config: Config, tmp_path: Path) -> None:
