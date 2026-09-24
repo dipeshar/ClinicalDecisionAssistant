@@ -36,7 +36,8 @@ def read_events(path: Path) -> list[dict[str, object]]:
 
 
 def test_successful_call_returns_output_and_writes_one_llm_call_event(config: Config, tmp_path: Path) -> None:
-    provider = FakeProvider("fake", [Scripted(raw_output='{"ok": true}', tokens_in=3, tokens_out=4, latency_ms=7)])
+    provider = FakeProvider("fake", [Scripted(raw_output='{"ok": true}', tokens_in=3, tokens_out=4, latency_ms=7,
+                                              finish_reason="length", reasoning="Synthetic reasoning trace")])
     gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
     result = gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, prompt="Synthetic prompt")
     assert result.raw_output == '{"ok": true}'
@@ -50,6 +51,7 @@ def test_successful_call_returns_output_and_writes_one_llm_call_event(config: Co
     assert event["prompt"] == "Synthetic prompt" and event["raw_output"] == '{"ok": true}'
     assert (event["tokens_in"], event["tokens_out"], event["latency_ms"]) == (3, 4, 7)
     assert event["budget_tokens_used"] == 7
+    assert event["finish_reason"] == "length" and event["reasoning"] == "Synthetic reasoning trace"
     assert provider.calls_made == 1
 
 
@@ -204,6 +206,13 @@ def test_temperature_for_maps_each_role_to_its_own_config_field(config: Config) 
 
 
 def test_role_selects_configured_model_temperature_and_reasoning_effort(config: Config, tmp_path: Path) -> None:
+    # config.yaml gives every role the same "low" reasoning_effort, which can't tell a
+    # role-mapping bug from a correct one (both read the same value); use distinct
+    # per-role values here so a swapped mapping is actually observable.
+    varied_effort = config.reasoning_effort.model_copy(update={
+        "specialist": "low", "judge": "medium", "red_team": "high", "chair": "none",
+    })
+    config = config.model_copy(update={"reasoning_effort": varied_effort})
     captured: list[tuple[str, float, str | None]] = []
 
     class SpyProvider(Provider):
@@ -218,11 +227,11 @@ def test_role_selects_configured_model_temperature_and_reasoning_effort(config: 
     for role in (Role.SURG, Role.JUDGE_A, Role.JUDGE_B, Role.RED, Role.CHAIR):
         gateway.call(role=role, step=Step.SPECIALIST, round_number=None, prompt="p")
     assert captured == [
-        ("specialist", config.temperature.specialist, config.reasoning_effort.specialist),
-        ("judge", config.temperature.judge, config.reasoning_effort.judge),
-        ("judge", config.temperature.judge, config.reasoning_effort.judge),
-        ("specialist", config.temperature.red_team, config.reasoning_effort.red_team),
-        ("specialist", config.temperature.chair, config.reasoning_effort.chair),
+        ("specialist", config.temperature.specialist, "low"),
+        ("judge", config.temperature.judge, "medium"),
+        ("judge", config.temperature.judge, "medium"),
+        ("specialist", config.temperature.red_team, "high"),
+        ("specialist", config.temperature.chair, "none"),
     ]
 
 

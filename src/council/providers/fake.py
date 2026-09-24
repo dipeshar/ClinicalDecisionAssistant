@@ -19,6 +19,8 @@ class Scripted:
     tokens_in: int = 1
     tokens_out: int = 1
     latency_ms: int = 1
+    finish_reason: str | None = None
+    reasoning: str | None = None
 
 
 class FakeProvider(Provider):
@@ -48,7 +50,8 @@ class FakeProvider(Provider):
             raise outcome(f"{self.name}: scripted failure")
         if outcome.tokens_out > max_tokens:
             raise ProviderError(f"{self.name}: scripted output exceeds the reserved cap")
-        return ProviderResponse(outcome.raw_output, outcome.tokens_in, outcome.tokens_out, outcome.latency_ms)
+        return ProviderResponse(outcome.raw_output, outcome.tokens_in, outcome.tokens_out, outcome.latency_ms,
+                                finish_reason=outcome.finish_reason, reasoning=outcome.reasoning)
 
     @property
     def calls_made(self) -> int:
