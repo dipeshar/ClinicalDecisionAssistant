@@ -2189,3 +2189,34 @@ What went wrong / limits:
 All 3 mutations were detected. Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,111 tests) after each restore.
 
 What I verified by hand:
+
+## Budget config audit; raised max_seconds_total; documented the trade-offs
+
+Raised `config.yaml`'s `max_seconds_total` from 1800 to 3600, per instruction.
+
+Audited every budget-related number (time limits, token limits, call limits, per-role token caps, the chair reserve, retry wait times) across `budget.py`, `gateway.py`, `orchestrator.py`, and swept the rest of `src/council` for large or suspicious numeric literals. Traced every actual use site (`self._config.budget.*`, `self._config.retries.*`) back to a real read from the loaded config, not a bypassed hardcoded value. Findings:
+
+- Every real budget/retry policy number genuinely comes from `config.yaml` at the point it's used. Confirmed structurally, not just by spot-checking: `budget.py`'s only literals are `0`/`1` used as structural constants (starting counter values, "the chair gets no reduction from itself," "one call per attempt"), never a limit; `orchestrator.py`'s only literals are the round numbers `1`/`2` and "exactly 2 judges," both of which `data-contracts.md` and `design.md` already document as fixed constants in code, not settings ("Exactly 2 rounds. There is no code path for a third.").
+- One borderline case: `gateway.py`'s `RETRY_AFTER_SAFETY_SECONDS = 0.25`, a fixed cushion added on top of a provider's own `Retry-After` header value (config's `api_retry_wait_seconds` is only the fallback when no such header exists). Flagged this explicitly and asked rather than deciding unilaterally, since fixing it "properly" (adding a `retries.retry_after_safety_seconds` config field) would mean proposing new `data-contracts.md` text I wasn't given, and the alternative (removing the margin) trades away a small correctness cushion. The human's call: leave it as a code constant — it's a sub-second implementation safety margin against clock/network slop, not a policy trade-off anyone would tune, the same category as the same file's `max(1, len(prompt))` floor and `max(0, ...)` latency clamp.
+- Also checked `config.py`'s `validate_limits`: it pins several settings (`max_repair_retries_per_turn`, `max_api_attempts`, `retrieval.top_k`, the quote-word bounds, the judging limits) to fixed expected values "under the current contracts." This looked superficially like hardcoded limits bypassing config, but it isn't: the pinned numbers are validation *expectations* checked against the config value actually loaded from `config.yaml` (which is what every other module reads); this is `data-contracts.md` correctly enforcing that certain settings stay at their documented fixed values, a pre-existing T2 design decision unrelated to this task.
+
+No hardcoded value needed fixing. Added inline comments to `config.yaml`'s budget section, and the "Tuning the budgets for your situation" section to `docs/design.md` (verbatim text as given), right after "LLM gateway."
+
+What went wrong / limits:
+
+- `tests/test_config.py`'s `chair_reserve.seconds` boundary-mutation case needed updating for the third time this session (600 → 900 → 1800 → 3600), since it must track `max_seconds_total`'s literal value to stay a genuine boundary test. Fixed again; flagging the pattern rather than refactoring the test to derive the value from `valid_data` itself, since that wasn't asked and would add asymmetric special-casing to an otherwise uniform parametrize table for one entry.
+- `docs/data-contracts.md` section 11's Config table still says `max_seconds_total | 900` — stale against the real value (now 3600) for the second time this session. Not fixed, since exact replacement text wasn't given this time (unlike the max_tokens_per_call/reasoning_effort row, which came with literal text to insert in an earlier task) and that file isn't mine to write unprompted.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| `max_seconds_total` is a config setting, not a code constant | `config.yaml` value only; read via `self._config.budget.max_seconds_total` in `budget.py`/`gateway.py` | Generic budget validation (`must be positive and smaller...`, `test_config.py`); no test pins the specific literal, since it's documented as a "starting value, to tune," not a fixed contract number |
+| Every budget/retry number comes from config, nothing hardcoded as a bypass | Confirmed by tracing every access site; the one borderline literal (`RETRY_AFTER_SAFETY_SECONDS`) is a deliberate, human-confirmed exception | n/a — an audit finding, not new code |
+| Not implemented, flagged instead | `data-contracts.md`'s `max_seconds_total` starting value is stale (900, not 3600) | n/a — not mine to write without given text |
+
+#### Mutation audit
+
+This task added a config value, inline comments, and a documentation section — no new enforceable code rule. Ran the honest version of the check anyway: reverted `max_seconds_total` to `1800` and ran the full suite. Nothing failed, confirming (rather than assuming) that no test pins this specific literal — consistent with `data-contracts.md` calling it a "starting value, to tune," not a fixed contract number the way `max_repair_retries_per_turn` and similar settings are. Restored to `3600`; full suite re-confirmed green (1,111 tests).
+
+What I verified by hand:
