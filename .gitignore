@@ -13,3 +13,4 @@ __pycache__/
 .DS_Store
 
 # Note: demo runs in runs/ are committed on purpose.
+runs/
