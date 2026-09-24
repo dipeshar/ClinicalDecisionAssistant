@@ -2062,3 +2062,42 @@ What I verified by hand:
 ## Known limitations
 
 The Groq free tier's 8,000-tokens-per-minute limit for `openai/gpt-oss-120b` means a single Round 2 call can approach or exceed the entire per-minute budget by itself, because it includes the full text of every other specialist's Round 1 argument. We chose to keep the design as-is rather than shrink Round 2's content or pay for a higher tier. As a result, live runs may be slow and may need retries or repeated attempts. This is a deliberate trade-off, not an unresolved bug.
+
+## Deduplicated judge sources and minimal chair view
+
+Judge prompts now put every uniquely cited KB passage or case section in one shared, ID-keyed source block. Argument citation lines retain their `passage_id` and quote without repeating source text. Cited case sections move out of the general Case block into that shared block; uncited sections remain in the Case block, so the full case is still present and cited case text occurs exactly once.
+
+Chair prompts now use a code-built projection containing each final argument's ID, role, stance, and flattened claims with `claim_id`, text, and `grounding_status`. Conditions appear only for a conditional stance. Citation objects and quotes, summaries, uncertainties, rebuttal structure, revisions, and other internal fields are omitted.
+
+Reconstruction from `run-20260924-092245-cardiac-01` produced a 13,474-character chair prompt and a 38,048-character Round 1 JUDGE_A prompt. Applying each model's observed characters-per-requested-token ratio from that same rejected call gives roughly 3,779 chair tokens and 9,358 judge tokens. The chair is about 4,221 tokens below 8,000; the judge remains about 1,358 above 8,000 and 2,358 above its model's actual 7,000 input-token ceiling.
+
+What went wrong / limits:
+
+- The first judge implementation deduplicated the shared block but also left cited case sections in the full Case block. The contract check caught that those sections still appeared twice. Cited sections now move to the shared block, with a regression that counts their text in the complete prompt.
+- No compatible tokenizer for either provider model is installed. The reconstructed token counts use each exact failed prompt's observed provider token count and character count as the conversion ratio, so they are rough; the character counts are exact Unicode code-point counts from the prompt strings.
+- The requested deduplication substantially reduces the judge prompt but does not bring this live Round 1 example below its provider ceiling.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 13 rule 27: every cited KB passage and case section is written in full exactly once in a shared block keyed by ID | `argument_claims`, `cited_passage_ids`, `render_shared_sources`, and Case/shared block assembly in `agents/judge.py` | `test_one_call_scores_every_non_failed_argument_of_the_round`, `test_render_shared_sources_writes_each_cited_source_once`, `test_cited_case_section_moves_to_shared_sources_without_duplication` |
+| Section 13 rule 27: each in-argument citation retains only `passage_id` and its quote | `render_argument` in `agents/judge.py` | `test_render_argument_shows_citation_id_and_quote_without_source_text`, judge integration test |
+| Section 13 rule 28: chair sees argument ID, role, stance, and claim ID/text/grounding status; conditional conditions only | `argument_view` and `render_argument_views` in `agents/chair.py` | `test_chair_argument_view_contains_only_contract_fields`, `test_chair_argument_view_omits_conditions_for_nonconditional_stance` |
+| Section 13 rule 28: citation quotes, uncertainties, rebuttal structure, and revisions are absent from the chair prompt | `run_chair` uses `render_argument_views` | `test_good_chair_result_uses_final_arguments_and_code_owned_fields` |
+
+Both new contract rules were implemented exactly. The argument ID remains in the chair view because the chair must return final argument IDs in `recommendation_basis`. Rebuttal response claims are flattened into the claims list, preserving their usable claim IDs without exposing the rebuttal object.
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Shared judge sources are deduplicated by passage ID | replaced ordered deduplication with a list containing repeated IDs | `test_render_shared_sources_writes_each_cited_source_once` |
+| Full source text is absent from individual argument blocks | appended each argument's cited sources again inside its own block | `test_one_call_scores_every_non_failed_argument_of_the_round` |
+| The live chair path uses the minimal argument projection | restored serialization of complete `Argument` models | `test_good_chair_result_uses_final_arguments_and_code_owned_fields` |
+| Conditions are shown only for a conditional stance | added conditions to every chair argument view | `test_chair_argument_view_omits_conditions_for_nonconditional_stance` |
+| A cited case section appears only in the shared source block | left cited sections in both the Case and shared-source blocks | `test_cited_case_section_moves_to_shared_sources_without_duplication` |
+
+All five mutations were detected. Committed source was restored after every mutation, and the full suite passed on the final implementation: 1,113 tests.
+
+What I verified by hand:
