@@ -340,7 +340,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | max_tokens_per_call | specialist 2500, judge 3000, red team 3000, chair 3500 | Output cap per call |
 | max_total_tokens | 200000 | Input plus output, all roles. Round 2 prompts are larger (own argument, judge notes, three other arguments), so check the count after the first run. |
 | max_calls | 40 | Counts every attempt |
-| max_seconds_total | 900 | |
+| max_seconds_total | 3600 | Starting value, to tune for your own rate limits and patience. See design.md, "Tuning the budgets for your situation." |
 | chair_reserve | 10000 tokens, 60 seconds, 2 calls | Only the chair can spend this. Other roles stop at the maximum minus the reserve. |
 | max_repair_retries_per_turn | 1 | Shared by bad JSON and bad citations |
 | max_api_attempts | 2 | The first try plus 1 retry |
