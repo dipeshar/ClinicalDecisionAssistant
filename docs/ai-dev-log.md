@@ -2220,3 +2220,48 @@ What went wrong / limits:
 This task added a config value, inline comments, and a documentation section — no new enforceable code rule. Ran the honest version of the check anyway: reverted `max_seconds_total` to `1800` and ran the full suite. Nothing failed, confirming (rather than assuming) that no test pins this specific literal — consistent with `data-contracts.md` calling it a "starting value, to tune," not a fixed contract number the way `max_repair_retries_per_turn` and similar settings are. Restored to `3600`; full suite re-confirmed green (1,111 tests).
 
 What I verified by hand:
+
+## Separate system and user messages, not one flattened prompt
+
+A real security gap the human flagged, not a style change: every call sent our own trusted instructions (persona, round/role instructions, rubric, repair text) and untrusted data (case text, retrieved passages, other arguments, judge notes) concatenated into a single user message, with no system role at all. `GroqProvider.complete()` sent `messages=[{"role": "user", "content": prompt}]` — one flat string — so the model's own trained instruction hierarchy, which weighs system content more heavily than user content, was never engaged; only the textual "this is data" delimiter framing inside the prompt did any work.
+
+Part 1 (docs, human-authored text, applied verbatim): added a bullet to `design.md`'s "Prompt injection defense" describing the system/user split as a real second defensive layer, and a bullet to "LLM gateway" describing exactly how a repair call's two messages change (system grows, user doesn't). Committed alone first, as instructed.
+
+Part 2 (code): `Provider.complete()` (`providers/base.py`) now takes `system: str, user: str` instead of one `prompt: str`. `GroqProvider` sends `messages=[{"role": "system", ...}, {"role": "user", ...}]`, two real messages. `agents/prompting.py` was rebuilt around a `PromptParts(system, user)` pair: `*_parts` functions (`specialist_parts`, `judge_parts`, `chair_parts`, `red_team_parts`) build `system` from only the role's own instruction files, and `user` from only the wrapped data blocks (schema appended separately, by `render_user`, at the point the schema is actually needed — kept out of `PromptParts` itself since a repair reuses the same `user` value verbatim without re-deriving it). `repair_system` builds only the grown `system` (original + `repair_intro.md` + the problem list + `repair_fix.md`); the repair call in `call_and_parse_with_repair` (`specialist.py`, the single choke point every agent's turn-calling logic shares) resends the exact same rendered `user` string it computed for the first attempt, never rebuilding it.
+
+Removed rather than adapted: `compose_body`, `render`, `build_prompt`, `specialist_prompt`, `judge_prompt`, `judge_schema`, `chair_prompt`, `red_team_prompt`, `repair_prompt`, and the old `*_body` functions. These existed only to produce one flattened string, which is exactly what this task eliminates; `judge_schema()` was also already stale on its own (`list[ScoreDraft]`, from before T11 part 2 moved judging to one argument per call) and had no real caller left, only its own tests.
+
+`gateway.py`'s `call()` now takes `system`/`user` separately, forwards them separately to `provider.complete()`, and scans both (not just one) for identifier patterns before the budget check (rule 20 — untrusted content can appear in either, in principle, even though in practice only `user` ever holds case-derived text). The trace's single `prompt` field (`data-contracts.md` section 10, deliberately left unchanged, not asked to be touched) now holds `combined_for_trace(system, user)` — `"[SYSTEM]\n{system}\n\n[USER]\n{user}"` — so the real split actually sent to the provider stays visible in the trace, rather than losing that information once system/user became genuinely separate at the wire.
+
+Per instruction 6, showed the human one real fresh specialist call and one real repair call, system and user shown separately (built from the real `prompts/` files, no fake data), before committing: the fresh call's `system` was persona + round instructions (5,743 chars), `user` was the wrapped case data plus schema (3,466 chars); the repair call's `system` grew to 7,641 chars (original plus repair text) while `user` was confirmed byte-identical to the fresh call's.
+
+Updated every call site: `specialist.py` (both `run_round1`/`run_round2`), `judge.py`, `chair.py`, `red_team.py` (all four building a `PromptParts` and passing it to the shared repair helper), and every test or tool that constructs a `Provider` call or inspects prompt content — `test_gateway.py`, `test_prompting.py` (rewritten around the new API), `test_providers.py`, `test_providers_groq.py`, `test_orchestrator.py`'s `AdaptiveFakeProvider`, and `tools/demo_run.py`'s `DemoFakeProvider`. The latter had its own pre-existing, unrelated staleness (its `judge_output` still built a JSON *array* of scores, the old one-call-per-round shape, exactly the bug T11 part 2 fixed in `test_orchestrator.py`'s copy but never in this one, since this tool isn't covered by `pytest`) — fixed it while already touching that exact function for the interface change, and smoke-tested the whole demo end to end afterward.
+
+What went wrong / limits:
+
+- `test_gateway.py`'s `test_failed_attempt_releases_token_reservation` used a budget tuned to the exact boundary of the old single-string token estimate; splitting into `system`/`user` means `estimate_tokens_in` is now called on each separately and summed, and each call has its own 1-token floor, so the tightest possible total went from 10 to 11. Bumped `max_total_tokens` by 1 to restore the same test intent (a budget tight enough to admit the output cap alone, but not the cap plus the reservation).
+- Two real gaps found only during the mutation check, not writing the tests up front: nothing verified `gateway.call()` forwards `system`/`user` to the provider unmodified (existing spy providers accepted the new params but never recorded them, only role→model/temperature/reasoning_effort mapping); and nothing verified a repair call resends the *same* `user` byte-for-byte, only that `prompting.py`'s own functions are individually pure in isolation. Both fixed with new/extended tests, confirmed to actually catch the mutation before committing.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| design.md, "Prompt injection defense": system/user split is a real second layer | `Provider.complete(system, user)`, `GroqProvider`'s two-message array | `test_system_and_user_are_sent_as_two_separate_messages_not_one`, `test_system_and_user_reach_the_provider_unmodified_and_separate` |
+| design.md, "LLM gateway": a repair call's system grows, user is unchanged | `repair_system` (system only); `call_and_parse_with_repair` resends the same `user` variable | `test_repair_call_resends_the_exact_same_user_message_unchanged` (unit), the extended assertion in `test_bad_json_then_fixed_uses_the_repair_retry` (end-to-end via the trace) |
+| Rule 20: the gateway scans the prompt for identifier patterns before the budget check | `scan_identifiers(system) + scan_identifiers(user)`, both parts | `test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it` (unchanged, still passes; re-run as a mutation target) |
+| Section 10: trace event's `prompt` field, unchanged shape | `combined_for_trace(system, user)` labels the real split without changing the field's type | `test_successful_call_returns_output_and_writes_one_llm_call_event` (exact string assertion) |
+| AGENTS.md: model output and case text are data, wrapped in delimiters | Unchanged (`wrap_data`); now additionally isolated to the `user` channel only | `test_wrap_data_delimits_and_preserves_text_verbatim`, `test_user_data_only_wraps_data_no_instructions` |
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| `GroqProvider` sends two real messages, never one flattened string | combined system+user into a single `{"role": "user", ...}` message | `test_system_and_user_are_sent_as_two_separate_messages_not_one`, 2 others |
+| `gateway.call()` forwards system/user to the provider unmodified | flattened system into user before calling `provider.complete()` | `test_system_and_user_reach_the_provider_unmodified_and_separate` (new — added after this mutation survived the original suite, see above) |
+| A repair call resends the exact same `user`, never rebuilds it | rebuilt `user` for the repair call with a trailing space added | the extended assertion in `test_bad_json_then_fixed_uses_the_repair_retry` (new — added after this mutation survived the original suite, see above) |
+| The privacy scan covers both system and user | scanned only `system` | `test_privacy_blocks_prompt_matching_identifier_pattern_without_leaking_it` |
+| `specialist_parts` puts instructions in system and data in user, not swapped | swapped which content goes into which field | 8 parametrized cases of `test_specialist_parts_system_combines_persona_then_round_file` |
+
+All 5 mutations were detected (two exposed real test gaps, closed and committed before repeating). Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,115 tests) after each restore.
+
+What I verified by hand:
