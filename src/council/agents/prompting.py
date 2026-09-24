@@ -77,9 +77,23 @@ def wrap_data(label: str, text: str) -> str:
             f"----- END {label} -----")
 
 
+def strip_schema_titles(value: Any) -> Any:
+    """Return a JSON-compatible copy without decorative schema title keys."""
+    if isinstance(value, dict):
+        return {
+            key: strip_schema_titles(item)
+            for key, item in value.items()
+            if key != "title"
+        }
+    if isinstance(value, list):
+        return [strip_schema_titles(item) for item in value]
+    return value
+
+
 def schema_block(schema_source: SchemaSource) -> str:
     """The JSON schema, appended after the prompt text, built from a draft model."""
     schema = schema_source.model_json_schema() if isinstance(schema_source, type) else schema_source.json_schema()
+    schema = strip_schema_titles(schema)
     return ("## Response schema\n\nRespond only with JSON matching this schema. No text outside the JSON.\n\n"
             "```json\n" + json.dumps(schema, indent=2) + "\n```")
 

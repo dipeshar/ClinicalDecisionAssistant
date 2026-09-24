@@ -12,6 +12,19 @@ from council.models import ArgumentDraft, RedTeamReportDraft, ReportDraft, Role,
 REAL_PROMPTS = Path("prompts")
 
 
+def _without_titles(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _without_titles(item) for key, item in value.items() if key != "title"}
+    if isinstance(value, list):
+        return [_without_titles(item) for item in value]
+    return value
+
+
+def _schema_from_prompt(prompt: str) -> object:
+    fence = prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]
+    return json.loads(fence)
+
+
 def test_load_prompt_reads_a_real_file() -> None:
     text = p.load_prompt("chair.md", REAL_PROMPTS)
     assert text.startswith("# Chair instructions")
@@ -44,17 +57,23 @@ def test_compose_body_orders_instructions_then_wrapped_data() -> None:
     assert passage_block.startswith("----- BEGIN Passages") and "passage text" in passage_block
 
 
-def test_schema_block_matches_the_draft_model() -> None:
+def test_schema_block_removes_only_titles_from_the_draft_model() -> None:
     block = p.schema_block(ArgumentDraft)
-    fence = block.split("```json\n", 1)[1].rsplit("\n```", 1)[0]
-    assert json.loads(fence) == ArgumentDraft.model_json_schema()
+    raw_schema = ArgumentDraft.model_json_schema()
+    emitted_schema = _schema_from_prompt(block)
+    assert emitted_schema == _without_titles(raw_schema)
+    assert len(json.dumps(emitted_schema)) < len(json.dumps(raw_schema))
+
+
+def test_strip_schema_titles_recurses_through_lists() -> None:
+    schema = {"anyOf": [{"title": "Choice", "type": "string"}], "title": "Root"}
+    assert p.strip_schema_titles(schema) == {"anyOf": [{"type": "string"}]}
 
 
 def test_schema_block_supports_a_type_adapter() -> None:
     adapter = TypeAdapter(list[ScoreDraft])
     block = p.schema_block(adapter)
-    fence = block.split("```json\n", 1)[1].rsplit("\n```", 1)[0]
-    assert json.loads(fence) == adapter.json_schema()
+    assert _schema_from_prompt(block) == _without_titles(adapter.json_schema())
 
 
 def test_render_appends_schema_after_the_body() -> None:
@@ -75,7 +94,7 @@ def test_specialist_prompt_combines_persona_then_round_file(
     round_text = p.load_prompt(round_file, REAL_PROMPTS)
     assert prompt.index(persona_text) < prompt.index(round_text)
     assert "Synthetic case text" in prompt
-    assert json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]) == ArgumentDraft.model_json_schema()
+    assert _schema_from_prompt(prompt) == _without_titles(ArgumentDraft.model_json_schema())
 
 
 def test_specialist_prompt_rejects_a_non_specialist_role() -> None:
@@ -88,8 +107,7 @@ def test_judge_prompt_combines_rubric_then_judge_file() -> None:
     rubric_text = p.load_prompt("rubric.md", REAL_PROMPTS)
     judge_text = p.load_prompt("judge.md", REAL_PROMPTS)
     assert prompt.index(rubric_text) < prompt.index(judge_text)
-    schema = json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0])
-    assert schema == TypeAdapter(list[ScoreDraft]).json_schema()
+    assert _schema_from_prompt(prompt) == _without_titles(TypeAdapter(list[ScoreDraft]).json_schema())
 
 
 def test_chair_prompt_stands_alone() -> None:
@@ -97,14 +115,14 @@ def test_chair_prompt_stands_alone() -> None:
     chair_text = p.load_prompt("chair.md", REAL_PROMPTS)
     assert prompt.startswith(chair_text)
     assert "Synthetic council output" in prompt
-    assert json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]) == ReportDraft.model_json_schema()
+    assert _schema_from_prompt(prompt) == _without_titles(ReportDraft.model_json_schema())
 
 
 def test_red_team_prompt_stands_alone() -> None:
     prompt = p.red_team_prompt([("Council output", "Synthetic council output")], REAL_PROMPTS)
     red_team_text = p.load_prompt("red_team.md", REAL_PROMPTS)
     assert prompt.startswith(red_team_text)
-    assert json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]) == RedTeamReportDraft.model_json_schema()
+    assert _schema_from_prompt(prompt) == _without_titles(RedTeamReportDraft.model_json_schema())
 
 
 def test_repair_prompt_puts_the_issue_list_between_intro_and_fix() -> None:
@@ -125,7 +143,7 @@ def test_repair_prompt_puts_the_issue_list_between_intro_and_fix() -> None:
     assert prompt.index(body) < prompt.index(intro_text) < prompt.index(first_item) < prompt.index(fix_text)
     assert first_item in prompt
     assert "2. Claim R1-SURG-C2: cites passage SURG-KB-99, which was not shown this turn" in prompt
-    assert json.loads(prompt.split("```json\n", 1)[1].rsplit("\n```", 1)[0]) == ArgumentDraft.model_json_schema()
+    assert _schema_from_prompt(prompt) == _without_titles(ArgumentDraft.model_json_schema())
 
 
 def test_repair_prompt_requires_at_least_one_issue() -> None:
