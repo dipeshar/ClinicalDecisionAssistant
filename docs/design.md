@@ -91,6 +91,16 @@ Rules:
 
 Production step (not built): a hosted gateway such as LiteLLM proxy or Portkey, for shared rate limits, caching, key management and redaction.
 
+## Tuning the budgets for your situation
+
+Every number in this section is a setting in config.yaml, not a constant in code. There are three independent things to trade off, and they don't all move together:
+
+- **Provider rate limits** (tokens and requests per minute) are usually not yours to change — they're set by your account tier. You can raise them by paying for a higher tier, but the system doesn't require it; it works within whatever ceiling your account has.
+- **Wall-clock patience** (max_seconds_total, the retry wait) is freely adjustable. Raising it trades your own waiting time for a better chance of a complete run on a constrained tier. Lowering it trades reliability for a faster failure when something's wrong.
+- **Scope and depth** (max_tokens_per_call, retrieval_top_k, reasoning_effort) trade how rich each call's context and output can be against how fast and cheap it runs.
+
+For this project's demo, the free tier's rate limits are fixed and out of our hands, and we chose not to shrink what each call sees, since that would cost real reasoning quality. The dial we turned was patience: a longer time budget, not a smaller one.
+
 ## Retrieval
 
 - BM25 over the role's own KB. Same result every run.
