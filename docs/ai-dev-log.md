@@ -2058,3 +2058,7 @@ No data-contract field, type, enum, required field, reference, constraint, model
 Both mutations were detected. Committed source was restored after every mutation, and the full suite passed before the audit: 1,109 tests.
 
 What I verified by hand:
+
+## Known limitations
+
+The Groq free tier's 8,000-tokens-per-minute limit for `openai/gpt-oss-120b` means a single Round 2 call can approach or exceed the entire per-minute budget by itself, because it includes the full text of every other specialist's Round 1 argument. We chose to keep the design as-is rather than shrink Round 2's content or pay for a higher tier. As a result, live runs may be slow and may need retries or repeated attempts. This is a deliberate trade-off, not an unresolved bug.
