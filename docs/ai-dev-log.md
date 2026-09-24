@@ -2030,3 +2030,31 @@ What went wrong / limits:
 All 4 mutations were detected. Committed source was restored after every mutation, and the full suite passed afterward: 1,108 tests.
 
 What I verified by hand:
+
+## Prompt schema title trimming
+
+Prompt assembly now recursively removes Pydantic's auto-generated `title` keys before appending a JSON schema to a model prompt. The Pydantic draft models and their validation remain unchanged. A structural regression compares the emitted schema with an independently title-stripped copy of the original schema, so types, enums, required fields, references, and constraints must remain identical. For `ArgumentDraft`, the indented schema shrank from 3,946 to 3,217 characters.
+
+What went wrong / limits:
+
+- Pytest could not access its normal temporary directory inside the filesystem sandbox, and a workspace-local pytest directory inherited the same restriction. The required test runs succeeded outside that restriction using the approved project test command.
+- This removes every JSON object key named `title`, recursively. Pydantic uses those keys as schema annotations; no model definition or runtime validation path was changed.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 13 rule 1: LLM output must parse into its contract; prompt schemas are derived from the same draft models | `strip_schema_titles` and `schema_block` in `agents/prompting.py`; draft models remain unchanged | `test_schema_block_removes_only_titles_from_the_draft_model`, prompt-shape tests for specialist, judge, chair, red team, and repair calls |
+
+No data-contract field, type, enum, required field, reference, constraint, model validator, or human-owned prompt changed.
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Every appended schema has decorative titles removed | bypassed `strip_schema_titles` in `schema_block` | `test_schema_block_removes_only_titles_from_the_draft_model` |
+| Title removal recurses through JSON arrays as well as objects | returned schema arrays unchanged | `test_strip_schema_titles_recurses_through_lists` |
+
+Both mutations were detected. Committed source was restored after every mutation, and the full suite passed before the audit: 1,109 tests.
+
+What I verified by hand:
