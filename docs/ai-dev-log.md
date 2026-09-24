@@ -2101,3 +2101,56 @@ Both new contract rules were implemented exactly. The argument ID remains in the
 All five mutations were detected. Committed source was restored after every mutation, and the full suite passed on the final implementation: 1,113 tests.
 
 What I verified by hand:
+
+## T11 part 2: judges score one argument per call (finishing an unverified draft)
+
+The working tree held a previous session's unfinished restructuring of `judge.py`, `models.py`, `orchestrator.py` and `test_judge.py` — cut off mid-edit, no tests ever run. Treated it as an unreviewed PR rather than trusted work: read every changed line against the current `data-contracts.md` before touching anything, then ran the suite to find what the draft actually broke.
+
+Confirmed the four things asked: `run_judge` now takes one `Argument` and parses a single `ScoreDraft` (not a list); `random.shuffle`, the `shuffle` parameter, `TypeAdapter`, and all shuffled-order tracking are gone from `judge.py`; `Scorecard.presented_order` is gone from `models.py` and matches `data-contracts.md`'s current Scorecard shape exactly (the contract itself had already dropped the field — the code just hadn't caught up); `orchestrator.py`'s `judge_round` builds one `eligible` list (non-failed arguments of the round) and calls `run_judge` once per judge per eligible argument, appending whatever score/failure came back before moving to the next argument — a plain loop, no early exit on one argument's failure (only a genuine budget exhaustion returns early, which is correct: design.md says the orchestrator skips remaining steps entirely when a budget runs out).
+
+Running the existing tests (`pytest tests/test_judge.py`) immediately surfaced two real defects in the draft, not just staleness: a missing `import pytest` (the file used `pytest.raises` without importing it — would fail at test collection) and a test still calling the *old* five-years-ago signature, `run_judge(judge, round, arguments, case, sources, config, gateway, prompts_dir, shuffle=...)`, unpacking a 3-tuple (`scores, order, failed`) that no longer exists. Fixed both directly rather than assuming they'd sort themselves out.
+
+Running the *full* suite (not just `test_judge.py`) surfaced four more regressions the previous session's own file list didn't cover, because they live in `tests/test_orchestrator.py` and `tests/test_models.py`, not the four files flagged as "in progress":
+
+- `AdaptiveFakeProvider.judge_output` (test fixture) still returned a JSON *array* of scores, one per every `### Rx-ROLE` argument header found in the whole prompt — the old one-call-per-round shape. Under the new one-argument-per-call contract, `judge.py` validates the raw output against a single-object `ScoreDraft` schema, so a JSON array always fails to parse, retries once, fails again, and the call is marked `failed` — which is exactly why `test_happy_path_...` first showed `0 == 16` scores rather than a parse-error message: the failure was silent at the orchestrator level, only visible as "nothing got scored." Fixed by making the fixture assert exactly one argument header per judge prompt and return one object.
+- `outbound_prompts_checked == 14` was the old total (2 judges × 2 rounds = 4 judge calls); under one-call-per-argument it's now 2 judges × 4 arguments × 2 rounds = 16, so the real total is 26. Updated the constant with the arithmetic spelled out in a comment.
+- A leftover `assert set(result.scorecard.presented_order) == {...}` in the same test — asserting a field that no longer exists on the model. Deleted; there's no shuffled order left to assert.
+- `test_models.py`'s `SAMPLES["Scorecard"]` contract fixture still included a `presented_order` key, which broke three separate tests (`test_contract_round_trip_and_fields[Scorecard]`, `[RunBundle]`, `test_no_judge_or_red_team_data_round_trip`) plus generated a now-meaningless `test_required_fields[Scorecard-presented_order]` case. Removed the key from the fixture.
+
+Separately found and fixed a stale value unrelated to this task, needed only because `pytest` must pass before committing: `test_config.py`'s `chair_reserve.seconds` boundary-mutation case still used `900`, but `config.yaml`'s `max_seconds_total` had already been raised to `1800` in an earlier, unrelated commit, so the boundary case (`reserve == total`) was silently no longer invalid. Fixed and committed separately from the judge work, since it has nothing to do with T11.
+
+Checked T14 (`report.py`, `chair.py`) and `scoring.py` for assumptions about the old multi-argument judge response shape, per the explicit ask: found none. Every consumer (`score_summary`, `build_judge_summary`, `derived_incomplete_reasons`, `failed_turn_ids`) filters `scores`/`failed_judge_calls` by `argument_id`/`judge`/`round`, which is agnostic to how many gateway calls produced them. One thing worth flagging, not fixing: `failed_judge_calls` can now hold multiple `{judge, round}` entries with identical values (one per argument that judge failed to score in that round), since the contract's shape is still `{judge, round}` with no `argument_id` — a genuine information-loss compared to the old one-call-per-round world, where `{judge, round}` was always unique. In practice this causes no visible bug: `report.py`'s `merge_reasons` (`dict.fromkeys`) collapses the resulting duplicate `"JUDGE_A failed in Round 1"` strings before they reach a human, and nothing else reads `failed_judge_calls` for anything but membership/count-by-judge. Flagging it rather than changing `data-contracts.md`'s `FailedJudgeCall` shape myself, since that's not mine to decide.
+
+Added one new test that nothing in the draft or the pre-existing suite exercised: `test_one_failed_judge_call_does_not_affect_other_arguments_or_judges` in `test_orchestrator.py`, using a new `fail_judging_for` parameter on `AdaptiveFakeProvider` (the fake provider can't distinguish JUDGE_A from JUDGE_B, since both use the same config model string in tests, but it can distinguish *which argument* is being judged from the prompt content — enough to prove the required property). It found a real gap during its own mutation check (see below): nothing had proven "one argument's judge failure doesn't stop the other three" at the orchestrator level, only at the `judge.py` unit level.
+
+What went wrong / limits:
+
+- The previous session's commit message convention (none — this was never committed) meant there was no way to know what was verified versus assumed; the four files it touched didn't include the two test files (`test_orchestrator.py`, `test_models.py`) it had actually broken, which is why "run the existing tests" for just the four flagged files wasn't enough — the full suite was necessary to find the real damage.
+- Did not touch `data-contracts.md`'s `FailedJudgeCall` shape despite the duplicate-entries observation above; flagged it instead, per AGENTS.md ("not yours to write... write the suggestion in your reply and wait").
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 6: Score, one per judge per argument | `judge.py`'s `run_judge`/`ScoreDraft`/`build_score`, one call per argument | `test_one_call_scores_one_argument_with_single_object_schema` |
+| Section 6: Scorecard has no `presented_order` (contract already dropped it) | Removed from `models.py` | `test_contract_round_trip_and_fields[Scorecard]` (T1, re-run), plus the reintroduction mutation below |
+| Rule 25: judge response must carry the argument_id of the one argument sent | `find_issues` in `run_judge` | `test_unknown_argument_id_triggers_repair`, `test_wrong_argument_id_still_wrong_after_repair_fails_only_that_call` |
+| Rule 18: a failed judge call doesn't stop the run; continues with other calls | `orchestrator.py`'s `judge_round` loop appends and continues rather than aborting | `test_one_failed_judge_call_does_not_affect_other_arguments_or_judges` (new) |
+| design.md: "no shuffling... since a call only ever contains one argument" | `shuffle`, `random`, `TypeAdapter` removed from `judge.py` | Absence confirmed by `grep`; `test_one_call_scores_one_argument_with_single_object_schema` asserts the prompt's schema has `"type": "object"`, not an array |
+| design.md: "up to 4 judge calls per round, 2 judges times up to 4 arguments" | `orchestrator.py`'s nested `for judge: for argument in eligible` loop | `test_happy_path_...` (16 = 2×4×2 scores), `outbound_prompts_checked == 26` |
+| T14/scoring.py: no assumption about the old multi-argument shape | Confirmed by reading; all consumers filter by ID, not by call structure | Existing T14 tests, unchanged and still passing |
+| Not implemented, flagged instead | `FailedJudgeCall` has no `argument_id`, so duplicate `{judge, round}` entries lose which argument failed | n/a — harmless in practice (`merge_reasons` dedupes the resulting text), noted above |
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| A judge's `argument_id` must match the one argument sent | disabled the mismatch check in `find_issues` | `test_unknown_argument_id_triggers_repair`, `test_wrong_argument_id_still_wrong_after_repair_fails_only_that_call` |
+| A failed argument must never be sent to a judge | removed the `ValueError` guard in `run_judge` | `test_failed_argument_is_rejected_before_gateway` |
+| One judge-argument failure doesn't stop the judge's remaining arguments | added a `break` after recording a failure in `judge_round` | `test_one_failed_judge_call_does_not_affect_other_arguments_or_judges` (new) |
+| Only non-failed arguments of the round are judged | dropped the `status != "failed"` filter from `eligible` | `test_one_failed_specialist_continues_and_skips_its_round2` (via `judge.py`'s own guard raising) |
+| `Scorecard` has no `presented_order` field | added it back to the model | 9 tests across `test_models.py`, `test_orchestrator.py`, `test_cli.py` |
+
+All 5 mutations were detected; no new test was needed beyond the one already added while reviewing the draft. Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,109 tests) after each restore.
+
+What I verified by hand:
