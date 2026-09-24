@@ -1993,3 +1993,40 @@ No contract field, prompt, retry delay, or backoff rule changed.
 All 4 mutations were detected. Committed source was restored after every mutation, and the full suite passed afterward: 1,104 tests.
 
 What I verified by hand:
+
+## Gateway pacing for free-tier token limits
+
+`LLMGateway` now parses a numeric `Retry-After` value from a `ProviderRateLimit` message and waits that duration plus a fixed 0.25-second margin. When the detailed header value is absent or cannot be parsed, it retains `retries.api_retry_wait_seconds`. Timeout retry behavior is unchanged.
+
+One gateway-owned lock now surrounds every `provider.complete` call, so only one outbound provider request is in flight across all roles. A rate-limit wait is performed while holding that pacing lock, preventing another logically parallel role from sending during the provider's requested quiet period. The failed attempt's budget reservation is released before waiting. The orchestrator's specialist thread pool remains parallel; a barrier test verifies those tasks still overlap independently of provider serialization.
+
+What went wrong / limits:
+
+- The first margin assertion reused the production margin constant, so mutating the constant would have changed both behavior and expectation together. The test was strengthened and committed before mutation testing to assert the literal expected wait, 7.75 seconds for `Retry-After: 7.5`.
+- A second concurrency regression was added to distinguish merely serializing active requests from pacing the whole gateway during `Retry-After`: while one call is in its rate-limit wait, another role must not enter the provider.
+- Only numeric delay-seconds values are parsed. Missing, malformed, or nonnumeric values use the configured fallback rather than guessing.
+- No prompt, provider adapter, retry count, configured fallback, or orchestrator scheduling rule changed.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Design gateway API retry: rate limits wait before retry | `retry_wait_seconds` and rate-limit branch in `LLMGateway.call` | `test_rate_limit_retry_after_overrides_flat_wait_with_margin` |
+| Config `retries.api_retry_wait_seconds` remains the fallback | `retry_wait_seconds(..., fallback)` | `test_rate_limit_retries_once_then_succeeds` |
+| Human-specified gateway rule: one outbound provider call in flight across all roles | `_provider_lock` around `provider.complete` | `test_only_one_provider_request_is_in_flight` |
+| Rate-limit quiet period applies before any other role's outbound attempt | rate-limit sleep while `_provider_lock` is held | `test_rate_limit_wait_blocks_another_roles_outbound_request` |
+| Design: four specialists remain logically parallel | unchanged `parallel_map`; provider overlap assertion updated for serialization | `test_parallel_map_keeps_specialist_tasks_logically_concurrent`, happy-path orchestrator test |
+| Failed-attempt budget reservation remains held only while in flight | `Budget.release` occurs before rate-limit sleep | existing failed-reservation regressions and full suite |
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| `Retry-After` overrides the flat delay | always returned configured fallback | `test_rate_limit_retry_after_overrides_flat_wait_with_margin` |
+| Header delay receives a 0.25-second margin | set margin to zero | `test_rate_limit_retry_after_overrides_flat_wait_with_margin` |
+| Missing header uses configured fallback | returned zero instead | `test_rate_limit_retries_once_then_succeeds` |
+| One shared lock serializes requests and protects the rate-limit wait | replaced shared lock with a new per-call lock | `test_only_one_provider_request_is_in_flight`, `test_rate_limit_wait_blocks_another_roles_outbound_request` |
+
+All 4 mutations were detected. Committed source was restored after every mutation, and the full suite passed afterward: 1,108 tests.
+
+What I verified by hand:
