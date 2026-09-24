@@ -1923,3 +1923,37 @@ What went wrong / limits:
 All 4 mutations were detected (two required a test fix or new test first, committed before repeating). Committed source was restored after every mutation, confirmed by `git diff --stat` and the full suite (1,100 tests) after each restore. Separately, the built-in T1 plan (119 mutations, including the two new/changed classes) was re-run to completion in chunks and all 119 were KILLED.
 
 What I verified by hand:
+
+## Live-run fixes: failed budget reservations and multi-ID narrative tags
+
+Failed provider attempts now release their conservative token reservation immediately while retaining the call count. `Budget.release` performs the locked removal, and `LLMGateway` invokes it before recording, retrying, or refusing a `ProviderError`. This prevents rate limits, timeouts, and other normalized provider failures from holding tokens after the attempt is no longer in flight.
+
+Chair narrative validation now splits each bracket's contents on commas and trims whitespace before checking every ID. A sentence ending in `[R1-SURG-C1, R1-PHYS-C1]` therefore validates both IDs independently. Existing single-ID, missing-tag, and unknown-ID behavior remains covered.
+
+What went wrong / limits:
+
+- The new gateway regression initially used a ten-digit numeric prompt, which correctly triggered the existing phone privacy guard before reaching the budget path. It now uses an alphabetic prompt of the same length.
+- Both new regressions failed for the intended reasons before implementation: `Budget.release` did not exist, and the comma-separated bracket was treated as one unknown ID.
+- The request ended mid-sentence after mentioning the human-owned `prompts/chair.md`. That file was not changed because the intended edit was incomplete; the two fully specified code bugs were completed.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 11 budget limits: reservations consume capacity only while an admitted attempt is in flight; failed attempts still count toward `max_calls` | `Budget.release`; failure branch in `LLMGateway.call` | `test_failed_attempt_release_makes_reserved_tokens_available_again`, `test_failed_attempt_releases_token_reservation` |
+| Section 10 trace: each failed attempt remains recorded with its error and settled token total | failure trace event in `LLMGateway.call`, after release | existing timeout/rate-limit/error trace tests plus `test_failed_attempt_releases_token_reservation` |
+| Section 8 narrative and section 13 rule 8: every cited narrative ID must exist; a sentence may cite multiple IDs | comma splitting in `narrative_issues` | `test_narrative_comma_separated_ids_in_one_tag_are_valid`, existing single-ID and unknown-ID tests |
+
+No contract field or human-owned prompt was changed.
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| Releasing a failed reservation makes its held tokens available | omitted removal from `Budget.release` | `test_failed_attempt_release_makes_reserved_tokens_available_again` |
+| The gateway releases a failed provider attempt before the next call | replaced `Budget.release` with a snapshot | `test_failed_attempt_releases_token_reservation` |
+| Comma-separated IDs in one narrative bracket are checked independently | restored the old one-string-per-bracket behavior | `test_narrative_comma_separated_ids_in_one_tag_are_valid` |
+
+All 3 mutations were detected. Committed source was restored after every mutation, and the full suite passed afterward: 1,103 tests.
+
+What I verified by hand:
