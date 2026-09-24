@@ -2154,3 +2154,38 @@ What went wrong / limits:
 All 5 mutations were detected; no new test was needed beyond the one already added while reviewing the draft. Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,109 tests) after each restore.
 
 What I verified by hand:
+
+## FailedJudgeCall carries argument_id
+
+Follow-up to T11 part 2: that entry flagged a real gap without fixing it — `FailedJudgeCall` had no `argument_id`, so a judge failing on two different arguments in the same round produced two identical `{judge, round}` entries, indistinguishable from a single failure. The human wrote the exact `data-contracts.md` text and gave the task in three concrete steps; applied them in order.
+
+`docs/data-contracts.md`: confirmed `FailedJudgeCall`'s current shape at both places it's described (`Scorecard.failed_judge_calls`, section 6; `JudgeSummary.failed_judge_calls`, section 8 — there's no dedicated `FailedJudgeCall` section of its own, both are inline `list of {judge, round}`). Updated both to `{judge, round, argument_id}` and added the multiplicity note to the Scorecard row's description, as asked. Committed alone first, per instruction.
+
+`models.py`: added `argument_id: str` to `FailedJudgeCall` (required, matching every other field on that model — no default). `orchestrator.py`'s `judge_round` is the single site that ever constructs a `FailedJudgeCall`; populated it with `argument.argument_id`, the same argument the failing `run_judge` call was for.
+
+`report.py`: `derived_incomplete_reasons` previously built the string `f"{call.judge} failed in Round {call.round}"` for every failed call, then relied on `merge_reasons`'s `dict.fromkeys` (a generic text dedup, meant for merging derived and human-supplied reasons) to collapse what were, before this fix, always-identical strings for repeat failures. That was silently hiding real information: two different arguments failing for the same judge in the same round produced only one line in `incomplete_reasons`, with no way to tell a second argument had also failed. Changed the format to `f"{call.judge} failed on {call.argument_id} in Round {call.round}"`, so each real, distinct failure now produces a distinct string and survives `merge_reasons` on its own merits, not by coincidence.
+
+Added `test_two_failed_arguments_for_the_same_judge_and_round_are_distinct_entries` (`test_orchestrator.py`): fails judging for two different Round 1 arguments via `AdaptiveFakeProvider`'s existing `fail_judging_for`, and asserts both judges end up with two distinct `FailedJudgeCall` entries (correct `argument_id` each, not collapsed to one) and that `report.incomplete_reasons` contains all four expected lines (2 judges x 2 arguments) rather than 2.
+
+What went wrong / limits:
+
+- Two existing fixtures needed the new required field to keep validating: `test_chair.py`'s `judge_summary(failed=True)` helper and its accompanying message assertion, and `test_models.py`'s `SAMPLES["FailedJudgeCall"]`/`test_no_judge_or_red_team_data_round_trip`. Both are mechanical — the field is required with no default, so anything constructing a `FailedJudgeCall` without it fails at validation, which is the correct behavior (no silent default that could mask a missed call site).
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| `Scorecard.failed_judge_calls` / `JudgeSummary.failed_judge_calls`: `{judge, round, argument_id}`, one distinct entry per failed argument | `FailedJudgeCall.argument_id` (`models.py`); populated in `orchestrator.py`'s `judge_round` | `test_two_failed_arguments_for_the_same_judge_and_round_are_distinct_entries` |
+| Rule 18: a failed judge call is listed and the report is INCOMPLETE | `report.py`'s `derived_incomplete_reasons` now names the argument per failure | Same test, checking `report.incomplete_reasons` has all 4 distinct lines |
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| `argument_id` is the argument the failing call was actually for | hardcoded it to `eligible[0].argument_id` (always the first argument) | `test_two_failed_arguments_for_the_same_judge_and_round_are_distinct_entries` |
+| Each failure's reason names its own argument, not a shared generic string | reverted `report.py`'s message to the old `"{judge} failed in Round {round}"` | `test_chair.py`'s message assertion, and the new orchestrator test (the collapse bug reproduced exactly: only one `"JUDGE_A failed in Round 1"` line for two real failures) |
+| `argument_id` is required, no default | made it `str \| None = None` | `test_required_fields[FailedJudgeCall-argument_id]` (T1, generic) |
+
+All 3 mutations were detected. Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,111 tests) after each restore.
+
+What I verified by hand:
