@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import sys
-from threading import Lock
+from threading import Event, Lock
 from time import sleep
 from types import SimpleNamespace
 
@@ -14,9 +14,7 @@ import httpx
 import pytest
 
 from council.budget import Budget
-from council.gateway import (
-    RETRY_AFTER_SAFETY_SECONDS, GatewayRefusal, LLMGateway, model_choice_for, temperature_for,
-)
+from council.gateway import GatewayRefusal, LLMGateway, model_choice_for, temperature_for
 from council.models import BudgetConfig, Config, Role, Step
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderResponse, ProviderTimeout
 from council.providers.fake import FakeProvider, Scripted
@@ -185,7 +183,47 @@ def test_rate_limit_retry_after_overrides_flat_wait_with_margin(config: Config, 
 
     assert gateway.call(role=Role.SURG, step=Step.SPECIALIST,
                         round_number=1, prompt="p").raw_output == "ok"
-    assert sleeps == [7.5 + RETRY_AFTER_SAFETY_SECONDS]
+    assert sleeps == [7.75]
+
+
+def test_rate_limit_wait_blocks_another_roles_outbound_request(config: Config, tmp_path: Path) -> None:
+    wait_started = Event()
+    allow_retry = Event()
+
+    class PacingProvider(Provider):
+        name = "fake"
+
+        def __init__(self) -> None:
+            self.lock = Lock()
+            self.calls = 0
+
+        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                     reasoning_effort: str | None = None) -> ProviderResponse:
+            with self.lock:
+                self.calls += 1
+                call = self.calls
+            if call == 1:
+                raise ProviderRateLimit("groq: rate limited (status 429); Retry-After: 1")
+            return ProviderResponse("ok", 1, 1, 1)
+
+    def controlled_sleep(seconds: float) -> None:
+        assert seconds == 1.25
+        wait_started.set()
+        assert allow_retry.wait(timeout=2)
+
+    provider = PacingProvider()
+    gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=controlled_sleep)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(gateway.call, role=Role.SURG, step=Step.SPECIALIST,
+                            round_number=1, prompt="p")
+        assert wait_started.wait(timeout=2)
+        second = pool.submit(gateway.call, role=Role.PHYS, step=Step.SPECIALIST,
+                             round_number=1, prompt="p")
+        sleep(0.02)
+        assert provider.calls == 1
+        allow_retry.set()
+        assert first.result().raw_output == "ok"
+        assert second.result().raw_output == "ok"
 
 
 def test_only_one_provider_request_is_in_flight(config: Config, tmp_path: Path) -> None:
