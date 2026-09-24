@@ -9,6 +9,7 @@ made). Agents never import a provider; this is the only caller.
 """
 
 from dataclasses import dataclass
+import re
 from threading import Lock
 from time import perf_counter, sleep
 from typing import Callable
@@ -22,6 +23,8 @@ from council.trace import TraceWriter
 SPECIALIST_ROLES = frozenset({Role.SURG, Role.PHYS, Role.ANAES, Role.ADMIN})
 JUDGE_ROLES = frozenset({Role.JUDGE_A, Role.JUDGE_B})
 RETRYABLE_ERRORS = (ProviderTimeout, ProviderRateLimit)
+RETRY_AFTER = re.compile(r"(?:^|;\s*)Retry-After:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.IGNORECASE)
+RETRY_AFTER_SAFETY_SECONDS = 0.25
 
 
 class GatewayRefusal(RuntimeError):
@@ -90,6 +93,12 @@ def _elapsed_ms(start: float) -> int:
     return max(0, round((perf_counter() - start) * 1000))
 
 
+def retry_wait_seconds(error: ProviderRateLimit, fallback: float) -> float:
+    """Use a numeric Retry-After value plus a small margin, else configured fallback."""
+    match = RETRY_AFTER.search(str(error))
+    return float(match.group(1)) + RETRY_AFTER_SAFETY_SECONDS if match else fallback
+
+
 class LLMGateway:
     """One shared instance per run. `providers` maps a config provider name to an adapter."""
 
@@ -103,6 +112,7 @@ class LLMGateway:
         self._trace = trace
         self._providers = providers
         self._sleep = sleep_fn
+        self._provider_lock = Lock()
         self._usage_lock = Lock()
         self._prompts_checked = 0
         self._prompts_blocked = 0
@@ -136,23 +146,36 @@ class LLMGateway:
             start = perf_counter()
             with self._usage_lock:
                 self._providers_used.add(choice.provider)
+            failed_state: BudgetState | None = None
             try:
-                response = provider.complete(model=choice.model, prompt=prompt, max_tokens=cap,
-                                             temperature=temperature, reasoning_effort=reasoning_effort)
+                with self._provider_lock:
+                    try:
+                        response = provider.complete(
+                            model=choice.model, prompt=prompt, max_tokens=cap,
+                            temperature=temperature, reasoning_effort=reasoning_effort,
+                        )
+                    except ProviderError as error:
+                        failed_state = self._budget.release(reservation)
+                        if isinstance(error, ProviderRateLimit):
+                            self._sleep(retry_wait_seconds(
+                                error, self._config.retries.api_retry_wait_seconds,
+                            ))
+                        raise
             except ProviderError as error:
                 latency_ms = _elapsed_ms(start)
                 last_error = str(error)
-                state = self._budget.release(reservation)
+                assert failed_state is not None
                 self._trace.write(TraceEvent(
                     run_id="", seq=0, timestamp="", step=step, event_type=EventType.LLM_CALL,
                     role=role, round=round_number, model=model_label, prompt=prompt,
                     retrieved_passage_ids=retrieved_passage_ids, raw_output=None, parsed_ref=None,
                     tokens_in=None, tokens_out=None, latency_ms=latency_ms, attempt=attempt,
-                    repair=repair, budget_tokens_used=state.tokens_used, error=last_error,
+                    repair=repair, budget_tokens_used=failed_state.tokens_used, error=last_error,
                     finish_reason=None, reasoning=None,
                 ))
                 if isinstance(error, RETRYABLE_ERRORS) and attempt < max_attempts:
-                    self._sleep(self._config.retries.api_retry_wait_seconds)
+                    if not isinstance(error, ProviderRateLimit):
+                        self._sleep(self._config.retries.api_retry_wait_seconds)
                     continue
                 raise GatewayRefusal(last_error) from error
             else:

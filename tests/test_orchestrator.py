@@ -3,14 +3,14 @@
 import json
 from pathlib import Path
 import re
-from threading import Lock
+from threading import Barrier, Lock
 from time import sleep
 
 from council.budget import Budget
 from council.gateway import LLMGateway
 from council.kb import KnowledgeBase
 from council.models import CaseContext, CaseSection, Config, InjectionFlag, Passage, Role
-from council.orchestrator import run_council
+from council.orchestrator import parallel_map, run_council
 from council.providers.base import ProviderResponse
 from council.providers.fake import FakeProvider, Scripted
 from council.trace import TraceWriter
@@ -154,6 +154,16 @@ def gateway(config: Config, tmp_path: Path, provider: AdaptiveFakeProvider) -> L
                       {"fake": provider}, sleep_fn=lambda seconds: None)
 
 
+def test_parallel_map_keeps_specialist_tasks_logically_concurrent() -> None:
+    barrier = Barrier(len(SPECIALISTS))
+
+    def meet(role: Role) -> None:
+        barrier.wait(timeout=2)
+        return None
+
+    assert parallel_map(SPECIALISTS, meet) == []
+
+
 def test_happy_path_runs_two_parallel_rounds_and_all_agents(config: Config, tmp_path: Path) -> None:
     provider = AdaptiveFakeProvider()
     result = run_council(run_id="run-synthetic", case=case_context(), kb=knowledge_base(), config=config,
@@ -166,7 +176,7 @@ def test_happy_path_runs_two_parallel_rounds_and_all_agents(config: Config, tmp_
         *((1, role.value) for role in sorted(SPECIALISTS, key=lambda item: item.value)),
         *((2, role.value) for role in sorted(SPECIALISTS, key=lambda item: item.value)),
     ]
-    assert provider.max_active >= 2
+    assert provider.max_active == 1
     assert len(result.scorecard.scores) == 16  # 4 arguments x 2 judges x 2 rounds
     assert result.red_team is not None
     assert result.report.status == "COMPLETE"

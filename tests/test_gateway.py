@@ -1,9 +1,12 @@
 """LLMGateway: privacy, budget, model/temperature choice, API retry, and one trace event per attempt."""
 
 import ast
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import sys
+from threading import Lock
+from time import sleep
 from types import SimpleNamespace
 
 import groq
@@ -11,7 +14,9 @@ import httpx
 import pytest
 
 from council.budget import Budget
-from council.gateway import GatewayRefusal, LLMGateway, model_choice_for, temperature_for
+from council.gateway import (
+    RETRY_AFTER_SAFETY_SECONDS, GatewayRefusal, LLMGateway, model_choice_for, temperature_for,
+)
 from council.models import BudgetConfig, Config, Role, Step
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderResponse, ProviderTimeout
 from council.providers.fake import FakeProvider, Scripted
@@ -156,6 +161,60 @@ def test_rate_limit_retries_once_then_succeeds(config: Config, tmp_path: Path) -
     events = read_events(trace_path)
     assert [event["attempt"] for event in events] == [1, 2]
     assert sleeps == [config.retries.api_retry_wait_seconds]
+
+
+def test_rate_limit_retry_after_overrides_flat_wait_with_margin(config: Config, tmp_path: Path) -> None:
+    class RetryAfterProvider(Provider):
+        name = "fake"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                     reasoning_effort: str | None = None) -> ProviderResponse:
+            self.calls += 1
+            if self.calls == 1:
+                raise ProviderRateLimit(
+                    "groq: rate limited (status 429): limit reached; Retry-After: 7.5"
+                )
+            return ProviderResponse("ok", 1, 1, 1)
+
+    sleeps: list[float] = []
+    provider = RetryAfterProvider()
+    gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, sleep_fn=sleeps.append)
+
+    assert gateway.call(role=Role.SURG, step=Step.SPECIALIST,
+                        round_number=1, prompt="p").raw_output == "ok"
+    assert sleeps == [7.5 + RETRY_AFTER_SAFETY_SECONDS]
+
+
+def test_only_one_provider_request_is_in_flight(config: Config, tmp_path: Path) -> None:
+    class OverlapProvider(Provider):
+        name = "fake"
+
+        def __init__(self) -> None:
+            self.lock = Lock()
+            self.active = 0
+            self.max_active = 0
+
+        def complete(self, *, model: str, prompt: str, max_tokens: int, temperature: float,
+                     reasoning_effort: str | None = None) -> ProviderResponse:
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            sleep(0.02)
+            with self.lock:
+                self.active -= 1
+            return ProviderResponse("ok", 1, 1, 1)
+
+    provider = OverlapProvider()
+    gateway, _ = make_gateway(config, tmp_path, {"fake": provider})
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(gateway.call, role=role, step=Step.SPECIALIST,
+                               round_number=1, prompt="p")
+                   for role in (Role.SURG, Role.PHYS)]
+        assert [future.result().raw_output for future in futures] == ["ok", "ok"]
+    assert provider.max_active == 1
 
 
 def test_timeout_twice_exhausts_attempts_and_refuses(config: Config, tmp_path: Path) -> None:
