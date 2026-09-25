@@ -2338,3 +2338,25 @@ Not applicable — no `data-contracts.md` or `design.md` rule is touched by this
 No automated test exists for `tools/demo_run.py` (by design — it runs outside pytest). Did the manual equivalent instead: reverted Part 1's subtle line back to the old blunt one and reran the script, confirming it reproduces the exact `all specialists failed` failure this task fixes (Status: INCOMPLETE, all four specialist turns refused with "injection score 40 met the threshold (30)"); reverted back, reran again, confirmed Part 1 completes normally (Status: COMPLETE, 1 scanner flag, verdict `no_sign`) and Part 2 refuses cleanly with a clean trace event. Full automated suite (1,141 tests, none of which touch this file) re-confirmed passing after all of this.
 
 What I verified by hand:
+
+## Fix Part 1's line so it actually gets cited, not just passes
+
+Direct follow-up to the previous entry: the zero-width-character version scored under threshold correctly, but had no visible content next to it, so no specialist's scripted claim ever cited it — `injection_check.claims_citing_flagged_lines` was empty, a technically-passing but weak demonstration (the human caught this from the actual run output, not from reading the code).
+
+Replaced the line with real, citable clinical content carrying an HTML comment mid-sentence (`<!-- draft note, remove before signout -->` — deliberately mundane and administrative, so it still trips only `hidden_text` and not `instruction_override`/`answer_manipulation`/`role_spoofing`). `CONSULTANT_REVIEW_QUOTE` is a real, exact substring of that same line (10 words, well inside the 4-to-40-word grounding bound), kept as one module-level constant so the case text and the scripted citation can never drift apart from each other. Added a second claim to every specialist's scripted Round 1 output citing `CASE-consultant-review` with that quote, and a matching `dropped` revision entry in Round 2 for that claim (rule 13: every Round 1 claim must be accounted for exactly once).
+
+Verified empirically, the same way as last time, both properties at once rather than assuming either from the code: ran `council.scanner.scan_section`/`score_text` directly against the exact tagged line (confirms `hidden_text` alone, score 20, under the default threshold of 30) and `council.grounding.quote_failure` against the quote (confirms it's a real, in-order substring match) *before* writing anything into the script; then ran the actual demo and read the real report: `Status: COMPLETE`, `Claims citing flagged lines: R1-ADMIN-C2, R1-ANAES-C2, R1-PHYS-C2, R1-SURG-C2` — non-empty this time, for all four specialists.
+
+What went wrong / limits:
+
+- None found this time; the fix was verified to actually work, not just to pass a scoring check, per the explicit instruction not to accept a technically-passing but empty result again.
+
+#### Contract check
+
+Not applicable — same as the previous entry, this is a demo-script fix with no `data-contracts.md`/`design.md` rule touched.
+
+#### Mutation audit
+
+No automated test exists for this file. Did the manual equivalent: removed the new second claim and its citation (and the matching Round 2 `dropped` revision) and reran, confirming it reproduces the exact regression being fixed (`Status: COMPLETE`, but `Claims citing flagged lines: none` again); restored both, reran again, confirmed the citation is present (`R1-SURG-C2` and the other three roles) and the full automated suite (1,141 tests, none touching this file) still passes.
+
+What I verified by hand:
