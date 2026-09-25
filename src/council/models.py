@@ -129,6 +129,7 @@ class EventType(StrEnum):
     ERROR = "error"
     DECISION = "decision"
     PRIVACY_BLOCK = "privacy_block"
+    INJECTION_BLOCK = "injection_block"
 
 
 Round = Literal[1, 2]
@@ -671,6 +672,25 @@ class PrivacyConfig(ContractModel):
     approved_providers: list[str]
 
 
+class InjectionPatternWeights(ContractModel):
+    """One weight per scanner.py category (contracts section 3); same four names."""
+
+    instruction_override: int
+    role_spoofing: int
+    answer_manipulation: int
+    hidden_text: int
+
+
+class InjectionThreshold(ContractModel):
+    default: int
+    chair: int
+
+
+class InjectionScoringConfig(ContractModel):
+    weights: InjectionPatternWeights
+    threshold: InjectionThreshold
+
+
 class Config(ContractModel):
     """Shape of the human-owned config.yaml; loading/policy validation is T2."""
 
@@ -685,6 +705,7 @@ class Config(ContractModel):
     judging: JudgingConfig
     roles: dict[Role, RoleConfig]
     privacy: PrivacyConfig
+    injection_scoring: InjectionScoringConfig
 
 
 class Source(ContractModel):

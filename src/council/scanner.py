@@ -5,6 +5,7 @@ complete injection defense; prompt delimiters and human review remain required.
 """
 
 from bisect import bisect_right
+from collections.abc import Mapping
 import re
 from typing import Final
 
@@ -81,3 +82,24 @@ def scan_section(section_id: str, text: str, *, start_line: int = 1) -> tuple[st
                                        matched_pattern=name))
         lines[index] = FLAG_TAG + " " + lines[index]
     return "".join(lines), flags
+
+
+def matched_categories(text: str) -> list[str]:
+    """Which SCANNER_PATTERNS categories match at least once anywhere in text,
+    in SCANNER_PATTERNS order. Whole-text, not line-by-line (contracts rule 29:
+    the gateway scores one combined system+user string, not individual lines)."""
+    return [name for name, pattern in SCANNER_PATTERNS.items()
+            if re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)]
+
+
+def score_text(text: str, weights: Mapping[str, int]) -> tuple[int, list[str]]:
+    """Total weighted injection score for text, and which categories fired.
+
+    A category that matches contributes its configured weight once, no matter
+    how many times it matches. `weights` is config-driven (contracts section 11,
+    `injection_scoring.weights`); this function has no opinion on the numbers.
+    Purely additive: `scan_section`'s own per-line flagging for ingest is
+    untouched and unaffected by this function's existence.
+    """
+    matched = matched_categories(text)
+    return sum(weights[name] for name in matched), matched

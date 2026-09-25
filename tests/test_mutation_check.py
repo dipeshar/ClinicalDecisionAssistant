@@ -12,8 +12,8 @@ from tools import mutation_check as audit
 def test_t1_plan() -> None:
     source = (audit.ROOT / "src/council/models.py").read_text(encoding="utf-8")
     plan = audit.build_t1(source)
-    assert len(plan) == 119
-    assert len({row[0] for row in plan}) == 119
+    assert len(plan) == 122
+    assert len({row[0] for row in plan}) == 122
     for _, changed, expected, _, _ in plan:
         assert changed != source and expected
         ast.parse(changed)

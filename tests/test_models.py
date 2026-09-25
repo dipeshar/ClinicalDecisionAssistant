@@ -117,10 +117,14 @@ def contract_samples() -> dict[str, dict[str, Any]]:
     s["PathsConfig"] = dict(cases="cases", runs="runs", prompts="prompts")
     s["RoleConfig"] = dict(name="Synthetic surgeon", kb="kb/surgeon", keywords=["risk"], persona_prompt="persona_surg.md")
     s["PrivacyConfig"] = dict(synthetic_marker="Synthetic case for a demonstration", approved_providers=["fake"])
+    s["InjectionPatternWeights"] = dict(instruction_override=40, role_spoofing=30, answer_manipulation=35, hidden_text=20)
+    s["InjectionThreshold"] = dict(default=30, chair=50)
+    s["InjectionScoringConfig"] = dict(weights=s["InjectionPatternWeights"], threshold=s["InjectionThreshold"])
     s["Config"] = dict(privacy=s["PrivacyConfig"], paths=s["PathsConfig"], models=s["ModelChoices"], temperature=s["RoleValues"],
                        reasoning_effort=s["ReasoningEffortConfig"],
                        budget=s["BudgetConfig"], retries=s["RetryConfig"], retrieval=s["RetrievalConfig"],
-                       grounding=s["GroundingConfig"], judging=s["JudgingConfig"], roles={"SURG": s["RoleConfig"]})
+                       grounding=s["GroundingConfig"], judging=s["JudgingConfig"], roles={"SURG": s["RoleConfig"]},
+                       injection_scoring=s["InjectionScoringConfig"])
     s["Source"] = dict(source_type="case", source_title="Tests and Imaging", text="Synthetic data only.")
     s["RunBundle"] = dict(run_id=s["Scorecard"]["run_id"], case_id="synthetic01", created_at="2026-09-19T10:30:00Z",
                           config_snapshot=s["Config"], case_context=s["CaseContext"], retrievals=[s["RetrievalResult"]],
@@ -178,7 +182,7 @@ ENUMS = {
     "ReportStatus": "COMPLETE INCOMPLETE",
     "Recommendation": "proceed proceed_with_modifications delay_pending_investigation decline",
     "Decision": "approved rejected comment_only", "Step": "ingest retrieve specialist judge red_team chair human",
-    "EventType": "start llm_call retrieval validation budget error decision privacy_block",
+    "EventType": "start llm_call retrieval validation budget error decision privacy_block injection_block",
 }
 
 

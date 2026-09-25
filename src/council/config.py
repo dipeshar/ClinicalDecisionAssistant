@@ -81,6 +81,7 @@ def validate_config(config: Config) -> None:
     validate_roles(config)
     validate_privacy(config)
     validate_models(config)
+    validate_injection_scoring(config)
 
 
 def validate_privacy(config: Config) -> None:
@@ -122,6 +123,16 @@ def validate_limits(config: Config) -> None:
         require(temperature >= 0, f"temperature.{role}", "must not be negative")
     require(bool(config.retrieval.case_sections) and set(config.retrieval.case_sections) <= CASE_SECTIONS,
             "retrieval.case_sections", "must contain known case section IDs")
+
+
+def validate_injection_scoring(config: Config) -> None:
+    scoring = config.injection_scoring
+    for category, weight in scoring.weights.model_dump().items():
+        require(weight >= 0, f"injection_scoring.weights.{category}", "must not be negative")
+    require(scoring.threshold.default > 0, "injection_scoring.threshold.default", "must be positive")
+    require(scoring.threshold.chair > 0, "injection_scoring.threshold.chair", "must be positive")
+    require(scoring.threshold.chair >= scoring.threshold.default, "injection_scoring.threshold.chair",
+            "must be at least the default threshold (rule 29: the chair's threshold is the looser one)")
 
 
 def validate_roles(config: Config) -> None:

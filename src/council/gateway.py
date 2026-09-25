@@ -18,6 +18,7 @@ from council.budget import Budget, BudgetExhausted, Reservation
 from council.models import BudgetState, Config, EventType, ModelChoice, PrivacySummary, Role, Round, Step, TraceEvent
 from council.privacy import scan_identifiers
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderTimeout
+from council.scanner import score_text
 from council.trace import TraceWriter
 
 SPECIALIST_ROLES = frozenset({Role.SURG, Role.PHYS, Role.ANAES, Role.ADMIN})
@@ -95,6 +96,15 @@ def reasoning_effort_for(config: Config, role: Role) -> str:
     raise ValueError(f"no reasoning effort configured for role {role!r}")
 
 
+def injection_threshold_for(config: Config, role: Role) -> int:
+    """Contracts rule 29: specialists, judges and red team share the stricter
+    threshold, since all three read the case document directly; the chair, which
+    never reads it directly, gets the looser one."""
+    if role is Role.CHAIR:
+        return config.injection_scoring.threshold.chair
+    return config.injection_scoring.threshold.default
+
+
 def _elapsed_ms(start: float) -> int:
     return max(0, round((perf_counter() - start) * 1000))
 
@@ -137,6 +147,8 @@ class LLMGateway:
         self._refuse_if_privacy_blocked(role=role, step=step, round_number=round_number,
                                         repair=repair, provider=choice.provider,
                                         system=system, user=user, model_label=model_label)
+        self._refuse_if_injection_blocked(role=role, step=step, round_number=round_number,
+                                          repair=repair, system=system, user=user, model_label=model_label)
 
         provider = self._providers[choice.provider]
         cap = self._budget.output_cap(role)
@@ -250,6 +262,27 @@ class LLMGateway:
             finish_reason=None, reasoning=None,
         ))
         raise GatewayRefusal(reason)
+
+    def _refuse_if_injection_blocked(self, *, role: Role, step: Step, round_number: Round | None,
+                                     repair: bool, system: str, user: str, model_label: str) -> None:
+        """Contracts rule 29: a second, scored check, after the identifier check (rule 20)
+        and before the budget check. Unlike ingest's per-line flagging, this scores the
+        whole outbound system+user text and can block agent-to-agent content (another
+        specialist's argument, a judge's notes) that ingest never saw."""
+        weights = self._config.injection_scoring.weights.model_dump()
+        score, matched = score_text(f"{system}\n\n{user}", weights)
+        threshold = injection_threshold_for(self._config, role)
+        if score < threshold:
+            return
+        self._trace.write(TraceEvent(
+            run_id="", seq=0, timestamp="", step=step, event_type=EventType.INJECTION_BLOCK,
+            role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,
+            raw_output=None, parsed_ref=None, tokens_in=None, tokens_out=None, latency_ms=None,
+            attempt=1, repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used,
+            error=f"injection: score {score} >= threshold {threshold} (patterns: {', '.join(matched)})",
+            finish_reason=None, reasoning=None,
+        ))
+        raise GatewayRefusal(f"injection score {score} met the threshold ({threshold}) for {role.value}")
 
     def _reserve_or_refuse(self, *, role: Role, step: Step, round_number: Round | None, repair: bool,
                            model_label: str, tokens_in: int, cap: int, attempt: int) -> Reservation:
