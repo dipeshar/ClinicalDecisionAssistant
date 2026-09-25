@@ -60,6 +60,6 @@ The cardiologist's recommendation is to proceed with surgical valve replacement 
 
 The cardiologist requests four things: formal nephrology input on peri-operative renal protection and dialysis-risk quantification; an anaesthesiology assessment of fitness given the COPD and frailty; explicit council consideration of the transcatheter approach as the lower-renal-stress alternative, noting the contrast allergy complicates its work-up and the coronary lesion would remain unaddressed; and a documented shared-decision conversation with the patient and his daughter before final consent.
 
-A follow-up telephone call to the nephrology team reconfirmed no additional pre-operative renal test is pending <!-- draft note, confirm with admin before signout --> beyond the dialysis-risk discussion already documented above.
+A follow-up physiotherapy note added to the file records that supervised pre-operative walking sessions began after referral, with gait speed reassessed at 0.75 m/s on 20 July, a slight improvement on the initial assessment <!-- draft note, confirm with admin before signout -->.
 
 — Dr. Meera Krishnan, Senior Consultant Cardiologist
