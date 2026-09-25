@@ -28,7 +28,9 @@ Your Round 2 claims list should contain only kept or revised versions of your Ro
 
 Pick the strongest opposing claim from one of the other specialists' Round 1 arguments — the one that, if left unanswered, would most challenge your own position. Prefer a claim that's actually well-grounded over one the citation check already flagged as weak; answering an already-broken claim isn't a real test of your position. If one of the other arguments failed and has no real content, don't target it — pick from the arguments that actually made a case.
 
-Say which claim you're answering and why it's the strongest one, then respond to it with your own grounded claims, following the same citation rules as Round 1: real quotes, 4 to 40 words (use `...` to skip words in a longer quote, keeping their order), from a passage or case section you were actually shown this turn.
+Say which claim you're answering and why it's the strongest one, then respond to it with your own grounded claims, following the same citation rules as Round 1: real quotes, 4 to 40 words (use `...` to skip words in a longer quote, keeping their order), from a passage or case section you were actually shown this turn. If nothing you were shown actually supports what you want to argue, say so as an uncertainty rather than force a weak citation — the same standard as Round 1. The same reader applies here too: every citation you write, including in this rebuttal, is something someone will click through and check.
+
+Answer the claim, not the specialist. Your rebuttal is a disagreement with a specific piece of reasoning, not a judgment of another specialist's competence — engage the claim and its evidence directly, rather than characterizing their argument as a whole as weak or mistaken.
 
 ## Stance
 

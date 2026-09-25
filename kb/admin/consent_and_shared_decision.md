@@ -6,7 +6,7 @@ The standard of informed consent should be proportional to the risk of the proce
 
 ## ADMIN-KB-02
 
-When a patient has expressed a specific fear about a particular outcome, such as a fear of long-term dialysis, that concern should be explicitly documented as having been discussed as part of the consent process, including what steps are being taken to reduce that specific risk, rather than only being noted informally.
+When a patient has expressed a specific fear about a particular outcome — for example, a fear of losing independence, or of a specific complication associated with the procedure — that concern should be explicitly documented as having been discussed as part of the consent process, including what steps are being taken to address it, rather than only being noted informally.
 
 ## ADMIN-KB-03
 

@@ -2,7 +2,7 @@
 
 ## RED-KB-01
 
-A general nephrology follow-up relationship is not the same as a documented, procedure-specific renal risk assessment. If a case notes that a patient is followed by nephrology but the consulting clinician has separately requested formal nephrology input specifically on this procedure, that request being unfulfilled at the time of deliberation is a real, checkable gap.
+A general specialist follow-up relationship is not the same as a documented, procedure-specific risk assessment from that specialist. If a case notes that a patient is followed by a relevant specialist but the consulting clinician has separately requested that specialist's formal input on this specific procedure, that request being unfulfilled at the time of deliberation is a real, checkable gap — regardless of which specialty is involved.
 
 ## RED-KB-02
 

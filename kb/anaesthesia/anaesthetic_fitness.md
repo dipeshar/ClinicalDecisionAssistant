@@ -2,7 +2,7 @@
 
 ## ANAES-KB-01
 
-ASA physical status class IV describes a patient with severe systemic disease that is a constant threat to life. A patient with stage 3b chronic kidney disease, diabetes, moderate COPD, and a recent syncopal episode being considered for major cardiac surgery would typically be assessed at or near this level, reflecting significant but not automatically prohibitive anaesthetic risk.
+ASA physical status class IV describes a patient with severe systemic disease that is a constant threat to life. Multiple concurrent organ-system impairments — for example, significant renal impairment combined with a major cardiac or respiratory condition — commonly place a patient at or near this level, reflecting significant but not automatically prohibitive anaesthetic risk. The classification reflects cumulative burden across systems, not any single diagnosis alone.
 
 ## ANAES-KB-02
 
