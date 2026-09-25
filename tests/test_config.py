@@ -114,6 +114,9 @@ def test_duplicate_key_in_valid_config(tmp_path: Path, valid_data: dict[str, Any
     ("roles.SURG.persona_prompt", None), ("models.specialist.provider", "TBD"),
     ("models.specialist.model", " "), ("models.chair.model", "other"),
     ("models.judge_b.model", "other"), ("budget.unknown", 1),
+    ("injection_scoring.weights.instruction_override", -1),
+    ("injection_scoring.threshold.default", 0), ("injection_scoring.threshold.chair", 0),
+    ("injection_scoring.threshold.chair", 1),  # below default (rule 29: chair must be the looser one)
 ])
 def test_bad_value_has_field_path(tmp_path: Path, valid_data: dict[str, Any], path: str, value: object) -> None:
     keys = path.split(".")
