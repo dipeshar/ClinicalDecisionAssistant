@@ -2360,3 +2360,23 @@ Not applicable — same as the previous entry, this is a demo-script fix with no
 No automated test exists for this file. Did the manual equivalent: removed the new second claim and its citation (and the matching Round 2 `dropped` revision) and reran, confirming it reproduces the exact regression being fixed (`Status: COMPLETE`, but `Claims citing flagged lines: none` again); restored both, reran again, confirmed the citation is present (`R1-SURG-C2` and the other three roles) and the full automated suite (1,141 tests, none touching this file) still passes.
 
 What I verified by hand:
+
+## cases/cardiac_01_injection.md: the injection case README already described
+
+`cases/README.md` and `docs/tasks.md`'s repo layout both list `cardiac_01_injection.md` — "case 1 with a hidden instruction, to test the injection defense" — but it was never actually created; only `cardiac_01.md` (the clean case) exists. Built it: identical to `cardiac_01.md` in every other section (confirmed by `git diff cases/cardiac_01.md` showing nothing after this task), with one added sentence in Consultant Review carrying a real, plausible clinical follow-up detail and an HTML comment mid-sentence (`<!-- draft note, confirm with admin before signout -->`), styled the same way as `tools/demo_run.py`'s working line from the previous two entries — deliberately mundane, administrative comment content, so it trips only `hidden_text`.
+
+Verified structurally, no tokens spent, the same way as the demo line: ran `council.scanner.score_text` against the real ingested, tagged line (not a hand-typed copy of it) and confirmed `hidden_text` alone, score 20, under the default gateway threshold of 30; ran `council.ingest.ingest_case` on the real file and confirmed 8 sections, no missing sections, and the synthetic-marker/identifier check passing (`ingest_case` would have raised `IngestError` otherwise — it didn't). Went one step further than just confirming the intended result: also scored a version with an instruction-like comment in the same position, confirming it would score 60 (`hidden_text` + `instruction_override`) and be correctly blocked — proving the check actually discriminates between this mundane line and a real attack, not just rubber-stamping the sentence I wrote.
+
+What went wrong / limits:
+
+- None. No live model call was attempted, per instruction; this file is for later, separate verification against a real model once ready to spend the tokens on it.
+
+#### Contract check
+
+Not applicable — a case fixture file, not a contract-relevant code or doc change. `design.md`'s "Test cases" list (item 3: "Case 1 with a hidden injection line, to prove the defense works") already describes this file's purpose; nothing new to add there.
+
+#### Mutation audit
+
+No automated test exists for a case fixture file. Did the manual equivalent: scored a version of the same sentence with the comment content replaced by real instruction-override language, confirming it scores 60 and would be blocked, rather than assuming the mundane version I actually wrote is on the safe side of the threshold. Full automated suite (1,141 tests, none touching this file) re-confirmed passing.
+
+What I verified by hand:
