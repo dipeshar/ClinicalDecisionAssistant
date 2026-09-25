@@ -2314,3 +2314,27 @@ What went wrong / limits:
 All 5 mutations were detected (one exposed a real test gap, closed and committed before repeating). Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,141 tests) after each restore.
 
 What I verified by hand:
+
+## Split tools/demo_run.py's injection demo into two clean demonstrations
+
+Follow-up to T21: the demo's case had used a blunt `instruction_override` line to show injection defense, but T21's own gateway check now correctly blocks that line outright, which meant the walkthrough itself could no longer complete (all four specialists failed with `all specialists failed`) — a direct, visible consequence of T21 that this task fixes by giving the demo two separate, honest stories instead of one broken one.
+
+**Part 1** (the main walkthrough): replaced the blunt line with a subtle `hidden_text`-only aside in `Consultant Review` (a zero-width character mid-sentence, score 20, under the default threshold of 30). Ingest still flags and tags it exactly as before; the gateway's score now lets it through; the run completes normally end to end.
+
+**Part 2** (new, standalone `run_injection_block_demo`): the old blunt line, sent straight through `LLMGateway.call()` with no council run at all, printed as its own clearly labeled section — the refusal, and the resulting `injection_block` trace event (kind, matched pattern, score), with an explicit assertion that the matched text itself never appears in it.
+
+No source code in `src/council` changed; this task is entirely `tools/demo_run.py`, a manual demo script explicitly outside pytest's coverage (its own docstring has always said so). There is no `data-contracts.md`/`design.md` rule this task touches, and no automated test to run or mutate — I verified both directions by hand instead: ran the script and confirmed Part 1 completes (`COMPLETE`, 1 scanner flag, verdict `no_sign`) and Part 2 refuses cleanly; then temporarily reverted Part 1's line back to the blunt one and reran, reproducing the exact `all specialists failed` breakage this task fixes, before reverting that revert and confirming the real suite (1,141 tests) still passes untouched.
+
+What went wrong / limits:
+
+- None. The one thing worth flagging is the same one noted under T21: several `kb/`/`prompts/` files still have your own uncommitted edits sitting in the working tree, unrelated to this task; left untouched and excluded from this commit too.
+
+#### Contract check
+
+Not applicable — no `data-contracts.md` or `design.md` rule is touched by this task; it's a demo script fix following directly from T21's own behavior.
+
+#### Mutation audit
+
+No automated test exists for `tools/demo_run.py` (by design — it runs outside pytest). Did the manual equivalent instead: reverted Part 1's subtle line back to the old blunt one and reran the script, confirming it reproduces the exact `all specialists failed` failure this task fixes (Status: INCOMPLETE, all four specialist turns refused with "injection score 40 met the threshold (30)"); reverted back, reran again, confirmed Part 1 completes normally (Status: COMPLETE, 1 scanner flag, verdict `no_sign`) and Part 2 refuses cleanly with a clean trace event. Full automated suite (1,141 tests, none of which touch this file) re-confirmed passing after all of this.
+
+What I verified by hand:
