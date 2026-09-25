@@ -56,6 +56,8 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | missing_sections | list[str] | CODE | Expected headings not found |
 | injection_flags | list[InjectionFlag] | CODE | `section_id`, `line_number`, `matched_pattern` |
 
+**Injection pattern categories.** `matched_pattern` above, and the gateway's scored check (section 13), both draw from one shared list of four categories: `instruction_override`, `role_spoofing`, `answer_manipulation`, `hidden_text`.
+
 **Text outside the sections.** The title line and anything before the first `##` heading are scanned too. If the scanner flags a line there, ingest rejects the whole case with an error that names the line number, and no `CaseContext` is built. Only section text is ever sent to the agents. The title and preamble never are.
 
 **Privacy check.** Ingest requires the synthetic-data marker: the text of `privacy.synthetic_marker` (from config) must appear in the preamble, ignoring case. Ingest also scans the whole file, including the title and preamble, for identifier patterns. The kinds are `email`, `phone`, `national_id`, `long_number`, `date_of_birth`, `url`, `ip_address`, `id_label` and `name_label`. If the marker is missing or any pattern matches, ingest rejects the whole case with an error that gives the line number and the kind. The error never contains the matched text, and no `CaseContext` is built. A rejected case still writes a run folder with a `trace.jsonl` that holds one `privacy_block` event (kind and line number only) and no case text.
@@ -314,7 +316,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | run_id, seq | str, int | Order of events in the run. `seq` is assigned under a lock. |
 | timestamp | str | |
 | step | `ingest` \| `retrieve` \| `specialist` \| `judge` \| `red_team` \| `chair` \| `human` | |
-| event_type | `start` \| `llm_call` \| `retrieval` \| `validation` \| `budget` \| `error` \| `decision` \| `privacy_block` | |
+| event_type | `start` \| `llm_call` \| `retrieval` \| `validation` \| `budget` \| `error` \| `decision` \| `privacy_block` \| `injection_block` | |
 | role, round | str, int or null | |
 | model | str or null | |
 | prompt | str or null | Full prompt sent |
@@ -352,6 +354,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | reasoning_effort | specialists/chair/red_team low, judges low | Passed to the provider on models that support it (currently openai/gpt-oss-120b and qwen/qwen3.8-27b). Ignored by providers or models that don't. |
 | models | Set per role | Specialists and chair share one model. Judges A and B use a different one. |
 | privacy | `synthetic_marker` (text that must appear in every case) and `approved_providers` (list of provider names) | Only approved providers may receive a prompt. Every provider named in `models` must be in the list, once the models are set. |
+| injection_scoring | weights per pattern category; threshold.default and threshold.chair | Same pattern categories as the ingest scanner. default applies to specialists, judges, and red team, who all read the case directly; chair is looser, since it never does. |
 
 **BudgetState** (kept by the gateway): `tokens_used`, `calls_used`, `started_at`, `exhausted` (bool), `reason`. It is guarded by a lock.
 
@@ -414,6 +417,8 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 27. **Deduplicated source passages in judge prompts.** When a judge is shown one or more arguments, every KB passage and case section cited anywhere in those arguments is written out in full exactly once, in a shared block, keyed by its ID. Each citation within an argument shows only its `passage_id` and its own quote, not the passage's full text again. This preserves everything the judge needs to check whether a citation supports its claim; it removes only the repeated copies of the same source text.
 
 28. **A minimal view for the chair.** The chair's prompt shows each final-round argument as: role, stance, and per claim: `claim_id`, text, and `grounding_status`. Conditions are included only when the stance is conditional. Citation quote text, uncertainties, the rebuttal object, and the Round 2 revision history are not shown to the chair — none of these are things the chair's own instructions ask it to use, and including them was an implementation gap against those instructions, not a deliberate design choice.
+
+29. **Gateway-level injection scoring.** In addition to the identifier check (rule 20), the gateway scores every outbound prompt, system and user combined, against the same weighted injection pattern list ingest uses (section 3). If the total score meets or exceeds the role's configured threshold, the call is refused, an `injection_block` trace event is written (kind, matched pattern names, and total score only, never the matched text), and the turn counts as failed immediately, with no repair retry — resending identical content would be blocked identically. Specialists, judges, and the red team share the stricter threshold, since all three read the case document directly. The chair, which never reads the case directly, uses a looser threshold.
 
 ## 14. Run folder
 

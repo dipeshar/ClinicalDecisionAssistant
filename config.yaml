@@ -106,3 +106,13 @@ roles:
 privacy:
   synthetic_marker: "Synthetic case for a demonstration"
   approved_providers: [groq]
+
+injection_scoring:
+  weights:
+    instruction_override: 40
+    answer_manipulation: 35
+    role_spoofing: 30
+    hidden_text: 20
+  threshold:
+    default: 30
+    chair: 50
