@@ -2265,3 +2265,52 @@ What went wrong / limits:
 All 5 mutations were detected (two exposed real test gaps, closed and committed before repeating). Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,115 tests) after each restore.
 
 What I verified by hand:
+
+## T21: gateway-level scored injection check
+
+A real injection-defense gap, not a small tweak: ingest's scanner only ever sees the *original* case, once, before any agent runs. From Round 2 onward, agents read each other's own output — another specialist's argument, a judge's notes — and none of that agent-to-agent content was ever re-checked for injection patterns. This task closes that gap with a second, scored check at the gateway.
+
+Stopped twice before writing anything, both explicitly invited by the human's own instructions ("if any of these aren't found as described, stop and tell me," "tell me if you rename any"):
+
+- Step 2 asked me to find where `data-contracts.md` documents "the injection pattern list (the four category groups)" — it doesn't, anywhere. The identifier-kind list (email/phone/etc.) is spelled out at line 61; the four injection categories are referenced only as an untyped `matched_pattern: str`, never enumerated, in either `data-contracts.md` or `design.md`. Reported this and asked how to handle rule 29's "section 3" cross-reference; the human chose to add the missing list to section 3 now, so I proposed exact wording and it's in the diff they reviewed before committing.
+- The four category names in the human's own draft config (`ai_directed_command`, `result_steering`, `fake_structure`, `hidden_text`) don't match the real scanner code at all — only `hidden_text`. The real four, verbatim from `scanner.py`'s `SCANNER_PATTERNS` dict, are `instruction_override`, `role_spoofing`, `answer_manipulation`, `hidden_text`. Showed these verbatim before proceeding, per instruction, then used the confirmed weight mapping (instruction_override=40, answer_manipulation=35, role_spoofing=30, hidden_text=20) throughout — `config.yaml`, `models.py`, tests, all real names, nowhere the guessed ones.
+
+Applied Part 1's docs/config text exactly as given (plus the section-3 addition, reviewed above), committed alone first.
+
+Part 2: `scanner.py` gained `matched_categories(text)` and `score_text(text, weights)` — both operate on the same `SCANNER_PATTERNS` dict `scan_section` already uses, but whole-text rather than line-by-line (the gateway scores one combined `system+user` string, not individual lines) and weighted rather than boolean (a category that matches contributes its configured weight once, no matter how many times it matches within the text). `scan_section` itself — ingest's own per-line flagging — is byte-for-byte untouched; these are new, additive functions, not a rewrite.
+
+`gateway.py`'s `call()` runs `_refuse_if_injection_blocked` right after the existing `_refuse_if_privacy_blocked` (identifier check, rule 20) and before the budget check, matching the ordering the human specified. It scores the combined `system+user` text against `config.injection_scoring.weights`, compares to `injection_threshold_for(role)` (the chair's own looser threshold; everyone else shares the stricter default, since only the chair never reads the case directly), and if the score meets or exceeds it: writes an `injection_block` trace event (`error` field holds the score, threshold, and matched pattern *names* only — never the matched text) and raises `GatewayRefusal`. That refusal reaches `call_and_parse_with_repair` through the exact same path a privacy block or budget refusal already does, so "no repair retry on this failure" needed no new code at all — resending identical content through the same check would obviously be blocked identically, and the existing machinery already treats every `GatewayRefusal` this way.
+
+New config models (`InjectionPatternWeights`, `InjectionThreshold`, `InjectionScoringConfig`) and `EventType.INJECTION_BLOCK`. Added `validate_injection_scoring` to `config.py`: weights non-negative, both thresholds positive, and — stated as a real rule in rule 29's text, not just a suggestion — the chair's threshold must be at least the default one.
+
+What went wrong / limits:
+
+- Found, mid-task and unrelated to this change, that several `kb/` and `prompts/` files had uncommitted edits already sitting in the working tree — not made by me, and files AGENTS.md explicitly says aren't mine to write. Left them exactly as found and excluded them from every commit in this task; they're still uncommitted, for the human to handle separately.
+- The mutation check found two real gaps in this task's own first-draft tests: nothing checked that the trace's `error` field never contains the actual matched text (only that it names the pattern), and nothing in `test_config.py`'s bad-value list covered `injection_scoring` at all, so removing the "chair threshold must be at least the default" validation check went undetected. Both fixed — the first was already covered by an assertion I'd written (`test_injection_score_over_threshold_is_blocked` already asserted the matched text stays out of the raw trace line, and it correctly failed when I broke the leak), the second needed a new parametrized case.
+- Smoke-tested `tools/demo_run.py` after the change and it now blocks every specialist's Round 1 call outright — the demo's own case has deliberately injected text ("...ignore prior approval rules") that scores 40 against `instruction_override` (over the default threshold of 30). This is the feature working exactly as designed, not a regression; confirmed via the trace before concluding that.
+
+#### Contract check
+
+| Rule or field touched | Implementation | Test |
+|---|---|---|
+| Section 3 (new): the four injection pattern categories, named | Added to `data-contracts.md`, human-reviewed text | n/a — a doc addition; `scanner.py`'s `SCANNER_PATTERNS` keys are the source of truth, checked directly (see below) |
+| Rule 29: gateway scores every outbound prompt (system+user) against the weighted pattern list; refuses at or above the role's threshold | `gateway.py`'s `_refuse_if_injection_blocked`, `injection_threshold_for` | `test_injection_score_under_threshold_passes`, `test_injection_score_over_threshold_is_blocked`, `test_injection_threshold_is_role_aware_same_content_different_outcome` |
+| Rule 29: `injection_block` trace event carries kind/matched-pattern-names/score only, never the matched text | `error=f"injection: score {score} >= threshold {threshold} (patterns: ...)"`, no text interpolated | `test_injection_score_over_threshold_is_blocked` (asserts the matched phrase is absent from the raw trace line) |
+| Rule 29: no repair retry on an injection block | No new code needed — `GatewayRefusal` already short-circuits before any repair attempt | Implicit in the above three tests (all assert `provider.calls_made == 0`, i.e., not even the first attempt reached the provider) |
+| Section 10: `event_type` includes `injection_block` | `EventType.INJECTION_BLOCK` | `test_enum_values[EventType-...]` |
+| Section 11: `injection_scoring` config setting | `InjectionScoringConfig` (`models.py`), `config.yaml` | `test_contract_round_trip_and_fields[InjectionScoringConfig]`, `test_bad_value_has_field_path[injection_scoring.*]` |
+| Ingest's own per-line flagging is unaffected | `scan_section` untouched; `matched_categories`/`score_text` are new, separate functions reading the same `SCANNER_PATTERNS` | Full existing `test_scanner.py` suite still passes unchanged; `test_scoring_derives_from_the_same_patterns_as_ingests_flagging` checks both draw from the same source |
+
+#### Mutation audit
+
+| Rule | What was broken | Test that failed |
+|---|---|---|
+| A score meeting the threshold is blocked (not just exceeding it) | changed `score < threshold` to `score <= threshold` | `test_injection_threshold_is_role_aware_same_content_different_outcome` |
+| The trace never contains the matched text | interpolated `user` into the `error` string | `test_injection_score_over_threshold_is_blocked` |
+| The chair gets the looser threshold, not the default one | made `injection_threshold_for` return `default` for `CHAIR` too | `test_injection_threshold_is_role_aware_same_content_different_outcome` |
+| `matched_categories`/`score_text` read from `SCANNER_PATTERNS` itself, not a copy | dropped `role_spoofing` from a stale local copy | `test_scoring_derives_from_the_same_patterns_as_ingests_flagging`, `test_score_text_sums_weights_across_distinct_categories` |
+| The chair's threshold must be at least the default one | removed that `require(...)` check from `validate_injection_scoring` | `test_bad_value_has_field_path[injection_scoring.threshold.chair-1]` (new — added after this mutation survived the original suite, see above) |
+
+All 5 mutations were detected (one exposed a real test gap, closed and committed before repeating). Committed source was restored after every mutation, confirmed by `git diff --stat` showing no diff and the full suite passing (1,141 tests) after each restore.
+
+What I verified by hand:
