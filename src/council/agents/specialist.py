@@ -21,6 +21,7 @@ the turn or stay silently as-is.
 
 from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
+import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -55,17 +56,42 @@ def describe_validation_error(error: ValidationError) -> str:
     return "; ".join(parts) if parts else str(error)
 
 
+_FENCE_PATTERN = re.compile(r"^```[a-zA-Z0-9_+-]*[ \t]*\n(.*)\n```[ \t]*$", re.DOTALL)
+
+
+def strip_code_fence(raw_output: str) -> str:
+    """Strip a code fence that wraps the entire response (some models, observed
+    with qwen/qwen3.8-27b, always wrap their JSON in ```json ... ```).
+
+    Only strips when the whole response, after surrounding whitespace, is one
+    opening fence, content, then one closing fence - never a partial match. A
+    response with only an opening fence and no closing one is left completely
+    unchanged: guessing at a truncated fence risks corrupting real content, and
+    an unclosed fence is already a sign something else (like truncation) is
+    wrong, which the normal parse-failure/repair path should surface as-is.
+    Content that was never fenced is also returned unchanged.
+    """
+    match = _FENCE_PATTERN.match(raw_output.strip())
+    return match.group(1) if match is not None else raw_output
+
+
 def parse_draft(raw_output: str, schema_source: SchemaSource) -> tuple[Any | None, str | None]:
     """Bad JSON is not the gateway's job (T8); this is where it's actually checked.
 
     `schema_source` is either a draft model class (one object) or a `TypeAdapter`
     (for example `list[ScoreDraft]`, T11's judge response), the same distinction
     `prompting.schema_block` already makes for the schema appended to the prompt.
+
+    A fully-wrapping markdown code fence is stripped first, every time - not as
+    a repair - since it's a formatting habit, not a content problem, and costing
+    a repair retry on it would waste the turn's one shared retry (rule 1) on
+    something that isn't actually wrong with the answer.
     """
+    unfenced = strip_code_fence(raw_output)
     try:
         if isinstance(schema_source, type):
-            return schema_source.model_validate_json(raw_output), None
-        return schema_source.validate_json(raw_output), None
+            return schema_source.model_validate_json(unfenced), None
+        return schema_source.validate_json(unfenced), None
     except ValidationError as error:
         return None, describe_validation_error(error)
 
