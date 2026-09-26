@@ -21,6 +21,7 @@ from council.models import (
 from council.orchestrator import CouncilRun, run_council
 from council.providers.base import Provider
 from council.providers.factory import ProviderConfigurationError, build_providers
+from council.report_page import write_report_page
 from council.trace import TraceWriteError, TraceWriter
 
 Input = Callable[[str], str]
@@ -198,6 +199,13 @@ def run_command(case_path: Path, config_path: Path, providers: Mapping[str, Prov
     return folder
 
 
+def report_command(run_folder: Path, output_fn: Output = print) -> Path:
+    """Build `report.html` for an existing run folder (T19, separate from `run`)."""
+    output_path = write_report_page(run_folder)
+    output_fn(f"Wrote {output_path}")
+    return output_path
+
+
 def parser() -> argparse.ArgumentParser:
     command_parser = argparse.ArgumentParser(
         prog="python -m council",
@@ -208,6 +216,10 @@ def parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="run the council on one synthetic case")
     run.add_argument("case", type=Path)
     run.add_argument("--config", type=Path, default=Path("config.yaml"))
+    report = subparsers.add_parser(
+        "report", help="build report.html for an existing run folder",
+    )
+    report.add_argument("run_folder", type=Path)
     return command_parser
 
 
@@ -222,7 +234,10 @@ def main(argv: Sequence[str] | None = None, *, providers: Mapping[str, Provider]
         command_parser.print_help()
         return 0
     try:
-        run_command(args.case, args.config, providers, input_fn, output_fn, clock)
+        if args.command == "report":
+            report_command(args.run_folder, output_fn)
+        else:
+            run_command(args.case, args.config, providers, input_fn, output_fn, clock)
     except (ConfigError, IngestError, KBError, TraceWriteError, OSError, ValueError,
             ProviderConfigurationError) as error:
         print(f"error: {error}", file=sys.stderr)
