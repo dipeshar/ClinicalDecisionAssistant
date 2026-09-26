@@ -2449,3 +2449,34 @@ What went wrong / limits:
 Both breaks were undone with `git restore` (`report_page.py`, then `models.py`) and `git status` was clean, and the full suite (1,155 tests) re-confirmed passing, before moving on.
 
 What I verified by hand:
+
+## Fix: markdown-fence parsing, and judges' output cap fits the real free-tier ceiling
+
+A live run (`run-20260924-111449-cardiac-01`) showed every Round 1 judge call (`qwen/qwen3.8-27b`) failing. Investigating the real trace, not guessing, turned up two separate, real bugs, both now fixed, plus a systematic audit (read-only, no code changed) across every committed run's `trace.jsonl` to check for other quirks in the same family before patching one at a time:
+
+**1. Judge output cap (`config.yaml`, committed separately as `4a0f57f` before this task, since it was applied before the audit below):** `max_tokens_per_call.judge` 3000 → 900, `reasoning_effort.judge` "low" → "none". The real trace's `reasoning` field showed the old 3000-token budget being consumed almost entirely by reasoning content (12,363–13,693 characters, roughly the whole cap) before any real answer, leaving one call's actual output at 0 characters and another truncated mid-JSON at `finish_reason: "length"`. Two real, complete judge scores from this exact model gave an empirical ~4.35 chars/token ratio; applied to their own raw-JSON-only length, a complete `ScoreDraft` needs ~440-560 tokens - comfortably under the new 900 cap once reasoning is disabled entirely rather than hoped to fit.
+
+**2. Fence stripping (`specialist.py`, this commit):** `qwen/qwen3.8-27b` wraps every judge response in a ```json fence; `parse_draft` sent that straight to `model_validate_json` with no stripping, so every fenced response failed to parse as JSON regardless of content or budget - confirmed against a real trace (`run-20260926-112051-cardiac-01` seq 10): a complete, well-formed, `finish_reason: "stop"` response still ended up in `failed_judge_calls` for this reason alone. Added `strip_code_fence`, called unconditionally inside `parse_draft` before validation (not as part of the repair path, since a formatting habit isn't a content problem and shouldn't cost the turn's one shared repair retry per rule 1). It only strips when the *entire* response, after surrounding whitespace, is one opening fence, content, then one matching closing fence; a response with only an opening fence and no closing one is returned completely unchanged, since guessing at a truncated fence risks corrupting real content rather than surfacing the real problem (most likely truncation) through the normal failure path.
+
+**Audit before patching (read-only, no files changed):** before writing the fence fix, scanned all 158 real `llm_call` events across all 9 committed run folders, running every real `raw_output` through the actual `parse_draft` and checking for: markdown fences (confirmed, `qwen` only, 5 occurrences, 0 for `gpt-oss-120b`); leading/trailing conversational prose around otherwise-complete JSON (0 occurrences - the two `trailing_prose`-flagged rows are truncation artifacts, not chatty wrappers, and were distinguished as such); trailing commas, single/smart-quoted keys, JSON comments, `NaN`/`Infinity` literals, concatenated top-level JSON, raw control characters, and a BOM (0 occurrences each, detectors validated against synthetic positive examples first, and a too-narrow smart-quote regex was caught and widened before concluding "none found"). Also found, but explicitly **not fixed this task** per the human owner's "apply only what's certain" instruction: `gpt-oss-120b` (specialist/chair) shows the same reasoning-eats-the-budget mechanism as judges did - one real confirmed truncation (`run-20260924-072427-cardiac-01` seq 10, 67% of output spent on reasoning) and several 55-64%-reasoning near-misses - but fixing `max_tokens_per_call.specialist`/`.chair` or their `reasoning_effort` depends on an unresolved billing-tier question and was left untouched. Red team has zero real `raw_output` samples across all 9 runs (every real call failed at the gateway level first), so nothing can be said about its parsing behavior either way.
+
+What went wrong / limits:
+
+- None for the two fixes actually applied. The audit surfaced two more open items (the specialist/chair reasoning-truncation risk, and red team's total lack of real-data coverage) that are documented above but deliberately left unfixed, since they either depend on an unresolved billing decision or have no evidence to act on yet.
+
+#### Contract check
+
+- **data-contracts.md section 11, `max_tokens_per_call`/`reasoning_effort` judge values**: already updated to 900/"none" in `4a0f57f`; unchanged by this commit.
+- **data-contracts.md section 13, rule 1** (fence-stripping clause): implemented by `strip_code_fence`/`parse_draft` in `specialist.py`; tested by `test_parse_draft_strips_a_real_fenced_judge_response`, `test_parse_draft_fenced_and_unfenced_equivalents_parse_identically`, `test_parse_draft_leaves_an_unclosed_fence_alone`, and `test_strip_code_fence_leaves_unfenced_content_unchanged`.
+- **"Not as a repair"**: the fence strip happens inside `parse_draft`, called once per attempt (original and repair alike) in `call_and_parse_with_repair`, before the parse/validate step - there is no code path where a fence costs a dedicated retry; a genuinely bad response (unfenced or still-bad-after-stripping) still goes through the existing single shared repair retry exactly as before.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| A fully-wrapping fence is stripped before validation | Set `unfenced = raw_output` in `parse_draft`, bypassing `strip_code_fence` entirely | `test_parse_draft_strips_a_real_fenced_judge_response`, `test_parse_draft_fenced_and_unfenced_equivalents_parse_identically` |
+| An unclosed fence is left completely unchanged | Relaxed `_FENCE_PATTERN` to match an opening fence with no required closing fence | `test_parse_draft_strips_a_real_fenced_judge_response`, `test_parse_draft_fenced_and_unfenced_equivalents_parse_identically`, `test_parse_draft_leaves_an_unclosed_fence_alone` |
+
+Both breaks were undone with `git restore src/council/agents/specialist.py` and `git status` was clean, and the full suite (1,159 tests) re-confirmed passing, before moving on.
+
+What I verified by hand:
