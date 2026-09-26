@@ -2420,3 +2420,32 @@ What went wrong / limits:
 Every break was undone with `git restore src/council/report_page.py` (or `cli.py` for the second row) and `git status` was clean before moving to the next row. The three rows caught only by the newly-added static-guard test are the honest result of the "no JS runtime" limitation above: the pre-existing tests (which check the rendered HTML/embedded JSON, not the script's own logic) did not fail on any of these until that guard was added — each is called out explicitly rather than folded silently into a passing row.
 
 What I verified by hand:
+
+## T19 fix: tolerate retired fields when reading a saved run.json
+
+Asked to run `python -m council report` against `runs/run-20260923-135348-cardiac-01` (a real, complete run with real Groq output — requested specifically because it's the one with actual citations, unlike the two contract-current run folders used for the earlier demo). It failed: `RunBundle` rejected `scorecard.presented_order` with `extra_forbidden`. Checked all eight committed run folders directly (`json.load` each and test for the key) rather than assuming this was a one-off: six of the eight have `scorecard.presented_order`, a field that no longer exists anywhere in `models.py`'s `Scorecard` — it was evidently dropped from the contract at some point without regenerating the run folders written under the earlier version. Only the two newest runs (`111449`, `123348`) match the current contract.
+
+This is exactly the situation data-contracts.md section 14's two-stage note is about, one level further: not just "`report.html` doesn't exist yet," but "the `run.json` itself predates the contract `report` is reading it against." Per the human owner's explicit direction, added `_prune_unknown_fields`/`_prune_value` to `report_page.py`, used only inside `write_report_page`: given the raw JSON dict and `RunBundle`'s own field annotations, it recursively drops any dict key that isn't a field of the matching model (walking into nested models, `list[X]`, `dict[str, X]`, and `X | None` unions via `typing.get_origin`/`get_args`), before handing the pruned dict to `RunBundle.model_validate`. It only removes keys; a field the file is genuinely missing still fails validation exactly as before, since pruning never invents a value. Every other model in `council.models` — including every specialist/judge/chair draft — keeps `ContractModel`'s `extra="forbid"` exactly as it was; nothing calls the pruning function except this one read path. Added the exact sentence the human owner specified to data-contracts.md section 14, verbatim, describing this as a read-time behavior of `python -m council report`, not a contract relaxation.
+
+Regenerated `report.html` for `run-20260923-135348-cardiac-01` with the fixed loader: it now writes cleanly, and a check with `html.parser.HTMLParser` confirms exactly 2 script elements in the 78KB output, same as every other generated report, with the disclaimer text present.
+
+What went wrong / limits:
+
+- None found beyond what's already flagged in the T19 entry above (no JS runtime to execute the page). The `presented_order` drift itself was pre-existing — not introduced by this task or the earlier T19 work — and is now handled rather than fixed at the source (the six affected run folders were left exactly as they were; regenerating them under the current contract, if that's wanted, is a separate decision outside this task).
+
+#### Contract check
+
+- **data-contracts.md section 14, new sentence**: "`python -m council report` tolerates and ignores unknown fields when loading an existing `run.json`... This applies only to reading a saved run back for display; parsing a model's live output stays exactly as strict as every other contract in this document." Implemented by `_prune_unknown_fields`, scoped to `write_report_page`; tested by `test_write_report_page_tolerates_a_retired_scorecard_field` (a synthetic `Scorecard` carrying a fabricated retired field loads successfully) and, on the real artifact, by regenerating `run-20260923-135348-cardiac-01/report.html` directly.
+- **No relaxation elsewhere**: tested by `test_pruning_does_not_relax_ordinary_contract_parsing`, which asserts `ClaimDraft` (an arbitrary, unrelated draft model) still raises `ValidationError` on an unknown field.
+- **Pruning must not paper over an actually-missing required field**: tested by `test_write_report_page_still_rejects_a_genuinely_missing_required_field` (deletes `report.narrative`, which has no default, and confirms `write_report_page` still raises).
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| Retired fields are pruned before validating a saved `run.json` | Changed `RunBundle.model_validate(_prune_unknown_fields(RunBundle, raw))` back to `RunBundle.model_validate(raw)` | `test_write_report_page_tolerates_a_retired_scorecard_field` |
+| Every other contract model keeps `extra="forbid"` | Changed `ContractModel.model_config` from `extra="forbid"` to `extra="ignore"` in `models.py` | `test_pruning_does_not_relax_ordinary_contract_parsing` |
+
+Both breaks were undone with `git restore` (`report_page.py`, then `models.py`) and `git status` was clean, and the full suite (1,155 tests) re-confirmed passing, before moving on.
+
+What I verified by hand:
