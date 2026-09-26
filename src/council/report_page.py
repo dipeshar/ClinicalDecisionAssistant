@@ -14,10 +14,58 @@ the page's own script using `textContent`/`createTextNode` only, never
 import html
 import json
 from pathlib import Path
+import types
+import typing
+
+from pydantic import BaseModel
 
 from council.models import RunBundle
 
 REPORT_FILENAME = "report.html"
+
+
+def _prune_unknown_fields(model_cls: type[BaseModel], data: object) -> object:
+    """Drop dict keys that are not fields of `model_cls`, recursing into nested
+    models/lists/dicts, so a `run.json` written under an earlier version of the
+    data contracts (with fields since removed, e.g. a retired `Scorecard`
+    field) can still be read back for display.
+
+    This only prunes extra keys; it never invents a field the old file is
+    missing, so a file that is genuinely incompatible (a required field
+    actually absent, or a value of the wrong shape) still fails validation
+    exactly as it would without this step. This function is used only by
+    `write_report_page`'s read of an already-produced `run.json` - every other
+    contract model (specialist/judge/chair drafts, and any other model in
+    `council.models`) still parses with the same `extra="forbid"` strictness
+    it always has; nothing here changes that."""
+    if not isinstance(data, dict):
+        return data
+    pruned: dict[str, object] = {}
+    for name, field in model_cls.model_fields.items():
+        if name not in data:
+            continue
+        pruned[name] = _prune_value(field.annotation, data[name])
+    return pruned
+
+
+def _prune_value(annotation: object, value: object) -> object:
+    origin = typing.get_origin(annotation)
+    if origin is typing.Union or origin is types.UnionType:
+        for arg in typing.get_args(annotation):
+            if isinstance(arg, type) and issubclass(arg, BaseModel) and isinstance(value, dict):
+                return _prune_unknown_fields(arg, value)
+        return value
+    if origin is list:
+        (item_type,) = typing.get_args(annotation)
+        return ([_prune_value(item_type, item) for item in value]
+                if isinstance(value, list) else value)
+    if origin is dict:
+        _, value_type = typing.get_args(annotation)
+        return ({key: _prune_value(value_type, item) for key, item in value.items()}
+                if isinstance(value, dict) else value)
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return _prune_unknown_fields(annotation, value)
+    return value
 
 
 def _escape_json_for_script(data: object) -> str:
@@ -52,9 +100,15 @@ def render_report_html(bundle: RunBundle) -> str:
 
 
 def write_report_page(run_folder: Path) -> Path:
-    """Read `run.json` from `run_folder` and write `report.html` next to it."""
+    """Read `run.json` from `run_folder` and write `report.html` next to it.
+
+    Tolerates and ignores unknown fields left over from an older schema
+    version (see `_prune_unknown_fields`) - this is reading our own,
+    already-validated historical output back for display, not validating
+    fresh model output."""
     run_json_path = run_folder / "run.json"
-    bundle = RunBundle.model_validate_json(run_json_path.read_text(encoding="utf-8"))
+    raw = json.loads(run_json_path.read_text(encoding="utf-8"))
+    bundle = RunBundle.model_validate(_prune_unknown_fields(RunBundle, raw))
     output_path = run_folder / REPORT_FILENAME
     output_path.write_text(render_report_html(bundle), encoding="utf-8")
     return output_path

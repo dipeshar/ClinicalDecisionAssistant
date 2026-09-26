@@ -434,6 +434,8 @@ Each run writes one folder, `runs/<run_id>/`:
 
 The run folder is built in two stages. T16 writes `trace.jsonl`, `run.json`, `scorecard.json`, and `report.md` at the end of a run. `report.html` does not exist until T19 runs separately on an existing run folder and adds it. A run folder produced by T16 alone, before T19 exists, is a complete and valid run folder with one file fewer than the table above — nothing should assume `report.html` is present until T19 has actually run.
 
+`python -m council report` tolerates and ignores unknown fields when loading an existing `run.json`, since a run's output may have been written under an earlier version of these contracts. This applies only to reading a saved run back for display; parsing a model's live output stays exactly as strict as every other contract in this document.
+
 `run.json` exists so the page needs nothing else. Every ID in the report can be looked up in this one file.
 
 **RunBundle** (`run.json`)

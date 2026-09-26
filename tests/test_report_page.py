@@ -119,6 +119,51 @@ def test_write_report_page_requires_an_existing_run_json(tmp_path: Path) -> None
         write_report_page(run_folder)
 
 
+def test_write_report_page_tolerates_a_retired_scorecard_field(tmp_path: Path) -> None:
+    """A run.json written under an earlier contract can carry a field since
+    dropped from the model (this actually happened: six of the eight committed
+    run folders have `scorecard.presented_order`, which no longer exists in
+    Scorecard). Reading it back for the report must not reject the file over
+    that leftover field."""
+    bundle = synthetic_bundle()
+    data = bundle.model_dump(mode="json")
+    data["scorecard"]["presented_order"] = {}
+    run_folder = tmp_path / "run-20260925-000003-synthetic01"
+    run_folder.mkdir()
+    (run_folder / "run.json").write_text(json.dumps(data), encoding="utf-8")
+    output_path = write_report_page(run_folder)
+    assert output_path.exists()
+
+
+def test_write_report_page_still_rejects_a_genuinely_missing_required_field(
+    tmp_path: Path,
+) -> None:
+    """Pruning only drops extra keys; it must not paper over a file that is
+    missing a field the current contract actually requires."""
+    bundle = synthetic_bundle()
+    data = bundle.model_dump(mode="json")
+    del data["report"]["narrative"]
+    run_folder = tmp_path / "run-missing-field"
+    run_folder.mkdir()
+    (run_folder / "run.json").write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError):
+        write_report_page(run_folder)
+
+
+def test_pruning_does_not_relax_ordinary_contract_parsing() -> None:
+    """The tolerant loader lives entirely in report_page.py's own read path.
+    Every other contract model - specialist/judge/chair drafts included -
+    must still reject an unknown field exactly as before."""
+    from pydantic import ValidationError
+
+    from council.models import ClaimDraft
+
+    with pytest.raises(ValidationError):
+        ClaimDraft.model_validate({
+            "text": "Synthetic claim", "citations": [], "not_a_real_field": True,
+        })
+
+
 def test_cli_report_command_writes_the_page(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     bundle = synthetic_bundle()
     run_folder = tmp_path / "run-20260925-000001-synthetic01"
