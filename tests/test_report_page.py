@@ -9,7 +9,7 @@ import pytest
 
 from council.cli import main, report_command
 from council.models import RunBundle
-from council.report_page import render_report_html, write_report_page
+from council.report_page import _JS, render_report_html, write_report_page
 from tests.test_models import contract_samples
 
 SCRIPT_PAYLOAD = "<script>window.__pwned = true;</script>"
@@ -141,6 +141,31 @@ def test_cli_main_report_subcommand(tmp_path: Path, capsys: pytest.CaptureFixtur
     exit_code = main(["report", str(run_folder)])
     assert exit_code == 0
     assert (run_folder / "report.html").exists()
+
+
+def test_js_wires_every_id_kind_into_the_clickable_index() -> None:
+    """No JS runtime is available in this test suite (AGENTS.md keeps the stack
+    to Python/pytest), so this is a static guard on the app script's source:
+    it must register every ID kind the design calls clickable - claim,
+    argument, red-team finding, case section and KB passage - into the panel
+    index, and must render every user-facing text field with
+    textContent/createTextNode, never innerHTML."""
+    assert ".innerHTML" not in _JS
+    # Case sections and KB passages both become clickable "source" panels.
+    assert 'registerSource(s.id, "case", s.heading, s.text' in _JS
+    assert "registerSource(id, s.source_type, s.source_title, s.text)" in _JS
+    # Claims (including rebuttal response claims) and arguments are indexed.
+    assert "claimIndex[c.claim_id] = { claim: c, argumentId: a.argument_id }" in _JS
+    assert "argumentIndex[a.argument_id] = a" in _JS
+    # Red-team findings are indexed by their finding_id.
+    assert "findingIndex[f.finding_id] = f" in _JS
+    # The disclaimer is always rendered onto the page, not just embedded as data.
+    assert 'app.appendChild(el("div", { "class": "disclaimer", text: report.disclaimer }))' in _JS
+    # Failed citations are visibly flagged wherever a citation is rendered.
+    assert _JS.count('c.verified ? "verified" : "unverified"') == 3
+    assert "NOT VERIFIED" in _JS
+    # The saved human decision, once made, is shown on the page.
+    assert "if (report.human_decision)" in _JS
 
 
 def test_cli_main_report_subcommand_reports_missing_run_json(
