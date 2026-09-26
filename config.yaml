@@ -25,7 +25,7 @@ temperature:            # used only if the model allows it
 
 reasoning_effort:
   specialist: low
-  judge: low
+  judge: none
   red_team: low
   chair: low
 
@@ -50,7 +50,7 @@ budget:
   # rate limit; lowering it is faster and cheaper but risks truncation.
   max_tokens_per_call:          # output cap per call
     specialist: 2500
-    judge: 3000
+    judge: 900
     red_team: 3000
     chair: 3500
 
