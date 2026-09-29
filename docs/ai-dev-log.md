@@ -2482,3 +2482,40 @@ What went wrong / limits:
 Both breaks were undone with `git restore src/council/agents/specialist.py` and `git status` was clean, and the full suite (1,159 tests) re-confirmed passing, before moving on.
 
 What I verified by hand:
+
+## Move every active role from Groq to OpenRouter
+
+Moved the active provider for specialists, chair, red team, and both judges to OpenRouter. Added `OpenRouterProvider`, using OpenRouter's OpenAI-compatible chat-completions HTTP shape through `httpx`; it preserves the system/user separation, actual usage counts, finish reason, and returned reasoning text. HTTP failures retain the numeric status and the provider's response-body message, rate limits retain `Retry-After`, and both the configured key and any OpenRouter-shaped key are redacted before an exception can reach the trace. The factory now reads only `OPENROUTER_API_KEY` for the active provider and constructs one shared OpenRouter adapter without making a request.
+
+Configured specialist/chair/red team on `openai/gpt-oss-120b`, Judge A on `qwen/qwen3-235b-a22b-2507`, and Judge B on `meta-llama/llama-3.3-70b-instruct`; config validation now requires the two judges to differ from each other and each to differ from the specialist model. Raised specialist output to 6000 and chair output to 7000. OpenRouter's live model and endpoint metadata list neither judge model as a reasoning model and none of their endpoints accept `reasoning`, `reasoning_effort`, or `include_reasoning`; the judge reasoning setting is therefore null and the adapter omits reasoning fields entirely for those calls. Specialist, chair, and red team keep `low`, sent in OpenRouter's unified `reasoning: {effort: ...}` form for `gpt-oss-120b`.
+
+What went wrong / limits:
+
+- The first broad test run inside the filesystem sandbox could not access pytest's Windows temp root. Fresh workspace-local pytest temp directories acquired the same ACL problem during cleanup. The required suite was rerun through the approved pytest command outside that restricted sandbox; it passed without any real provider or network call. The three workspace-local failed temp directories were resolved, checked to be under the repository root, and removed.
+- Existing fake configurations gave both judges the same synthetic model, reflecting the old contract. Once config validation correctly required different judge models, those fixtures failed before their tests ran. Updated the shared fixture and CLI fixture to use `judge-a` and `judge-b`, and updated the one score-model assertion that intentionally records Judge A's selected model.
+- The initial full suite then found that same stale expected model label in `test_judge.py`; after correcting it, all 1,169 tests passed.
+- No live call was attempted. Endpoint capability conclusions come from OpenRouter's live catalog and endpoint metadata; the human still needs to verify a paid-account run.
+
+#### Contract check
+
+- **Section 11 `models`**: exact five role/provider/model pairs are in `config.yaml`; `validate_models` enforces specialist/chair equality, distinct judge models, and both judges differing from the specialist. Tested by `test_checked_in_config_has_real_models_and_approved_provider`, `test_bad_value_has_field_path[models.judge_b.model-*]`, and `test_each_judge_differs_from_specialists`.
+- **Section 11 `max_tokens_per_call`**: specialist 6000 and chair 7000 are in `config.yaml` and flow through the existing `TokenCaps`/`Budget.output_cap`. Both exact values are pinned by `test_checked_in_config_has_real_models_and_approved_provider`; the existing budget and gateway tests cover enforcement.
+- **Section 11 `reasoning_effort`**: the judge field is nullable in `ReasoningEffortConfig`, configured null, returned as `None` by the gateway, and omitted by `OpenRouterProvider`. Both judge slugs are tested by `test_judge_request_omits_unsupported_reasoning_parameter`; the exact null setting is pinned by the checked-in-config test.
+- **Section 11 `privacy.approved_providers` and rule 21**: only `openrouter` is approved; the factory uses `OPENROUTER_API_KEY`; error-body key redaction is tested directly and through `LLMGateway` into a real trace file by `test_other_status_keeps_status_and_provider_message_but_redacts_key` and `test_api_keys_never_appear_in_trace_or_run_bundle`.
+- **Design LLM gateway retry rule**: OpenRouter timeouts map to `ProviderTimeout`; status 429 maps to `ProviderRateLimit` with `Retry-After`; other HTTP errors map to `ProviderError` with safe status/body detail. Tested in `test_providers_openrouter.py`, with the gateway's existing retry/backoff tests covering the shared behavior.
+- All requested rules were implemented as written. The legacy Groq adapter and its tests remain in the repository but are unreachable from active config/factory selection; this preserves prior code history without leaving Groq active.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| OpenRouter credentials never reach exceptions or traces | Removed exact-key and key-shape redaction from `_safe_text` | `test_other_status_keeps_status_and_provider_message_but_redacts_key`; `test_api_keys_never_appear_in_trace_or_run_bundle` |
+| Rate-limit responses preserve `Retry-After` for gateway backoff | Removed the header from `_error_detail` | `test_rate_limit_keeps_status_message_and_retry_after_but_redacts_key` |
+| Unsupported reasoning controls are absent from both judge requests | Always emitted `reasoning: {effort: null}` | Both parameter cases of `test_judge_request_omits_unsupported_reasoning_parameter` |
+| Judge A and Judge B use different model families | Set Judge B to Judge A's Qwen slug | `test_checked_in_config_has_real_models_and_approved_provider` (config validation rejected it) |
+| New output headroom is exact | Changed specialist cap from 6000 to 5999 | `test_checked_in_config_has_real_models_and_approved_provider` |
+| The active factory reads the OpenRouter credential | Mapped `openrouter` back to `GROQ_API_KEY` | `test_missing_api_key_is_a_clear_error_not_a_stack_trace` |
+
+Each break was restored with `git restore` before the next mutation; `git status --short` was clean after the audit.
+
+What I verified by hand:

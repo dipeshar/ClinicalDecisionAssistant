@@ -351,7 +351,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | retrieval_top_k | 5 | |
 | quote_words | 4 to 40 | Total words in a citation quote |
 | temperature | specialists 0.4, judges 0, red team 0.5, chair 0.2 | Starting values. Used only if the model allows it. |
-| reasoning_effort | specialists/chair/red_team low, judges none | Passed to the provider on models that support it (currently openai/gpt-oss-120b and qwen/qwen3.8-27b). Ignored by providers or models that don't. |
+| reasoning_effort | specialists/chair/red_team low, judges unset | Passed to the provider on models that support it (currently openai/gpt-oss-120b). Neither judge model supports reasoning controls, so no reasoning parameter is sent for judge calls. |
 | models | specialist: openrouter/openai/gpt-oss-120b; chair: openrouter/openai/gpt-oss-120b; red_team: openrouter/openai/gpt-oss-120b; judge_a: openrouter/qwen/qwen3-235b-a22b-2507; judge_b: openrouter/meta-llama/llama-3.3-70b-instruct | Specialists and chair share one model. Judge A and Judge B each use a different model family from the specialists and from each other. |
 | privacy | `synthetic_marker` (text that must appear in every case) and `approved_providers` (list of provider names) | Only approved providers may receive a prompt. Every provider named in `models` must be in the list, once the models are set. |
 | injection_scoring | weights per pattern category; threshold.default and threshold.chair | Same pattern categories as the ingest scanner. default applies to specialists, judges, and red team, who all read the case directly; chair is looser, since it never does. |
