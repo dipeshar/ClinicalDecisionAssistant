@@ -157,7 +157,16 @@ def test_checked_in_config_has_real_models_and_approved_provider() -> None:
         assert role_choice.model != "TBD"
     assert config.privacy.approved_providers
     assert config.privacy.approved_providers == ["openrouter"]
-    assert config.models.judge_a.model != config.models.judge_b.model
+    assert config.models.model_dump(mode="json") == {
+        "specialist": {"provider": "openrouter", "model": "openai/gpt-oss-120b"},
+        "chair": {"provider": "openrouter", "model": "openai/gpt-oss-120b"},
+        "red_team": {"provider": "openrouter", "model": "openai/gpt-oss-120b"},
+        "judge_a": {"provider": "openrouter", "model": "qwen/qwen3-235b-a22b-2507"},
+        "judge_b": {"provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct"},
+    }
+    assert config.budget.max_tokens_per_call.specialist == 6000
+    assert config.budget.max_tokens_per_call.chair == 7000
+    assert config.reasoning_effort.judge is None
 
 
 def test_tunable_values_and_missing_resource_files(tmp_path: Path, valid_data: dict[str, Any]) -> None:
