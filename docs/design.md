@@ -72,6 +72,8 @@ Read the case, let 4 specialists argue for 2 rounds, have judges score each roun
 
 One class, `LLMGateway`, in our own code. Every model call from every agent goes through it. There is no proxy, no extra service and no gateway product to install. The only outside thing it talks to is the model provider's API, which we need anyway. API keys come from environment variables.
 
+The system moved from Groq to OpenRouter for every role. Two problems on Groq's free tier drove this: a hard per-minute token ceiling that specialist Round 2 calls and the red team's call structurally exceeded regardless of content, and the judge model being a Preview-status release with no path to a paid tier. OpenRouter removes the first entirely for paid accounts — no platform-level rate limit on paid models — and hosts stable, non-preview releases for every role now in use.
+
 For each call it does five things:
 
 1. **Check privacy.** The provider must be on the approved list, and the prompt must contain no identifier pattern. Otherwise it refuses the call.
@@ -162,6 +164,7 @@ How judges work:
 - Judges also write short notes for each specialist on what to fix. Notes are limited in number and length. They are about sourcing, logic and uncertainty, and never about which recommendation is right, so judges cannot steer the outcome. Notes carry no scores. A note naming a specific claim is the one exception: it doesn't steer the recommendation, but when both judges independently name the same claim, it is binding on that claim.
 - Judges do not see Round 1 scores when they score Round 2, so they are not anchored by them.
 - Judges run on a different model from the specialists. The model used is saved with every score.
+- Judge A and Judge B also run on two different models from each other, not just from the specialists — Judge A on qwen3-235b (Alibaba), Judge B on llama-3.3-70b (Meta). Agreement between them is genuine cross-model, cross-organization evidence, not two calls to the same model checking its own work.
 - If the two judges differ by 2 or more points on the same argument and criterion, we record a disagreement.
 - Code also lists the claims its own check marked ungrounded, so we can compare them with what the judges flagged.
 

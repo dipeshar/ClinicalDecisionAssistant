@@ -339,7 +339,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | Setting | Starting value | Notes |
 |---|---|---|
 | max_rounds | 2 | A constant in code, not a setting. There is no third-round path. |
-| max_tokens_per_call | specialist 2500, judge 900, red team 3000, chair 3500 | Output cap per call |
+| max_tokens_per_call | specialist 6000, judge 900, red team 3000, chair 7000 | Output cap per call |
 | max_total_tokens | 200000 | Input plus output, all roles. Round 2 prompts are larger (own argument, judge notes, three other arguments), so check the count after the first run. |
 | max_calls | 60 | Counts every attempt. Raised from 40 once judging moved to one call per argument. |
 | max_seconds_total | 3600 | Starting value, to tune for your own rate limits and patience. See design.md, "Tuning the budgets for your situation." |
@@ -352,7 +352,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | quote_words | 4 to 40 | Total words in a citation quote |
 | temperature | specialists 0.4, judges 0, red team 0.5, chair 0.2 | Starting values. Used only if the model allows it. |
 | reasoning_effort | specialists/chair/red_team low, judges none | Passed to the provider on models that support it (currently openai/gpt-oss-120b and qwen/qwen3.8-27b). Ignored by providers or models that don't. |
-| models | Set per role | Specialists and chair share one model. Judges A and B use a different one. |
+| models | specialist: openrouter/openai/gpt-oss-120b; chair: openrouter/openai/gpt-oss-120b; red_team: openrouter/openai/gpt-oss-120b; judge_a: openrouter/qwen/qwen3-235b-a22b-2507; judge_b: openrouter/meta-llama/llama-3.3-70b-instruct | Specialists and chair share one model. Judge A and Judge B each use a different model family from the specialists and from each other. |
 | privacy | `synthetic_marker` (text that must appear in every case) and `approved_providers` (list of provider names) | Only approved providers may receive a prompt. Every provider named in `models` must be in the list, once the models are set. |
 | injection_scoring | weights per pattern category; threshold.default and threshold.chair | Same pattern categories as the ingest scanner. default applies to specialists, judges, and red team, who all read the case directly; chair is looser, since it never does. |
 
