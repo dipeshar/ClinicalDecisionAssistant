@@ -67,10 +67,10 @@ def test_human_gate_accepts_each_decision_and_hashes_displayed_report(
 
 def write_cli_config(config: object, root: Path) -> Path:
     data = config.model_dump(mode="json")
-    for name in data["models"]:
-        data["models"][name] = {
-            "provider": "fake", "model": "judge" if name.startswith("judge") else "specialist",
-        }
+    for name in ("specialist", "chair", "red_team"):
+        data["models"][name] = {"provider": "fake", "model": "specialist"}
+    data["models"]["judge_a"] = {"provider": "fake", "model": "judge-a"}
+    data["models"]["judge_b"] = {"provider": "fake", "model": "judge-b"}
     data["privacy"]["approved_providers"] = ["fake"]
     data["paths"] = {
         "cases": str(root / "cases"), "runs": str(root / "runs"),
@@ -120,18 +120,18 @@ def test_real_cli_invocation_reports_missing_api_key_clearly_not_a_stack_trace(
 ) -> None:
     """No `providers=` given (the real `python -m council run` path) builds real
     adapters from config; a missing key must fail cleanly, before ingest or the KB."""
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     config_path = write_cli_config(config, tmp_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     for name in data["models"]:
-        data["models"][name]["provider"] = "groq"
-    data["privacy"]["approved_providers"] = ["groq"]
+        data["models"][name]["provider"] = "openrouter"
+    data["privacy"]["approved_providers"] = ["openrouter"]
     config_path.write_text(yaml.safe_dump(data), encoding="utf-8")
 
     code = main(["run", str(tmp_path / "a_case_that_does_not_exist.md"), "--config", str(config_path)])
 
     assert code == 1
-    assert "GROQ_API_KEY" in capsys.readouterr().err
+    assert "OPENROUTER_API_KEY" in capsys.readouterr().err
     assert not (tmp_path / "runs").exists()
 
 

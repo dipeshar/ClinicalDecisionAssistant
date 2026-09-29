@@ -3,14 +3,12 @@
 import os
 from typing import Final
 
-import groq
-
 from council.models import Config
 from council.providers.base import Provider
-from council.providers.groq import GroqProvider
+from council.providers.openrouter import OpenRouterProvider
 
 # One entry per provider name that can appear in config.yaml's `models` block.
-PROVIDER_ENV_VARS: Final[dict[str, str]] = {"groq": "GROQ_API_KEY"}
+PROVIDER_ENV_VARS: Final[dict[str, str]] = {"openrouter": "OPENROUTER_API_KEY"}
 
 
 class ProviderConfigurationError(RuntimeError):
@@ -30,7 +28,7 @@ def build_provider(name: str) -> Provider:
         raise ProviderConfigurationError(
             f"{env_var} is not set; set it in your environment before running with provider {name!r}"
         )
-    return GroqProvider(client=groq.Groq(api_key=api_key))
+    return OpenRouterProvider(api_key=api_key)
 
 
 def build_providers(config: Config) -> dict[str, Provider]:

@@ -158,9 +158,12 @@ def validate_models(config: Config) -> None:
     for field in ("provider", "model"):
         require(getattr(models.chair, field) == getattr(models.specialist, field),
                 f"models.chair.{field}", "must match the specialist provider and model")
-        require(getattr(models.judge_a, field) == getattr(models.judge_b, field),
-                f"models.judge_b.{field}", "must match Judge A's provider and model")
+    require(models.judge_a.provider == models.judge_b.provider,
+            "models.judge_b.provider", "must match Judge A's provider")
+    require(models.judge_a.model != models.judge_b.model,
+            "models.judge_b.model", "must differ from Judge A's model")
     require(models.judge_a != models.specialist, "models.judge_a", "judges must use a different model from specialists")
+    require(models.judge_b != models.specialist, "models.judge_b", "judges must use a different model from specialists")
     for role, choice in models.model_dump().items():
         require(choice["provider"] in config.privacy.approved_providers,
                 f"models.{role}.provider", "must be in privacy.approved_providers")

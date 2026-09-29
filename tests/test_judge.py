@@ -90,7 +90,7 @@ def test_one_call_scores_one_argument_with_single_object_schema(config: Config, 
 
     assert failed is False and score is not None
     assert score.argument_id == "R1-SURG" and score.judge == "JUDGE_A" and score.round == 1
-    assert score.model == "fake/judge"
+    assert score.model == "fake/judge-a"
     prompt = trace_events(trace_path)[0]["prompt"]
     assert "### R1-SURG (SURG, round 1)" in prompt
     assert "### R1-PHYS" not in prompt

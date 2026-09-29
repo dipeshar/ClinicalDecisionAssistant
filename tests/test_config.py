@@ -15,8 +15,8 @@ def valid_data() -> dict[str, Any]:
     data = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
     for role in ("specialist", "chair", "red_team"):
         data["models"][role] = dict(provider="fake", model="synthetic-specialist")
-    for role in ("judge_a", "judge_b"):
-        data["models"][role] = dict(provider="fake", model="synthetic-judge")
+    data["models"]["judge_a"] = dict(provider="fake", model="synthetic-judge-a")
+    data["models"]["judge_b"] = dict(provider="fake", model="synthetic-judge-b")
     data["privacy"]["approved_providers"] = ["fake"]
     return data
 
@@ -113,7 +113,7 @@ def test_duplicate_key_in_valid_config(tmp_path: Path, valid_data: dict[str, Any
     ("roles.SURG.name", ""), ("roles.SURG.kb", ""), ("roles.SURG.keywords", []),
     ("roles.SURG.persona_prompt", None), ("models.specialist.provider", "TBD"),
     ("models.specialist.model", " "), ("models.chair.model", "other"),
-    ("models.judge_b.model", "other"), ("budget.unknown", 1),
+    ("models.judge_b.model", "synthetic-judge-a"), ("budget.unknown", 1),
     ("injection_scoring.weights.instruction_override", -1),
     ("injection_scoring.threshold.default", 0), ("injection_scoring.threshold.chair", 0),
     ("injection_scoring.threshold.chair", 1),  # below default (rule 29: chair must be the looser one)
@@ -128,9 +128,11 @@ def test_bad_value_has_field_path(tmp_path: Path, valid_data: dict[str, Any], pa
         load_config(write_config(tmp_path, valid_data))
 
 
-def test_judges_differ_from_specialists(tmp_path: Path, valid_data: dict[str, Any]) -> None:
-    valid_data["models"]["judge_a"] = deepcopy(valid_data["models"]["specialist"])
-    valid_data["models"]["judge_b"] = deepcopy(valid_data["models"]["specialist"])
+@pytest.mark.parametrize("judge", ["judge_a", "judge_b"])
+def test_each_judge_differs_from_specialists(
+    tmp_path: Path, valid_data: dict[str, Any], judge: str,
+) -> None:
+    valid_data["models"][judge] = deepcopy(valid_data["models"]["specialist"])
     with pytest.raises(ConfigError, match="different model"):
         load_config(write_config(tmp_path, valid_data))
 
@@ -154,7 +156,8 @@ def test_checked_in_config_has_real_models_and_approved_provider() -> None:
         assert role_choice.provider != "TBD"
         assert role_choice.model != "TBD"
     assert config.privacy.approved_providers
-    assert "groq" in config.privacy.approved_providers
+    assert config.privacy.approved_providers == ["openrouter"]
+    assert config.models.judge_a.model != config.models.judge_b.model
 
 
 def test_tunable_values_and_missing_resource_files(tmp_path: Path, valid_data: dict[str, Any]) -> None:

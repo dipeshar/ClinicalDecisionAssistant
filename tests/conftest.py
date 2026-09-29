@@ -17,10 +17,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.fixture
 def config(tmp_path: Path) -> Config:
     data = yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
-    for role in data["models"]:
-        data["models"][role] = {
-            "provider": "fake", "model": "judge" if role.startswith("judge") else "specialist",
-        }
+    for role in ("specialist", "chair", "red_team"):
+        data["models"][role] = {"provider": "fake", "model": "specialist"}
+    data["models"]["judge_a"] = {"provider": "fake", "model": "judge-a"}
+    data["models"]["judge_b"] = {"provider": "fake", "model": "judge-b"}
     data["privacy"]["approved_providers"] = ["fake"]
     data["paths"]["runs"] = str(tmp_path / "runs")
     path = tmp_path / "test-config.yaml"

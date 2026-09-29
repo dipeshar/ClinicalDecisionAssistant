@@ -84,7 +84,7 @@ def temperature_for(config: Config, role: Role) -> float:
     raise ValueError(f"no temperature configured for role {role!r}")
 
 
-def reasoning_effort_for(config: Config, role: Role) -> str:
+def reasoning_effort_for(config: Config, role: Role) -> str | None:
     if role in SPECIALIST_ROLES:
         return config.reasoning_effort.specialist
     if role in JUDGE_ROLES:

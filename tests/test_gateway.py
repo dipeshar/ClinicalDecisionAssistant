@@ -7,9 +7,6 @@ from pathlib import Path
 import sys
 from threading import Event, Lock
 from time import sleep
-from types import SimpleNamespace
-
-import groq
 import httpx
 import pytest
 
@@ -18,7 +15,7 @@ from council.gateway import GatewayRefusal, LLMGateway, model_choice_for, temper
 from council.models import BudgetConfig, Config, Role, Step
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderResponse, ProviderTimeout
 from council.providers.fake import FakeProvider, Scripted
-from council.providers.groq import GroqProvider
+from council.providers.openrouter import OpenRouterProvider
 from council.trace import TraceWriter
 
 
@@ -406,8 +403,8 @@ def test_role_selects_configured_model_temperature_and_reasoning_effort(config: 
         gateway.call(role=role, step=Step.SPECIALIST, round_number=None, system="s", user="p")
     assert captured == [
         ("specialist", config.temperature.specialist, "low"),
-        ("judge", config.temperature.judge, "medium"),
-        ("judge", config.temperature.judge, "medium"),
+        ("judge-a", config.temperature.judge, "medium"),
+        ("judge-b", config.temperature.judge, "medium"),
         ("specialist", config.temperature.red_team, "high"),
         ("specialist", config.temperature.chair, "none"),
     ]
@@ -503,25 +500,22 @@ def test_api_keys_never_appear_in_trace_or_run_bundle(
     })
     assert fake_key not in run_bundle_like
 
-    groq_key = "gsk_synthetic_fake_key_9f3c7a21e8"
-    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
-    body = {"error": {"message": f"Invalid request; credential {groq_key} was rejected."}}
-    response = httpx.Response(400, request=request, json=body)
-    detailed_error = groq.APIStatusError("bad request", response=response, body=body)
+    openrouter_key = "sk-or-v1-synthetic_fake_key_9f3c7a21e8"
 
-    class ErrorCompletions:
-        def create(self, **kwargs: object) -> object:
-            raise detailed_error
+    def error_response(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, request=request, json={
+            "error": {"message": f"Invalid request; credential {openrouter_key} was rejected."},
+        })
 
-    client = SimpleNamespace(chat=SimpleNamespace(completions=ErrorCompletions()))
+    client = httpx.Client(transport=httpx.MockTransport(error_response))
     detailed_trace = tmp_path / "detailed-trace.jsonl"
     detailed_gateway = LLMGateway(
         config, Budget(config.budget), TraceWriter(detailed_trace, "run-detailed-error"),
-        {"fake": GroqProvider(client=client)}, sleep_fn=lambda seconds: None,
+        {"fake": OpenRouterProvider(api_key=openrouter_key, client=client)}, sleep_fn=lambda seconds: None,
     )
     with pytest.raises(GatewayRefusal, match="status 400"):
         detailed_gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1,
                               system="s", user="Synthetic prompt")
     trace_text = detailed_trace.read_text(encoding="utf-8")
     assert "Invalid request" in trace_text and "status 400" in trace_text
-    assert groq_key not in trace_text
+    assert openrouter_key not in trace_text

@@ -606,7 +606,7 @@ ReasoningEffort = Literal["none", "default", "low", "medium", "high"]
 
 class ReasoningEffortConfig(ContractModel):
     specialist: ReasoningEffort
-    judge: ReasoningEffort
+    judge: ReasoningEffort | None
     red_team: ReasoningEffort
     chair: ReasoningEffort
 

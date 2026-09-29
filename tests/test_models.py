@@ -105,7 +105,7 @@ def contract_samples() -> dict[str, dict[str, Any]]:
     s["ModelChoice"] = dict(provider="fake", model="fake-model")
     s["ModelChoices"] = {role: s["ModelChoice"] for role in ["specialist", "chair", "red_team", "judge_a", "judge_b"]}
     s["RoleValues"] = dict(specialist=0.4, judge=0.0, red_team=0.5, chair=0.2)
-    s["ReasoningEffortConfig"] = dict(specialist="low", judge="low", red_team="low", chair="low")
+    s["ReasoningEffortConfig"] = dict(specialist="low", judge=None, red_team="low", chair="low")
     s["TokenCaps"] = dict(specialist=1500, judge=2500, red_team=2500, chair=3000)
     s["ChairReserve"] = dict(tokens=10000, seconds=60, calls=2)
     s["BudgetConfig"] = dict(max_total_tokens=200000, max_calls=40, max_seconds_total=600,

@@ -11,11 +11,11 @@ paths:
 # load_config rejects TBD entries with the setting's name; tests use synthetic model names.
 # API keys come from environment variables, never from this file.
 models:
-  specialist: { provider: groq, model: openai/gpt-oss-120b }
-  chair:      { provider: groq, model: openai/gpt-oss-120b }
-  red_team:   { provider: groq, model: openai/gpt-oss-120b }
-  judge_a:    { provider: groq, model: qwen/qwen3.8-27b }
-  judge_b:    { provider: groq, model: qwen/qwen3.8-27b }
+  specialist: { provider: openrouter, model: openai/gpt-oss-120b }
+  chair:      { provider: openrouter, model: openai/gpt-oss-120b }
+  red_team:   { provider: openrouter, model: openai/gpt-oss-120b }
+  judge_a:    { provider: openrouter, model: qwen/qwen3-235b-a22b-2507 }
+  judge_b:    { provider: openrouter, model: meta-llama/llama-3.3-70b-instruct }
 
 temperature:            # used only if the model allows it
   specialist: 0.4
@@ -25,7 +25,7 @@ temperature:            # used only if the model allows it
 
 reasoning_effort:
   specialist: low
-  judge: none
+  judge: null                 # neither judge model supports reasoning controls
   red_team: low
   chair: low
 
@@ -49,10 +49,10 @@ budget:
   # the cost of more tokens per call and a bigger share of the per-minute
   # rate limit; lowering it is faster and cheaper but risks truncation.
   max_tokens_per_call:          # output cap per call
-    specialist: 2500
+    specialist: 6000
     judge: 900
     red_team: 3000
-    chair: 3500
+    chair: 7000
 
 retries:
   max_repair_retries_per_turn: 1   # shared by bad JSON and bad citations
@@ -105,7 +105,7 @@ roles:
 
 privacy:
   synthetic_marker: "Synthetic case for a demonstration"
-  approved_providers: [groq]
+  approved_providers: [openrouter]
 
 injection_scoring:
   weights:
