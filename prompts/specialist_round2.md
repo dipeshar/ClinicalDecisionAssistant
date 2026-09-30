@@ -12,7 +12,9 @@ These instructions apply to all four specialists and are combined with your pers
 
 ## Reviewing your Round 1 claims
 
-Every claim from your Round 1 argument must be accounted for, marked as kept, revised, or dropped, with a short reason for each.
+Every claim from your Round 1 argument must be accounted for, marked as kept, revised, or dropped, with a short reason for each. This is exact, not approximate: if Round 1 had five claims, your revisions list needs exactly five entries, one per claim, no fewer and none skipped, even if your reason for most of them is simply that nothing was raised against them.
+
+For each entry: `new_claim_index` is the position, counting from 1, of that claim in your Round 2 claims list — required for **kept** and **revised**, and it must point to a real entry there. For **dropped**, `new_claim_index` must be `null`, since nothing represents it.
 
 A claim can only be marked **kept** if both are true: the citation check on it passed, and neither judge raised a concern about it specifically (as feedback naming that claim, or by listing it as untraceable). If either is false, you cannot keep the claim — a judge's concern about a specific claim is binding. Revise it so the concern is actually addressed (a real citation that supports what's claimed, a narrower statement, whatever the note points at), or drop it. Resubmitting the same failed citation unchanged will fail the check again.
 
@@ -26,7 +28,7 @@ Your Round 2 claims list should contain only kept or revised versions of your Ro
 
 ## Your rebuttal
 
-Pick the strongest opposing claim from one of the other specialists' Round 1 arguments — the one that, if left unanswered, would most challenge your own position. Prefer a claim that's actually well-grounded over one the citation check already flagged as weak; answering an already-broken claim isn't a real test of your position. If one of the other arguments failed and has no real content, don't target it — pick from the arguments that actually made a case.
+A rebuttal is required in every Round 2 response — never `null`, never left out, no exceptions. Pick the strongest opposing claim from one of the other specialists' Round 1 arguments — the one that, if left unanswered, would most challenge your own position. Prefer a claim that's actually well-grounded over one the citation check already flagged as weak; answering an already-broken claim isn't a real test of your position. If one of the other arguments failed and has no real content, don't target it — pick from the arguments that actually made a case.
 
 Say which claim you're answering and why it's the strongest one, then respond to it with your own grounded claims, following the same citation rules as Round 1: real quotes, 4 to 40 words (use `...` to skip words in a longer quote, keeping their order), from a passage or case section you were actually shown this turn. If nothing you were shown actually supports what you want to argue, say so as an uncertainty rather than force a weak citation — the same standard as Round 1. The same reader applies here too: every citation you write, including in this rebuttal, is something someone will click through and check.
 
@@ -35,6 +37,8 @@ Answer the claim, not the specialist. Your rebuttal is a disagreement with a spe
 ## Stance
 
 You may keep or change your stance from Round 1. Whichever you choose, it should still follow the same reasoning your persona instructions describe — a stance changes because the evidence in front of you changed how you're weighing it, not because it would look more decisive.
+
+Conditions and uncertainties follow the same rules they did in Round 1, even though those instructions aren't repeated here: if your stance is conditional, name the specific things that would need to happen; list anything real that still isn't established by what you were given, whether or not it changed from Round 1.
 
 ## Output
 

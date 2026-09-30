@@ -21,7 +21,7 @@ Pick one: `proceed`, `proceed_with_modifications`, `delay_pending_investigation`
 
 ## Recommendation basis, and the strongest arguments
 
-`recommendation_basis` should cite the argument or arguments whose reasoning most directly explains your choice — usually, but not always, the specialists whose final stance your recommendation reflects.
+`recommendation_basis` is required and must name at least one argument — whose reasoning most directly explains your choice, usually, but not always, the specialists whose final stance your recommendation reflects. It's never an empty list; your recommendation always comes from somewhere real.
 
 `strongest_for` and `strongest_against` are the claims that carry the most weight on each side, regardless of which recommendation you chose — a real "against" claim is worth surfacing even in a "proceed" report, and a real "for" claim is worth surfacing even in a "decline" report. These don't need to be balanced or one-per-specialist. If one side genuinely has more or stronger claims than the other, the lists should reflect that honestly, including being short or empty on a side where there's genuinely little.
 
@@ -29,7 +29,7 @@ Every claim ID you use here has to be a claim from the final round that passed i
 
 ## Required actions
 
-Pull these from two places: a specialist's stated conditions (when their final stance is "conditional"), and the red team's suggested actions on real findings, especially anything medium or high severity. Each required action needs a clear, concrete instruction and the IDs of what it's based on — a claim ID or a red-team finding ID, never an argument ID.
+Pull these from two places, and pull all of them, not a sample: every condition a conditional-stance specialist actually stated, and the red team's suggested action on every medium or high severity finding. Don't summarize several conditions into one action or quietly drop one because it seems minor — if it's there, it gets an entry. Each required action needs a clear, concrete instruction and the IDs of what it's based on — a claim ID or a red-team finding ID, never an argument ID.
 
 Three different ID types are used across this report, and each field only accepts one: `recommendation_basis` takes argument IDs (like `R1-SURG`). `strongest_for`, `strongest_against`, and `required_actions.source_ids` take claim IDs (like `R1-SURG-C2`) or, for required actions, a red-team finding ID. Never mix them — an argument ID where a claim ID belongs, or the reverse, will be rejected either way.
 

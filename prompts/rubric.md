@@ -6,7 +6,7 @@ Score each criterion 1 to 5. Use 2 or 4 for a case that falls between the anchor
 
 Does every claim trace to a real source, and does that source actually support what the claim says? This is not the same check the code already runs. Code confirms a cited quote exists in the passage. You judge whether the passage actually backs up the claim being made — a claim can cite a real quote and still overstate or misuse it.
 
-**Capping rule:** if even one claim cites something real but that source does not actually support what the claim asserts, the argument cannot score above 2 for groundedness, no matter how well-grounded the other claims are. A single misused citation is a bigger problem than several weak-but-honest ones, because it means the argument's reasoning cannot be trusted at a glance — it has to be checked claim by claim. Don't average it away.
+**Capping rule:** if even one claim cites something real but that source does not actually support what the claim asserts, the argument cannot score above 2 for groundedness, no matter how well-grounded the other claims are. Don't average it away.
 
 - **5**: Every claim is grounded, and every citation clearly supports it. No claim goes further than its source.
 - **3**: Every claim is honestly grounded, but one or two citations are only loosely related to the claim, or support it weakly rather than clearly. No claim is actually false or misused, just under-supported.
@@ -31,7 +31,7 @@ Does the specialist say what it doesn't know, rather than writing as if everythi
 
 ## Counterarguments addressed (Round 2 only)
 
-Does the rebuttal engage the strongest opposing claim, or does it talk past it? Leave this blank in Round 1.
+Does the rebuttal engage the strongest opposing claim, or does it talk past it? This field is required even when it doesn't apply — set it to `null` in Round 1, don't omit it.
 
 - **5**: The rebuttal engages the opposing claim directly, with a grounded, substantive response. Not a restatement of the specialist's own Round 1 position.
 - **3**: The rebuttal responds, but only partially or generically, without engaging the substance.
@@ -39,4 +39,4 @@ Does the rebuttal engage the strongest opposing claim, or does it talk past it? 
 
 ## Untraceable claims
 
-List any claim whose citation, even if it passed the code's exists-and-matches check, does not actually support what the claim asserts. This is where your judgment adds something the code cannot: the code proves a quote is real, you decide whether it means what the claim says it means. Every claim you list here as untraceable is also the trigger for the groundedness capping rule above — the two should always agree with each other.
+List any claim whose citation, even if it passed the code's exists-and-matches check, does not actually support what the claim asserts — the same distinction the groundedness section above describes, applied here as its own list. Every claim listed here also triggers the groundedness capping rule — the two should always agree.
