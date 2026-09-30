@@ -2553,3 +2553,34 @@ What went wrong / limits:
 Every mutation was detected. All mutated files were restored to committed content, `git status --short` was clean, and the complete suite then passed: 1,170 tests.
 
 What I verified by hand:
+
+## Revert input reservations to a guaranteed bound and contain settlement overruns
+
+Reverted gateway input admission from the empirical divide-by-four approximation to one reserved token per character. `max_total_tokens` remains 800,000; the larger total ceiling addresses late-run admission without weakening the per-call reservation bound. This directly follows the real crash in `run-20260930-151507-cardiac-01`, where OpenRouter reported more prompt tokens than the average-based reservation for a structured, ID-heavy judge prompt.
+
+Added `ReservationMismatch` for the defensive case where provider-reported input or output still exceeds a reservation. `Budget.complete` records the actual provider usage and clears the pending reservation before raising it. `LLMGateway.call` catches that specific mismatch, writes a failed `llm_call` event containing actual and reserved input and output counts (plus the returned usage, output, finish reason, and reasoning), then raises `GatewayRefusal`. Existing agent code converts that into a failed turn, so orchestration can continue to an `INCOMPLETE` report instead of aborting the command.
+
+What went wrong / limits:
+
+- A focused budget test reused one reservation for two independent overrun cases. That matched the old behavior, which left the failed reservation pending. The new path correctly settles and clears it, so the test now creates one reservation per overrun and confirms actual usage is retained and duplicate settlement is rejected.
+- No live model call was made. The regression uses `FakeProvider`, including a deliberately impossible input count, to exercise the defensive path deterministically.
+
+#### Contract check
+
+- **Section 11 `max_total_tokens` reservation note**: `estimate_tokens_in` again returns one token per character (with the existing one-token floor). Tested by `test_character_count_reservation_uses_a_guaranteed_input_upper_bound` using the observed 28,518-character Round 2 prompt size.
+- **Section 11 `max_total_tokens` value**: remains 800,000 in `config.yaml`; the existing checked-in-config test continues to pin it.
+- **Budget settlement and failed-turn behavior**: `ReservationMismatch` in `budget.py` carries actual/reserved input/output counts, settles actual usage, and clears the reservation. `LLMGateway.call` traces it and converts it to `GatewayRefusal`. Tested directly by `test_settlement_overrun_is_a_gateway_refusal_with_full_diagnostic_trace`, at the budget level by `test_settlement_rejects_unknown_duplicate_and_over_bound_usage`, and through an agent by `test_settlement_overrun_fails_the_turn_instead_of_escaping`.
+- All requested rules were implemented exactly. The overrun trace records both sides of both token comparisons and the actual spent tokens remain in the run budget.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| Input admission uses the one-character-per-token upper bound | Restored the divide-by-four approximation | `test_character_count_reservation_uses_a_guaranteed_input_upper_bound` |
+| A settlement mismatch becomes a failed turn rather than escaping | Changed the gateway catch so `ReservationMismatch` escaped | `test_settlement_overrun_fails_the_turn_instead_of_escaping` |
+| The trace diagnostic includes actual and reserved input and output counts | Removed the reserved-output count from the exception detail | `test_settlement_overrun_is_a_gateway_refusal_with_full_diagnostic_trace` |
+| Provider-reported usage is counted even when it exceeds the reservation | Removed actual-usage settlement from the mismatch branch | `test_settlement_overrun_is_a_gateway_refusal_with_full_diagnostic_trace` |
+
+Every mutation was detected and restored before the next one. The complete suite passed afterward: 1,172 tests.
+
+What I verified by hand:
