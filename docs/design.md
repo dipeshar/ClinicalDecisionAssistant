@@ -72,6 +72,8 @@ Read the case, let 4 specialists argue for 2 rounds, have judges score each roun
 
 A run on 2026-09-30 was the first to complete most of its calls successfully — Round 1, most of Round 2, and all sixteen judge calls. It showed the original 200,000-token budget and the gateway's character-based reservation estimate were both calibrated for a pipeline that mostly failed early, not one that mostly succeeds. Both were adjusted once real, complete-run evidence existed to adjust them against.
 
+A follow-up run the same day crashed outright when the tightened estimate was genuinely exceeded by real usage on one call — structured, ID-heavy text tokenizes less efficiently than the plain-prose average the estimate assumed. The estimate was reverted to a guaranteed upper bound; the larger total budget is what actually solves the original problem.
+
 One class, `LLMGateway`, in our own code. Every model call from every agent goes through it. There is no proxy, no extra service and no gateway product to install. The only outside thing it talks to is the model provider's API, which we need anyway. API keys come from environment variables.
 
 The system moved from Groq to OpenRouter for every role. Two problems on Groq's free tier drove this: a hard per-minute token ceiling that specialist Round 2 calls and the red team's call structurally exceeded regardless of content, and the judge model being a Preview-status release with no path to a paid tier. OpenRouter removes the first entirely for paid accounts — no platform-level rate limit on paid models — and hosts stable, non-preview releases for every role now in use.
