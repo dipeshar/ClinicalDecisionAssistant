@@ -12,6 +12,22 @@ class BudgetExhausted(RuntimeError):
     """The gateway must refuse this attempt and record the reason."""
 
 
+class ReservationMismatch(ValueError):
+    """Provider-reported usage exceeded an attempt's conservative reservation."""
+
+    def __init__(self, *, actual_input: int, reserved_input: int,
+                 actual_output: int, reserved_output: int) -> None:
+        self.actual_input = actual_input
+        self.reserved_input = reserved_input
+        self.actual_output = actual_output
+        self.reserved_output = reserved_output
+        super().__init__(
+            "actual usage exceeds the reserved bounds: "
+            f"input actual={actual_input}, reserved={reserved_input}; "
+            f"output actual={actual_output}, reserved={reserved_output}"
+        )
+
+
 @dataclass(frozen=True, eq=False)
 class Reservation:
     """One admitted attempt; identity prevents forged or duplicate settlement."""
@@ -113,7 +129,12 @@ class Budget:
             if reservation not in self._pending:
                 raise ValueError("unknown or already settled reservation")
             if tokens_in > reservation.tokens_in or tokens_out > reservation.max_tokens_out:
-                raise ValueError("actual usage exceeds the reserved bounds")
+                self._state.tokens_used += tokens_in + tokens_out
+                del self._pending[reservation]
+                raise ReservationMismatch(
+                    actual_input=tokens_in, reserved_input=reservation.tokens_in,
+                    actual_output=tokens_out, reserved_output=reservation.max_tokens_out,
+                )
             self._state.tokens_used += tokens_in + tokens_out
             del self._pending[reservation]
             return self._state.model_copy(deep=True)

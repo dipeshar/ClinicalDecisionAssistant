@@ -190,21 +190,15 @@ def test_reservation_accounts_for_prompt_length_not_just_the_output_cap(config: 
     assert provider.calls_made == 0
 
 
-def test_realistic_prompt_estimate_does_not_spuriously_refuse_a_call_that_fits(
+def test_character_count_reservation_uses_a_guaranteed_input_upper_bound(
     config: Config, tmp_path: Path,
 ) -> None:
-    """Today's 28,518-character prompt fits a realistic remaining token balance.
-
-    The old one-character-per-token reservation requested 34,518 tokens after
-    adding the 6,000-token output cap and would refuse this call. The empirical
-    divide-by-four estimate reserves 13,130, while actual provider usage settles
-    the budget at 8,300.
-    """
+    """The observed 28,518-character prompt reserves every input character."""
     system = "s" * 7000
     user = "x" * 21518
-    assert estimate_tokens_in(system) + estimate_tokens_in(user) == 7130
+    assert estimate_tokens_in(system) + estimate_tokens_in(user) == 28518
     budget = Budget(BudgetConfig(
-        max_total_tokens=30000, max_calls=5, max_seconds_total=60,
+        max_total_tokens=50000, max_calls=5, max_seconds_total=60,
         chair_reserve=dict(tokens=10000, calls=1, seconds=10),
         max_tokens_per_call=dict(specialist=6000, judge=900, red_team=3000, chair=7000),
     ))
@@ -217,6 +211,34 @@ def test_realistic_prompt_estimate_does_not_spuriously_refuse_a_call_that_fits(
     assert result.raw_output == "ok"
     assert provider.calls_made == 1
     assert budget.snapshot().tokens_used == 8300
+
+
+def test_settlement_overrun_is_a_gateway_refusal_with_full_diagnostic_trace(
+    config: Config, tmp_path: Path,
+) -> None:
+    provider = FakeProvider("fake", [Scripted(
+        raw_output="provider returned a response", tokens_in=9, tokens_out=6,
+        finish_reason="stop", reasoning="synthetic reasoning",
+    )])
+    gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
+
+    with pytest.raises(GatewayRefusal, match="actual usage exceeds the reserved bounds"):
+        gateway.call(role=Role.JUDGE_A, step=Step.JUDGE, round_number=1,
+                     system="1234", user="5678")
+
+    events = read_events(trace_path)
+    assert len(events) == 1
+    event = events[0]
+    assert event["event_type"] == "llm_call"
+    assert event["error"] == (
+        "actual usage exceeds the reserved bounds: input actual=9, reserved=8; "
+        "output actual=6, reserved=900"
+    )
+    assert event["tokens_in"] == 9 and event["tokens_out"] == 6
+    assert event["raw_output"] == "provider returned a response"
+    assert event["finish_reason"] == "stop" and event["reasoning"] == "synthetic reasoning"
+    assert event["budget_tokens_used"] == 15
+    assert gateway.budget_state().tokens_used == 15
 
 
 def test_timeout_retries_once_then_succeeds(config: Config, tmp_path: Path) -> None:

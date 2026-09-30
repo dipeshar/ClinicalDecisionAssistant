@@ -161,11 +161,17 @@ def test_unknown_role_cannot_get_chair_privileges() -> None:
 
 
 def test_settlement_rejects_unknown_duplicate_and_over_bound_usage() -> None:
+    for incoming, outgoing in [(6, 0), (0, 11)]:
+        overrun_budget = Budget(settings())
+        overrun_ticket = overrun_budget.check_and_reserve(Role.SURG, 5)
+        with pytest.raises(ValueError, match="reserved bounds"):
+            overrun_budget.complete(overrun_ticket, incoming, outgoing)
+        assert overrun_budget.snapshot().tokens_used == incoming + outgoing
+        with pytest.raises(ValueError, match="unknown or already"):
+            overrun_budget.complete(overrun_ticket, incoming, outgoing)
+
     budget = Budget(settings())
     ticket = budget.check_and_reserve(Role.SURG, 5)
-    for incoming, outgoing in [(6, 0), (0, 11)]:
-        with pytest.raises(ValueError, match="reserved bounds"):
-            budget.complete(ticket, incoming, outgoing)
     forged = Reservation(ticket.tokens_in, ticket.max_tokens_out, ticket.seconds_remaining)
     with pytest.raises(ValueError, match="unknown or already"):
         budget.complete(forged, 1, 1)

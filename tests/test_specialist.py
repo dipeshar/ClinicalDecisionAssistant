@@ -310,6 +310,24 @@ def test_gateway_refusal_on_first_call_fails_the_turn_without_a_repair(config: C
     assert "gateway refused" in (argument.failure_reason or "")
 
 
+def test_settlement_overrun_fails_the_turn_instead_of_escaping(
+    config: Config, tmp_path: Path,
+) -> None:
+    gateway, trace_path = make_gateway(config, tmp_path, [Scripted(
+        raw_output=GOOD_JSON, tokens_in=1_000_000, tokens_out=5,
+    )])
+
+    argument = s.run_round1(Role.SURG, case_context(), knowledge_base(), config, gateway, REAL_PROMPTS)
+
+    assert argument.status == "failed"
+    assert argument.repair_used is False
+    assert "actual usage exceeds the reserved bounds" in (argument.failure_reason or "")
+    event = trace_events(trace_path)[0]
+    assert event["error"].startswith(
+        "actual usage exceeds the reserved bounds: input actual=1000000, reserved="
+    )
+
+
 def test_gateway_refusal_on_repair_call_still_marks_repair_used(config: Config, tmp_path: Path) -> None:
     gateway, _ = make_gateway(config, tmp_path, [Scripted(raw_output=BAD_JSON), ProviderError])
     argument = s.run_round1(Role.SURG, case_context(), knowledge_base(), config, gateway, REAL_PROMPTS)

@@ -14,7 +14,7 @@ from threading import Lock
 from time import perf_counter, sleep
 from typing import Callable
 
-from council.budget import Budget, BudgetExhausted, Reservation
+from council.budget import Budget, BudgetExhausted, Reservation, ReservationMismatch
 from council.models import BudgetState, Config, EventType, ModelChoice, PrivacySummary, Role, Round, Step, TraceEvent
 from council.privacy import scan_identifiers
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderTimeout
@@ -42,14 +42,14 @@ class GatewayResult:
 
 
 def estimate_tokens_in(text: str) -> int:
-    """Estimate input tokens for admission only, rounding one token per four characters up.
+    """A guaranteed upper bound on input tokens, used only to size the reservation.
 
-    Real calls observed roughly 4.1 to 4.2 characters per input token. Using
-    four deliberately stays a little pessimistic without the severe late-run
-    refusals caused by reserving one token per character. Successful calls are
-    still settled from provider-reported usage by `Budget.complete`.
+    A real tokenizer cannot produce more tokens than there are characters in
+    the text. This deliberately loose bound prevents actual provider usage from
+    exceeding an admitted reservation; the larger total run budget prevents
+    late-run refusals. Successful calls still settle provider-reported usage.
     """
-    return max(1, (len(text) + 3) // 4)
+    return max(1, len(text))
 
 
 def combined_for_trace(system: str, user: str) -> str:
@@ -197,7 +197,21 @@ class LLMGateway:
                 raise GatewayRefusal(last_error) from error
             else:
                 latency_ms = response.latency_ms
-                state = self._budget.complete(reservation, response.tokens_in, response.tokens_out)
+                try:
+                    state = self._budget.complete(reservation, response.tokens_in, response.tokens_out)
+                except ReservationMismatch as error:
+                    state = self._budget.snapshot()
+                    detail = str(error)
+                    self._trace.write(TraceEvent(
+                        run_id="", seq=0, timestamp="", step=step, event_type=EventType.LLM_CALL,
+                        role=role, round=round_number, model=model_label, prompt=prompt,
+                        retrieved_passage_ids=retrieved_passage_ids, raw_output=response.raw_output,
+                        parsed_ref=None, tokens_in=response.tokens_in, tokens_out=response.tokens_out,
+                        latency_ms=latency_ms, attempt=attempt, repair=repair,
+                        budget_tokens_used=state.tokens_used, error=detail,
+                        finish_reason=response.finish_reason, reasoning=response.reasoning,
+                    ))
+                    raise GatewayRefusal(detail) from error
                 self._trace.write(TraceEvent(
                     run_id="", seq=0, timestamp="", step=step, event_type=EventType.LLM_CALL,
                     role=role, round=round_number, model=model_label, prompt=prompt,
