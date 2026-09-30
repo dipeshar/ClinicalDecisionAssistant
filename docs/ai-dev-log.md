@@ -1640,6 +1640,7 @@ All seven mutations were detected by their named tests. The committed source was
 
 What I verified by hand:
 
+
 ## T14: chair and report checks
 
 `run_chair` (`src/council/agents/chair.py`) first calls T6's `final_arguments`. When that result is empty, it skips `LLMGateway` entirely and returns the section 8 bare report with `"all specialists failed"`, as explicitly required for T14. Otherwise the chair sees only final specialist arguments (Round 2 with Round 1 fallback), judge scores for those exact argument IDs, and the red-team report. Confidence, dissent, the council warning, status, failed-turn lists, citations, the disclaimer, and the human-decision placeholder are not in the chair draft schema and are filled by `src/council/report.py`.
@@ -2517,5 +2518,38 @@ What went wrong / limits:
 | The active factory reads the OpenRouter credential | Mapped `openrouter` back to `GROQ_API_KEY` | `test_missing_api_key_is_a_clear_error_not_a_stack_trace` |
 
 Each break was restored with `git restore` before the next mutation; `git status --short` was clean after the audit.
+
+What I verified by hand:
+
+## Raise the run token ceiling and use empirical input reservations
+
+Raised the checked-in run token ceiling from 200,000 to 800,000 after `run-20260930-142830-cardiac-01` showed the cumulative cost of a pipeline that completes most calls. Changed the gateway's admission estimate from one token per character to `ceil(characters / 4)` for each system and user message. The estimate is used only while deciding whether a call may start; after a successful response, `Budget.complete` still settles the reservation from the provider's real `tokens_in` and `tokens_out` values. Added a regression shaped like the observed 28,518-character Round 2 prompt: the new estimate reserves 7,130 input tokens plus the 6,000 output cap, admits the call within a 20,000-token non-chair balance, and records the fake provider's real 8,300-token total after completion.
+
+Installed the human-supplied chair prompt clarification. It now tells the chair that `recommendation_basis` takes argument IDs, evidence/action fields take claim or red-team finding IDs, and `role_notes` contains specialists only. Existing code-side validation remains authoritative and unchanged.
+
+What went wrong / limits:
+
+- The first focused test run found one stale boundary case: a 200,000-token chair reserve had correctly been invalid when the total ceiling was 200,000, but became valid after the ceiling rose. Updated that invalid test value to the equivalent new boundary, 800,000.
+- During the mutation audit, sandboxed `git restore` could not create `.git/index.lock`. At that point the estimator and config mutations were both present. Both were immediately restored together through the approved Git command, and `git status --short` was clean before the third mutation began.
+- The divide-by-four estimate is deliberately based on the observed 4.1–4.2 characters per input token. It is not a tokenizer and unusual content can tokenize differently. Provider-reported usage remains the source of truth after every successful call.
+- No live model call was made.
+
+#### Contract check
+
+- **Section 11 `max_total_tokens`**: the contract and `config.yaml` now specify 800,000. `Budget.check_and_reserve` continues to enforce this configured ceiling. `test_checked_in_config_has_real_models_and_approved_provider` pins the checked-in value, and the existing budget tests cover enforcement and the chair reserve.
+- **Section 11 reservation note**: `estimate_tokens_in` implements rounded-up one-token-per-four-character admission estimates. `test_realistic_prompt_estimate_does_not_spuriously_refuse_a_call_that_fits` uses today's realistic character counts and checks the exact 7,130-token input estimate and successful admission.
+- **Actual post-call accounting remains provider-owned**: `LLMGateway.call` passes `response.tokens_in` and `response.tokens_out` to `Budget.complete`; the same realistic regression asserts that the settled total is the provider's 8,300 tokens rather than the larger reservation.
+- **Chair ID and role constraints clarified in `prompts/chair.md`**: code enforcement remains in `chair_issues`. It is covered by `test_nonfinal_recommendation_basis_alone_triggers_repair`, `test_unknown_action_source_alone_triggers_repair`, and `test_role_notes_must_cover_exactly_non_failed_final_specialists`.
+- All requested contract changes were implemented exactly. The estimator affects only pre-call admission and does not change settled usage.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| Input reservations use the empirical divide-by-four estimate | Restored the former one-character-per-token calculation | `test_realistic_prompt_estimate_does_not_spuriously_refuse_a_call_that_fits` |
+| The checked-in total token ceiling is 800,000 | Restored `config.yaml` to 200,000 | `test_checked_in_config_has_real_models_and_approved_provider` |
+| Successful calls settle with real provider usage, not the reservation estimate | Passed estimated `tokens_in` to `Budget.complete` instead of `response.tokens_in` | `test_realistic_prompt_estimate_does_not_spuriously_refuse_a_call_that_fits` |
+
+Every mutation was detected. All mutated files were restored to committed content, `git status --short` was clean, and the complete suite then passed: 1,170 tests.
 
 What I verified by hand:
