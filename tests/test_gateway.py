@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from council.budget import Budget
-from council.gateway import GatewayRefusal, LLMGateway, model_choice_for, temperature_for
+from council.gateway import GatewayRefusal, LLMGateway, estimate_tokens_in, model_choice_for, temperature_for
 from council.models import BudgetConfig, Config, Role, Step
 from council.providers.base import Provider, ProviderError, ProviderRateLimit, ProviderResponse, ProviderTimeout
 from council.providers.fake import FakeProvider, Scripted
@@ -179,7 +179,7 @@ def test_tiny_budget_refuses_the_call_and_writes_one_budget_event(config: Config
 def test_reservation_accounts_for_prompt_length_not_just_the_output_cap(config: Config, tmp_path: Path) -> None:
     """A budget tight enough to admit the output cap alone, but not the cap plus a long prompt."""
     budget = Budget(BudgetConfig(
-        max_total_tokens=15, max_calls=5, max_seconds_total=60,
+        max_total_tokens=14, max_calls=5, max_seconds_total=60,
         chair_reserve=dict(tokens=1, calls=1, seconds=10),
         max_tokens_per_call=dict(specialist=10, judge=10, red_team=10, chair=10),
     ))
@@ -188,6 +188,35 @@ def test_reservation_accounts_for_prompt_length_not_just_the_output_cap(config: 
     with pytest.raises(GatewayRefusal, match="token budget"):
         gateway.call(role=Role.SURG, step=Step.SPECIALIST, round_number=1, system="s", user="x" * 10)
     assert provider.calls_made == 0
+
+
+def test_realistic_prompt_estimate_does_not_spuriously_refuse_a_call_that_fits(
+    config: Config, tmp_path: Path,
+) -> None:
+    """Today's 28,518-character prompt fits a realistic remaining token balance.
+
+    The old one-character-per-token reservation requested 34,518 tokens after
+    adding the 6,000-token output cap and would refuse this call. The empirical
+    divide-by-four estimate reserves 13,130, while actual provider usage settles
+    the budget at 8,300.
+    """
+    system = "s" * 7000
+    user = "x" * 21518
+    assert estimate_tokens_in(system) + estimate_tokens_in(user) == 7130
+    budget = Budget(BudgetConfig(
+        max_total_tokens=30000, max_calls=5, max_seconds_total=60,
+        chair_reserve=dict(tokens=10000, calls=1, seconds=10),
+        max_tokens_per_call=dict(specialist=6000, judge=900, red_team=3000, chair=7000),
+    ))
+    provider = FakeProvider("fake", [Scripted(raw_output="ok", tokens_in=6800, tokens_out=1500)])
+    gateway, _ = make_gateway(config, tmp_path, {"fake": provider}, budget=budget)
+
+    result = gateway.call(role=Role.ANAES, step=Step.SPECIALIST, round_number=2,
+                          system=system, user=user)
+
+    assert result.raw_output == "ok"
+    assert provider.calls_made == 1
+    assert budget.snapshot().tokens_used == 8300
 
 
 def test_timeout_retries_once_then_succeeds(config: Config, tmp_path: Path) -> None:
@@ -320,9 +349,8 @@ def test_timeout_twice_exhausts_attempts_and_refuses(config: Config, tmp_path: P
 
 
 def test_failed_attempt_releases_token_reservation(config: Config, tmp_path: Path) -> None:
-    # +1 over the tightest-possible total: system="s" and user="abcdefghij" (10 chars)
-    # each cost at least 1 estimated token (estimate_tokens_in's floor), so the
-    # reservation is tokens_in=11, not 10, plus the cap of 20.
+    # system="s" uses the one-token floor and the ten-character user rounds up
+    # to three tokens, so each attempt reserves four input tokens plus the cap.
     budget = Budget(BudgetConfig(
         max_total_tokens=33, max_calls=6, max_seconds_total=60,
         chair_reserve=dict(tokens=2, calls=1, seconds=10),

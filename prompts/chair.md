@@ -29,11 +29,15 @@ Every claim ID you use here has to be a claim from the final round that passed i
 
 ## Required actions
 
-Pull these from two places: a specialist's stated conditions (when their final stance is "conditional"), and the red team's suggested actions on real findings, especially anything medium or high severity. Each required action needs a clear, concrete instruction and the IDs of what it's based on.
+Pull these from two places: a specialist's stated conditions (when their final stance is "conditional"), and the red team's suggested actions on real findings, especially anything medium or high severity. Each required action needs a clear, concrete instruction and the IDs of what it's based on — a claim ID or a red-team finding ID, never an argument ID.
+
+Three different ID types are used across this report, and each field only accepts one: `recommendation_basis` takes argument IDs (like `R1-SURG`). `strongest_for`, `strongest_against`, and `required_actions.source_ids` take claim IDs (like `R1-SURG-C2`) or, for required actions, a red-team finding ID. Never mix them — an argument ID where a claim ID belongs, or the reverse, will be rejected either way.
 
 ## Notes on each specialist
 
 Write one short note per specialist for every non-failed specialist, explaining how their final position relates to your recommendation. For a specialist whose stance your recommendation reflects, this can be brief. For one it doesn't — a dissenter — say plainly what they argued and why the recommendation went a different way despite it. These notes are what a human reads to understand disagreement, so a dissenting note that's vague or dismissive isn't doing its job.
+
+This is specialists only. You're also shown both judges' scores, to help you write these notes and pick your evidence, but the judges never get an entry here — there's no field for one, and adding one will be rejected. Use what they scored, don't write about them.
 
 ## Narrative
 

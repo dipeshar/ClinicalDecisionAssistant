@@ -102,7 +102,7 @@ def test_duplicate_key_in_valid_config(tmp_path: Path, valid_data: dict[str, Any
 @pytest.mark.parametrize("path,value", [
     ("budget.max_calls", "40"), ("budget.max_calls", True), ("budget.max_calls", 1.5),
     ("budget.max_calls", 0), ("budget.max_seconds_total", -1), ("budget.max_total_tokens", 0),
-    ("budget.max_tokens_per_call.judge", 0), ("budget.chair_reserve.tokens", 200000),
+    ("budget.max_tokens_per_call.judge", 0), ("budget.chair_reserve.tokens", 800000),
     ("budget.chair_reserve.tokens", 2999), ("budget.chair_reserve.seconds", 3600),
     ("budget.chair_reserve.calls", 0), ("retries.max_repair_retries_per_turn", 2),
     ("retries.max_api_attempts", 3), ("retries.api_retry_wait_seconds", -1),
@@ -166,6 +166,7 @@ def test_checked_in_config_has_real_models_and_approved_provider() -> None:
     }
     assert config.budget.max_tokens_per_call.specialist == 6000
     assert config.budget.max_tokens_per_call.chair == 7000
+    assert config.budget.max_total_tokens == 800000
     assert config.reasoning_effort.judge is None
 
 

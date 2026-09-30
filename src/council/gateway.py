@@ -42,16 +42,14 @@ class GatewayResult:
 
 
 def estimate_tokens_in(text: str) -> int:
-    """A safe upper bound on the input token count, used only to size the reservation.
+    """Estimate input tokens for admission only, rounding one token per four characters up.
 
-    No tokenizer is available (AGENTS.md keeps dependencies minimal), and
-    `Budget.complete` requires actual usage to fall within the reservation
-    (budget.py's settlement bound). A real tokenizer never produces more
-    tokens than there are characters, so the character count is always a
-    safe, if loose, bound; the reservation over-reserves briefly and
-    `Budget.complete` releases the unused room once real usage is known.
+    Real calls observed roughly 4.1 to 4.2 characters per input token. Using
+    four deliberately stays a little pessimistic without the severe late-run
+    refusals caused by reserving one token per character. Successful calls are
+    still settled from provider-reported usage by `Budget.complete`.
     """
-    return max(1, len(text))
+    return max(1, (len(text) + 3) // 4)
 
 
 def combined_for_trace(system: str, user: str) -> str:

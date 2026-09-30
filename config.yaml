@@ -33,7 +33,7 @@ budget:
   # Scope and depth: raises the ceiling on how much a run can spend overall.
   # Not usually the binding constraint; a provider's own rate limit (tokens
   # or requests per minute) is typically hit well before this is.
-  max_total_tokens: 200000      # input plus output, all roles
+  max_total_tokens: 800000      # input plus output, all roles
   max_calls: 60                 # counts every attempt
   # Wall-clock patience: how long the whole run is allowed to take. Raising
   # this trades your own waiting time for a better chance of a complete run
