@@ -242,7 +242,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | injection_check | object | CODE | Copied from the red team report, or code-built with verdict `not_run` if the red team never ran (see the rule above) |
 | privacy_summary | PrivacySummary | CODE | Shape below |
 | judge_summary | JudgeSummary | CODE | Shape below |
-| narrative | str | CHAIR (LLM) | Short summary. Every sentence ends with at least one ID tag such as `[R1-SURG-C2]`. Code checks the tags exist. |
+| narrative | str | CHAIR (LLM) | Short summary. Every sentence ends with at least one ID tag such as `[R1-SURG-C2]`. Code checks the tags exist. Sentence-boundary detection does not treat a period inside a decimal number or a recognized common abbreviation as the end of a sentence. |
 | citations_index | list[Citation] | CODE | Every citation used, with its verified flag |
 | disclaimer | str | CODE | Fixed text: decision support only, requires human clinical sign-off, synthetic data |
 | human_decision | HumanDecision or null | CODE | Empty until the gate |

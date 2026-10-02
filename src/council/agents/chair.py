@@ -19,6 +19,12 @@ from council.scoring import final_arguments
 
 ID_TAG = re.compile(r"\[([^\[\]]+)\]")
 SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]+|$)")
+DECIMAL_PERIOD = re.compile(r"(?<=\d)\.(?=\d)")
+ABBREVIATION = re.compile(
+    r"\b(?:e\.g\.|i\.e\.|approx\.|etc\.|vs\.|dr\.|mr\.|mrs\.|ms\.|prof\.|fig\.|eq\.|no\.|st\.)",
+    re.IGNORECASE,
+)
+PROTECTED_PERIOD = "\uE000"
 
 
 def render_json(items: Sequence[object]) -> str:
@@ -51,9 +57,23 @@ def render_argument_views(arguments: Sequence[Argument]) -> str:
     return json.dumps([argument_view(argument) for argument in arguments], indent=2)
 
 
+def split_sentences(narrative: str) -> list[str]:
+    """Split prose at sentence punctuation without splitting decimals or abbreviations."""
+    protected = list(narrative)
+    for match in DECIMAL_PERIOD.finditer(narrative):
+        protected[match.start()] = PROTECTED_PERIOD
+    for match in ABBREVIATION.finditer(narrative):
+        for index in range(match.start(), match.end()):
+            if protected[index] == ".":
+                protected[index] = PROTECTED_PERIOD
+    masked = "".join(protected)
+    return [narrative[match.start():match.end()].strip()
+            for match in SENTENCE.finditer(masked) if match.group().strip()]
+
+
 def narrative_issues(narrative: str, valid_ids: Collection[str]) -> list[RepairIssue]:
     issues: list[RepairIssue] = []
-    sentences = [match.group().strip() for match in SENTENCE.finditer(narrative) if match.group().strip()]
+    sentences = split_sentences(narrative)
     if not sentences:
         return [RepairIssue("narrative", "must contain at least one sentence ending with a real ID tag")]
     for index, sentence in enumerate(sentences, start=1):

@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from council.agents import chair
 from council.budget import Budget
 from council.gateway import LLMGateway
@@ -229,6 +231,27 @@ def test_narrative_requires_real_id_at_end_of_every_sentence(config: Config, tmp
     assert report.recommendation is not None
     repair = events(path)[1]["prompt"]
     assert "must end with at least one ID tag" in repair and "NOPE" in repair
+
+
+def test_narrative_decimal_is_not_a_false_sentence_boundary() -> None:
+    narrative = (
+        "Severe symptomatic aortic stenosis (valve area 0.7 cm², mean gradient 46 mmHg) "
+        "mandates intervention, but the patient’s high-intermediate surgical risk and "
+        "comorbidities necessitate additional safeguards [R2-SURG-C1][R2-ANAES-C1]."
+    )
+
+    assert chair.narrative_issues(narrative, {"R2-SURG-C1", "R2-ANAES-C1"}) == []
+
+
+@pytest.mark.parametrize("narrative", [
+    "Use renal protection, e.g. hydration and nephrotoxin avoidance [R2-PHYS-C3].",
+    "The choice, i.e. surgery versus TAVR, needs review [R2-ADMIN-C4].",
+    "Wait approx. 48 hours before reassessment [RT-1].",
+])
+def test_narrative_common_abbreviation_is_not_a_false_sentence_boundary(narrative: str) -> None:
+    assert chair.narrative_issues(
+        narrative, {"R2-PHYS-C3", "R2-ADMIN-C4", "RT-1"},
+    ) == []
 
 
 def test_narrative_unknown_id_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
