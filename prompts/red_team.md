@@ -30,7 +30,9 @@ A clean injection attempt — flagged by the scanner, but with no apparent effec
 
 ## Writing a finding
 
-Every finding needs: which of the five categories it belongs to, a severity (`low`, `medium`, `high`), a plain description, the specific evidence it rests on (case sections, argument or claim IDs, or your own knowledge base passages — never something that doesn't exist), which specialist roles it affects, and a concrete suggested action.
+Every finding needs: which of the five categories it belongs to, a severity (`low`, `medium`, `high`), a plain description, the specific evidence it rests on, which specialist roles it affects, and a concrete suggested action.
+
+Evidence IDs are limited to four kinds: a case section, an argument ID, a claim ID, or one of your own RED-KB passages. Never a specialist's own knowledge-base passage directly — even when your finding is specifically about what that passage says or doesn't cover. If your point is about a passage a specialist cited, point at the claim that cited it instead; that claim's own citation already shows the real passage underneath it to anyone who looks.
 
 Reserve `high` for something that would genuinely change how much a human should trust the recommendation if left unaddressed — not for anything merely worth mentioning. Severity feeds directly into how much the council's confidence score is reduced, so an inflated severity has a real cost.
 
