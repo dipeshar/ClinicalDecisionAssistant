@@ -17,7 +17,11 @@ from council.agents.red_team import claims_citing_flagged_lines
 from council.report import bare_report, full_report
 from council.scoring import final_arguments
 
-ID_TAG = re.compile(r"\[([^\[\]]+)\]")
+SPECIALIST_ROLE_PATTERN = "|".join(
+    re.escape(role.value) for role in (Role.SURG, Role.PHYS, Role.ANAES, Role.ADMIN)
+)
+SYSTEM_ID_PATTERN = rf"(?:R[12]-(?:{SPECIALIST_ROLE_PATTERN})(?:-C[1-9]\d*)?|RT-[1-9]\d*)"
+ID_TAG = re.compile(rf"\[({SYSTEM_ID_PATTERN}(?:\s*,\s*{SYSTEM_ID_PATTERN})*)\]")
 SENTENCE = re.compile(r"[^.!?\n]+(?:[.!?]+|$)")
 DECIMAL_PERIOD = re.compile(r"(?<=\d)\.(?=\d)")
 ABBREVIATION = re.compile(
@@ -77,10 +81,10 @@ def narrative_issues(narrative: str, valid_ids: Collection[str]) -> list[RepairI
     if not sentences:
         return [RepairIssue("narrative", "must contain at least one sentence ending with a real ID tag")]
     for index, sentence in enumerate(sentences, start=1):
-        tags = [item.strip() for contents in ID_TAG.findall(sentence)
-                for item in contents.split(",")]
-        ending = re.search(r"(?:\[[^\[\]]+\])+(?:[.!?]+)?$", sentence)
-        if ending is None:
+        matches = list(ID_TAG.finditer(sentence))
+        tags = [item.strip() for match in matches for item in match.group(1).split(",")]
+        ends_with_tag = bool(matches) and re.fullmatch(r"[.!?]*", sentence[matches[-1].end():]) is not None
+        if not ends_with_tag:
             issues.append(RepairIssue(f"narrative sentence {index}", "must end with at least one ID tag"))
         unknown = sorted(set(tags) - set(valid_ids))
         if unknown:

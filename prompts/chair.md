@@ -43,6 +43,8 @@ This is specialists only. You're also shown both judges' scores, to help you wri
 
 Write a short summary of the council's finding and reasoning, in your own words, but every sentence has to end with at least one ID tag pointing at something real — a claim, an argument, or a finding — for example: "The council recommends proceeding with modifications, given strong surgical feasibility [R2-SURG-C1] balanced against a documented need to reconfirm kidney function before proceeding [R2-ANAES-C2]." A sentence can cite more than one ID when it's genuinely drawing on more than one source — that's a real synthesis, not a violation. A sentence with no tag at all will be rejected; there's no such thing as a summarizing sentence that doesn't trace to something specific.
 
+If you want to say what the cited evidence implies or leads to, that's a new sentence, with its own tag at the end — never continue past a citation with more unsupported words in the same sentence. A citation always ends its sentence; it's never something you build a further conclusion onto within the same breath.
+
 ## Output
 
 Respond only with JSON matching the schema provided after this prompt. No text outside the JSON.

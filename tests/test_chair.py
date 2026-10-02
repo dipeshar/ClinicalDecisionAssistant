@@ -226,11 +226,11 @@ def test_ungrounded_strongest_claim_triggers_repair(config: Config, tmp_path: Pa
 
 
 def test_narrative_requires_real_id_at_end_of_every_sentence(config: Config, tmp_path: Path) -> None:
-    bad = draft_json(narrative="First sentence has no tag. Second uses a fake tag [NOPE].")
+    bad = draft_json(narrative="First sentence has no tag. Second uses a fake tag [R2-SURG-C99].")
     report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])
     assert report.recommendation is not None
     repair = events(path)[1]["prompt"]
-    assert "must end with at least one ID tag" in repair and "NOPE" in repair
+    assert "must end with at least one ID tag" in repair and "R2-SURG-C99" in repair
 
 
 def test_narrative_decimal_is_not_a_false_sentence_boundary() -> None:
@@ -255,10 +255,19 @@ def test_narrative_common_abbreviation_is_not_a_false_sentence_boundary(narrativ
 
 
 def test_narrative_unknown_id_alone_triggers_repair(config: Config, tmp_path: Path) -> None:
-    bad = draft_json(narrative="The sentence ends in a syntactically valid tag [NOPE].")
+    bad = draft_json(narrative="The sentence ends in a syntactically valid tag [R2-SURG-C99].")
     report, path, _ = run(config, tmp_path, [Scripted(raw_output=bad), Scripted(raw_output=draft_json())])
     assert report.recommendation is not None
-    assert "uses IDs that do not exist: NOPE" in events(path)[1]["prompt"]
+    assert "uses IDs that do not exist: R2-SURG-C99" in events(path)[1]["prompt"]
+
+
+def test_narrative_bracketed_clinical_notation_is_not_an_id_tag() -> None:
+    narrative = (
+        "The risk estimate remains uncertain [95% CI], so clinical review is required "
+        "before proceeding [R2-SURG-C1]."
+    )
+
+    assert chair.narrative_issues(narrative, {"R2-SURG-C1"}) == []
 
 
 def test_narrative_comma_separated_ids_in_one_tag_are_valid(config: Config, tmp_path: Path) -> None:
