@@ -2584,3 +2584,35 @@ What went wrong / limits:
 Every mutation was detected and restored before the next one. The complete suite passed afterward: 1,172 tests.
 
 What I verified by hand:
+
+## Show the previous raw response to every repair call
+
+Added a repair-specific user-message assembly that preserves the original input data, adds the previous attempt's `raw_output` verbatim inside a labeled `Previous response` data block, and keeps the unchanged response schema last. The generated problem list and repair instructions remain in the trusted system message. The shared `call_and_parse_with_repair` path now uses this message for its single repair attempt, so the behavior applies to specialist Round 1, specialist Round 2, Judge A, Judge B, the red team, and the chair.
+
+Installed the human-supplied `prompts/repair_fix.md`, which tells the model to copy unaffected content from the displayed response rather than reconstructing it. This is still model-followed behavior rather than a code-enforced field merge. No live model call was made.
+
+What went wrong / limits:
+
+- The first focused test run found a missing test import for the `prompting` alias. Adding the import fixed the test; the production repair path itself had run successfully.
+- This change gives a stateless repair call the exact prior text but does not guarantee that the model will preserve every unflagged byte. A strict guarantee would require the larger targeted-patch-and-code-merge design.
+- The previous output increases repair prompt size and remains subject to the gateway's existing privacy, injection, and budget checks, as all outbound user data is.
+
+#### Contract check
+
+- **Section 13 rule 1, one shared repair retry**: `call_and_parse_with_repair` still performs exactly one repair attempt for parse and validation problems. It now passes `result.raw_output` into `prompting.repair_user`. Covered end to end by `test_bad_json_then_fixed_uses_the_repair_retry`.
+- **Section 13 rule 1, previous output is verbatim delimited data**: `prompting.repair_user` wraps the unmodified string with `wrap_data("Previous response", ...)` in the user message. `test_repair_user_contains_verbatim_previous_output_as_separate_data` checks exact content, delimiter placement, original-data ordering, and absence from the trusted system message.
+- **Schema remains last**: `prompting.repair_user` delegates final assembly to `render_user` after joining the original and previous-response data blocks. Both repair tests check that the unchanged schema remains at the end.
+- **All roles use the behavior**: `judge.py`, `red_team.py`, and `chair.py`, plus both specialist rounds, use the one shared `call_and_parse_with_repair` helper. No role-specific repair path or new draft model was added.
+- All requested contract changes were implemented exactly.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| The previous raw response is included verbatim in a labeled data block | Removed the previous-response block from `repair_user` | `test_repair_user_contains_verbatim_previous_output_as_separate_data` |
+| The live shared repair path sends the newly assembled repair user | Changed `call_and_parse_with_repair` back to sending the original user message | `test_bad_json_then_fixed_uses_the_repair_retry` |
+| Original data precedes the previous response and the schema remains last | Moved the response schema before both data blocks | `test_repair_user_contains_verbatim_previous_output_as_separate_data` |
+
+Every mutation was detected and restored with `git restore`; `git status --short` was clean after the audit. The complete suite passed before the audit: 1,172 tests. Both focused repair tests passed again on restored committed code.
+
+What I verified by hand:
