@@ -2674,3 +2674,34 @@ What went wrong / limits:
 Both mutations were detected and restored with `git restore`; `git status --short` was clean after each restore. The complete suite passed before the audit: 1,178 tests. All four focused regression cases passed again on restored committed code.
 
 What I verified by hand:
+
+## Distinguish narrative ID tags from bracketed clinical notation
+
+Narrowed the chair narrative's tag detector from any square-bracketed content to the three ID families defined in contracts section 1 and generated throughout the pipeline: specialist argument IDs, their claim IDs, and red-team finding IDs. Both tag collection and the sentence-ending check now use that same detector. Clinical notation such as `[95% CI]` remains ordinary narrative text, while a real-shaped but nonexistent reference such as `[R2-SURG-C99]` is still collected and rejected by the existing known-ID check.
+
+Installed the human-supplied chair prompt clarification that a citation ends its sentence and any further inference belongs in a separately tagged sentence. No live model call was made.
+
+What went wrong / limits:
+
+- No implementation problem occurred. The regression test directly reproduced the false positive observed during the audit before the detector was narrowed.
+- Text in brackets that resembles one of the system's exact ID shapes is intentionally treated as an ID tag and validated, even if the author meant it as prose. That follows the contract's reserved ID syntax.
+
+#### Contract check
+
+- **Section 1 ID shapes**: `SYSTEM_ID_PATTERN` recognizes `R1`/`R2` specialist argument IDs, optional positive claim suffixes, and positive `RT` finding IDs, using the four specialist values from `Role` rather than accepting judge, red-team-role, or chair role names.
+- **Report `narrative` field**: only those shapes count as tags; every sentence must still end in at least one, and every detected ID must occur in the supplied valid-ID set. Implemented in `narrative_issues`.
+- **Ordinary bracketed clinical notation**: `test_narrative_bracketed_clinical_notation_is_not_an_id_tag` uses the audited `[95% CI]` example and a real terminal claim tag.
+- **Genuine bad reference**: `test_narrative_unknown_id_alone_triggers_repair` now uses the correctly shaped but nonexistent `R2-SURG-C99` and confirms it still triggers repair with the exact unknown-ID diagnostic.
+- Existing tests continue to cover separate adjacent tags and comma-separated IDs inside one tag.
+- All requested contract changes were implemented exactly.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| Bracketed clinical notation is not interpreted as an ID tag | Restored the old any-brackets detector | `test_narrative_bracketed_clinical_notation_is_not_an_id_tag` |
+| A real-shaped but nonexistent ID still triggers repair | Removed the known-ID comparison from `narrative_issues` | `test_narrative_unknown_id_alone_triggers_repair` |
+
+Both mutations were detected and restored with `git restore`; `git status --short` was clean after each restore. The complete suite passed before the audit: 1,179 tests. Both focused tests passed again on restored committed code.
+
+What I verified by hand:
