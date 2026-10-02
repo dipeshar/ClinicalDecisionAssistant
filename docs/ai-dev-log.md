@@ -2644,3 +2644,33 @@ What went wrong / limits:
 Every mutation was detected and restored with `git restore`; `git status --short` was clean after each restore. The complete suite passed before the audit: 1,174 tests. Both focused tests passed again on restored committed code.
 
 What I verified by hand:
+
+## Detect chair narrative sentence boundaries without splitting clinical values
+
+Replaced the chair validator's direct use of its punctuation regex with `split_sentences`, which masks nonterminal periods before finding boundaries while returning slices from the original narrative. A period immediately between digits is protected, so a clinical decimal such as `0.7 cm²` stays inside its sentence. Periods in recognized common abbreviations are also protected, including `e.g.`, `i.e.`, `approx.`, `etc.`, `vs.`, common titles, and common figure/equation/number abbreviations. Real sentence-ending punctuation and the requirement that every sentence end in real ID tags are unchanged.
+
+What went wrong / limits:
+
+- The read-only audit reproduced the same false split for decimals, `e.g.`, `i.e.`, and `approx.` before any edit. The original expression treated every period as a sentence ending.
+- The first focused test collection found that `test_chair.py` had never needed to import `pytest`; the new parameterized abbreviation test required that import.
+- Abbreviation recognition is an explicit, reviewable list rather than a natural-language sentence tokenizer. Unknown abbreviations containing periods can be added when encountered without changing the validation model.
+- No live model call was made.
+
+#### Contract check
+
+- **Report `narrative` field**: every sentence must still end with at least one ID tag and all tags must exist. `narrative_issues` continues to enforce both rules. Existing chair tests cover missing and unknown tags.
+- **Sentence-boundary detection**: the contract now states that decimal-number periods and recognized common-abbreviation periods are not boundaries. `split_sentences` implements this with same-length masking so tag checks use the unmodified original text.
+- **Observed decimal regression**: `test_narrative_decimal_is_not_a_false_sentence_boundary` uses tonight's actual `0.7 cm²` chair sentence and its real final tags.
+- **Clinical abbreviations**: the parameterized abbreviation test covers `e.g.`, `i.e.`, and `approx.` with valid end tags.
+- All requested contract changes were implemented exactly.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| A period between digits is not a sentence boundary | Removed decimal-period masking | `test_narrative_decimal_is_not_a_false_sentence_boundary` |
+| Periods in recognized common abbreviations are not sentence boundaries | Removed abbreviation-period masking | All three cases of `test_narrative_common_abbreviation_is_not_a_false_sentence_boundary` |
+
+Both mutations were detected and restored with `git restore`; `git status --short` was clean after each restore. The complete suite passed before the audit: 1,178 tests. All four focused regression cases passed again on restored committed code.
+
+What I verified by hand:
