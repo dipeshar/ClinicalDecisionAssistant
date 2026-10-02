@@ -2616,3 +2616,31 @@ What went wrong / limits:
 Every mutation was detected and restored with `git restore`; `git status --short` was clean after the audit. The complete suite passed before the audit: 1,172 tests. Both focused repair tests passed again on restored committed code.
 
 What I verified by hand:
+
+## Require at least one rebuttal response claim
+
+Installed the human-supplied Round 2 prompt clarification: an uncitable rebuttal response claim may be dropped, but at least one supported response claim must remain. The existing contract and code did not enforce that lower bound. Added it to the Rebuttal table and rule 5, then added a `rebuttal_issues` check that sends an empty list through the existing one-repair path with the message `Rebuttal response_claims: must contain at least one response claim`. If the repair remains empty, the Round 2 turn fails with that reason.
+
+What went wrong / limits:
+
+- No implementation problem occurred. The read-only audit confirmed the gap before editing: `RebuttalDraft` accepted an empty list and `rebuttal_issues` checked only presence and target IDs.
+- The check enforces list cardinality. Citation verification for each remaining response claim continues through the existing grounding checks.
+- No live model call was made.
+
+#### Contract check
+
+- **Rebuttal table, `response_claims`**: now requires at least one claim. Implemented by `rebuttal_issues` in `specialist.py`; tested by `test_empty_rebuttal_response_claims_triggers_repair` and `test_empty_rebuttal_response_claims_fails_if_repair_stays_empty`.
+- **Section 13 rule 5**: an empty rebuttal response list is a validation failure eligible for the shared repair retry. The successful-repair test checks both call events and the exact problem text in the repair prompt.
+- **Failure after the one repair**: the still-empty test verifies the Round 2 argument becomes failed with the exact diagnostic, rather than silently accepting an empty rebuttal.
+- All requested contract changes were implemented exactly.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| A rebuttal must retain at least one response claim, with one repair opportunity | Removed the empty-list check from `rebuttal_issues` | `test_empty_rebuttal_response_claims_triggers_repair`; `test_empty_rebuttal_response_claims_fails_if_repair_stays_empty` |
+| The repair prompt and final failure use a clear, specific diagnostic | Replaced the diagnostic with `Rebuttal: invalid` | `test_empty_rebuttal_response_claims_triggers_repair`; `test_empty_rebuttal_response_claims_fails_if_repair_stays_empty` |
+
+Every mutation was detected and restored with `git restore`; `git status --short` was clean after each restore. The complete suite passed before the audit: 1,174 tests. Both focused tests passed again on restored committed code.
+
+What I verified by hand:
