@@ -12,5 +12,7 @@ __pycache__/
 # OS
 .DS_Store
 
-# Note: demo runs in runs/ are committed on purpose.
-runs/
+# Keep local/debugging runs out of Git; retain the first complete real run as evidence.
+runs/*
+!runs/run-20261002-083031-cardiac-01/
+!runs/run-20261002-083031-cardiac-01/**
