@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from council.agents import prompting as p
 from council.agents import specialist as s
 from council.budget import Budget
 from council.gateway import LLMGateway
@@ -224,11 +225,16 @@ def test_bad_json_then_fixed_uses_the_repair_retry(config: Config, tmp_path: Pat
     events = trace_events(trace_path)
     assert len(events) == 2
     assert [event["repair"] for event in events] == [False, True]
-    # design.md, "LLM gateway": a repair call resends the exact same user
-    # message (data plus schema) unchanged; only system grows.
+    # The repair keeps the original data, adds the failed response verbatim as
+    # delimited user data, and leaves the schema at the end. Trusted system
+    # instructions contain the problem list but never the model's raw output.
     users = [event["prompt"].split("[USER]\n", 1)[1] for event in events]
     systems = [event["prompt"].split("[USER]\n", 1)[0] for event in events]
-    assert users[0] == users[1]
+    previous_block = p.wrap_data("Previous response", BAD_JSON)
+    initial_data, initial_schema = users[0].split("\n\n## Response schema", 1)
+    assert users[1].startswith(initial_data + "\n\n" + previous_block + "\n\n## Response schema")
+    assert users[1].endswith(initial_schema)
+    assert BAD_JSON not in systems[1]
     assert systems[0] != systems[1] and systems[0] in systems[1]
 
 

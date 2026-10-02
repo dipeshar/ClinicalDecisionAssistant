@@ -34,8 +34,9 @@ what precedes it (`grep -n "above" prompts/*.md`):
   the two files. repair_fix.md says "the same instructions, rules, and
   schema you were given for your original task", and our providers are
   single-shot (one call in, one completion out, no conversation history),
-  so that original system content has to be resent in full; `user` is the
-  exact same data and schema as the original attempt, unchanged.
+  so that original system content has to be resent in full. The repair's
+  `user` contains the original data, the previous raw response in its own
+  untrusted-data block, and the original schema, in that order.
 """
 
 from dataclasses import dataclass
@@ -132,6 +133,21 @@ def render_user(data: str, schema_source: SchemaSource) -> str:
     return f"{data}\n\n{schema_block(schema_source)}"
 
 
+def repair_user(original_data: str, previous_raw_output: str,
+                schema_source: SchemaSource) -> str:
+    """Build a repair user message while preserving the prior output verbatim.
+
+    The previous response is model-generated and therefore untrusted. It stays
+    in `user`, inside the same explicit data delimiters used for case text and
+    other model output. The schema remains the final prompt section.
+    """
+    data = join_sections([
+        original_data,
+        wrap_data("Previous response", previous_raw_output),
+    ])
+    return render_user(data, schema_source)
+
+
 def specialist_parts(role: Role, round_number: Round, data_blocks: Sequence[tuple[str, str]],
                      prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> PromptParts:
     """system: persona_<role>.md, then specialist_round<N>.md; see the module docstring."""
@@ -190,8 +206,8 @@ def repair_system(original_system: str, issues: Sequence[RepairIssue],
     `original_system` is whatever `*_parts` produced for the turn being repaired.
     repair_intro.md introduces the problem list ("listed below"); repair_fix.md
     refers back to it ("the problems above"), so the list has to sit between
-    the two files, not after both. `user` is not touched here: the caller resends
-    the exact same rendered user message (data plus schema) unchanged.
+    the two files, not after both. The caller separately builds the repair user
+    message from the original data, previous raw response, and schema.
     """
     intro = load_prompt("repair_intro.md", prompts_dir)
     fix = load_prompt("repair_fix.md", prompts_dir)

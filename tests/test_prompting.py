@@ -163,16 +163,20 @@ def test_repair_system_puts_the_issue_list_between_intro_and_fix() -> None:
     assert "2. Claim R1-SURG-C2: cites passage SURG-KB-99, which was not shown this turn" in system
 
 
-def test_repair_call_resends_the_exact_same_user_message_unchanged() -> None:
-    """design.md, "LLM gateway": a repair call's user message is the same
-    original data as the first attempt, unchanged, with the schema still at
-    the end. Only system grows for a repair."""
+def test_repair_user_contains_verbatim_previous_output_as_separate_data() -> None:
+    """The prior response is untrusted user data, never system instructions."""
     parts = p.specialist_parts(Role.SURG, 1, [("Case", "Synthetic case text")], REAL_PROMPTS)
-    user = p.render_user(parts.user, ArgumentDraft)
+    previous = "  {\n  \"claims\": [\"unchanged — exactly\"]\n}\n  "
+    user = p.repair_user(parts.user, previous, ArgumentDraft)
     repaired_system = p.repair_system(parts.system, [p.RepairIssue("X", "Y")], REAL_PROMPTS)
-    # The caller resends `user` verbatim; prompting.py itself never touches it
-    # for a repair. Confirm it stays byte-identical across both calls.
-    assert user == p.render_user(parts.user, ArgumentDraft)
+    block = p.wrap_data("Previous response", previous)
+
+    assert user.startswith(parts.user + "\n\n")
+    assert block in user
+    assert previous in block
+    assert user.index(parts.user) < user.index(block) < user.index("## Response schema")
+    assert user.endswith(p.schema_block(ArgumentDraft))
+    assert previous not in repaired_system
     assert repaired_system != parts.system
 
 

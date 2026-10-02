@@ -2,6 +2,8 @@
 
 Produce a corrected response that fixes every problem listed above, following the same instructions, rules, and schema you were given for your original task — nothing about your task has changed except that your last attempt didn't meet it.
 
+Your previous response is shown below, exactly as you wrote it. Copy forward, word for word, anything not named as a problem above — don't retype it from memory or paraphrase it, copy the actual text. Only change what's specifically listed as wrong.
+
 Fix only what's broken. Anything in your previous response that wasn't flagged as a problem above should stay as it was — don't rewrite claims, change your stance, or introduce new content that has nothing to do with the listed problems. This is a correction, not a fresh attempt.
 
 Your response must still be the complete object the schema asks for, every field, every list entry, not just the part you changed. "Stay as it was" means resubmit that part with the exact same content, not leave it out because it was already fine, and not change it either, even to something that also looks reasonable. If your original response had five items in a list and only one had a problem, your corrected response still needs all five — four byte-for-byte unchanged, one fixed. Fixing one problem is never a reason to touch a field that wasn't named in the list above, including setting it to null or leaving it empty. If it worked the first time, it goes back in exactly as it was.

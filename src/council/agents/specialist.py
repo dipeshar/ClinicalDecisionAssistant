@@ -111,8 +111,9 @@ def call_and_parse_with_repair(
     `TypeAdapter` such as `list[ScoreDraft]` for T11's judge response).
 
     `parts.system`/`parts.user` are sent as two separate messages (design.md,
-    "Prompt injection defense"); the schema is appended to `user` once, and the
-    same rendered `user` is resent unchanged on a repair, only `system` grows.
+    "Prompt injection defense"). The initial user message is the original data
+    followed by the schema. A repair user message inserts the first attempt's
+    raw output as a labeled, delimited data block before that same schema.
 
     If parsing fails, or `find_issues(draft)` reports any problem with an
     otherwise-valid draft, one repair retry follows (rule 1: bad JSON and
@@ -138,9 +139,10 @@ def call_and_parse_with_repair(
         RepairIssue("Response", parse_error or "could not parse as JSON matching the schema"),
     ]
     repair_system = prompting.repair_system(parts.system, repair_issues, prompts_dir)
+    repair_user = prompting.repair_user(parts.user, result.raw_output, schema_model)
     try:
         repaired = gateway.call(role=role, step=step, round_number=round_number,
-                                system=repair_system, user=user, repair=True,
+                                system=repair_system, user=repair_user, repair=True,
                                 retrieved_passage_ids=list(retrieved_ids))
     except GatewayRefusal as error:
         return None, True, f"gateway refused the repair attempt: {error}", None
