@@ -90,7 +90,7 @@ Rules:
 
 - Agents never call a provider directly. There is no other path to a model.
 - A retry, and a repair call after bad JSON, is a new call through the gateway. It counts against the budget and appears in the trace.
-- A repair call's system message is the original instructions plus the repair instructions and the generated problem list, appended after them. Its user message is the same original data as the first attempt, unchanged, with the schema still at the end.
+- A repair call's system message is the original instructions plus the repair instructions and the generated problem list, appended after them. Its user message contains the same original input data as the first attempt, then the previous attempt's `raw_output` verbatim in a labeled, delimited data block, with the schema still at the end. A repair call is stateless: previously the model was told to preserve anything that was not flagged without being shown its prior answer, which asked it to reconstruct that answer from memory. Showing the real text removes that guesswork, though preserving it remains an instruction for the model to follow, not a guarantee enforced by code.
 - Bad JSON is not the gateway's job. The code checks handle it and ask again through the gateway.
 - Each provider has a small adapter (about 30 lines) that uses the provider's own SDK. We do not use a gateway library such as LiteLLM.
 - The budget counter and the trace sequence number are guarded by a lock, because specialists run in parallel.
