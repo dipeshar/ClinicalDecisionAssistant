@@ -111,7 +111,7 @@ The case Markdown file must have these 8 headings. A missing heading is recorded
 | target_argument_id | str | LLM | Must be a real Round 1 argument from a different role |
 | target_claim_id | str | LLM | Must be a claim inside that argument |
 | why_strongest | str | LLM | Why this is the strongest opposing claim |
-| response_claims | list[Claim] | LLM | The answer, grounded like any other claim |
+| response_claims | list[Claim] | LLM | The answer, grounded like any other claim. Must contain at least one response claim. |
 
 **Revision** (Round 2 only, one per Round 1 claim of the same specialist)
 
@@ -391,7 +391,7 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 2. A claim needs at least 1 citation, or it is `ungrounded`.
 3. A cited ID must exist, and it must be a case section or a passage the specialist was shown in that turn. In Round 2 this includes the passages it cited in Round 1.
 4. **Quote check.** Ignore upper and lower case, extra spaces, and quote or dash styles. Split the quote at `...` and require each part to appear in the passage, in order. The whole quote must be 4 to 40 words. If a citation still fails after the repair retry, its claim is `ungrounded`. This proves the quote exists, not that it supports the claim.
-5. A rebuttal target must be a real Round 1 argument from a different role, and `target_claim_id` must be a claim inside it.
+5. A rebuttal target must be a real Round 1 argument from a different role, and `target_claim_id` must be a claim inside it. Its `response_claims` must contain at least one claim. An empty list is a validation failure eligible for the same repair retry as other response validation failures.
 6. Each non-failed argument of a round is judged with its own call, per judge. A failed judge call for one argument does not affect calls for other arguments.
 7. Red team evidence IDs must exist.
 8. Chair IDs (basis, strongest claims, actions, narrative tags) must exist. The basis and the strongest claims must come from the final round (Round 2, or Round 1 when Round 2 was skipped for that specialist), so a claim that was dropped cannot be cited as strongest. Strongest claims must also be `grounded`. The chair's claim text is copied in by code, not retyped.

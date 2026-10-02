@@ -287,6 +287,51 @@ def test_no_rebuttal_fails_the_turn_if_still_missing_after_repair(config: Config
     assert argument is not None and argument.status == "failed"
 
 
+def test_empty_rebuttal_response_claims_triggers_repair(config: Config, tmp_path: Path) -> None:
+    revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
+    empty_rebuttal = {
+        "target_argument_id": "R1-PHYS",
+        "target_claim_id": "R1-PHYS-C1",
+        "why_strongest": "It is the clearest opposing claim.",
+        "response_claims": [],
+    }
+    gateway, trace_path = make_gateway(config, tmp_path, [
+        Scripted(raw_output=round2_json(revisions, rebuttal=empty_rebuttal), tokens_in=5, tokens_out=5),
+        Scripted(raw_output=round2_json(revisions), tokens_in=5, tokens_out=5),
+    ])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), ALL_ROUND1, [], REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "ok"
+    assert argument.repair_used is True
+    assert argument.rebuttal is not None and len(argument.rebuttal.response_claims) == 1
+    events = trace_events(trace_path)
+    assert [event["repair"] for event in events] == [False, True]
+    assert "Rebuttal response_claims: must contain at least one response claim" in events[1]["prompt"]
+
+
+def test_empty_rebuttal_response_claims_fails_if_repair_stays_empty(config: Config, tmp_path: Path) -> None:
+    revisions = [revision("R1-SURG-C1", "kept", 1), revision("R1-SURG-C2", "dropped", None)]
+    empty_rebuttal = {
+        "target_argument_id": "R1-PHYS",
+        "target_claim_id": "R1-PHYS-C1",
+        "why_strongest": "It is the clearest opposing claim.",
+        "response_claims": [],
+    }
+    response = round2_json(revisions, rebuttal=empty_rebuttal)
+    gateway, _ = make_gateway(config, tmp_path, [
+        Scripted(raw_output=response, tokens_in=5, tokens_out=5),
+        Scripted(raw_output=response, tokens_in=5, tokens_out=5),
+    ])
+
+    argument = s.run_round2(Role.SURG, case_context(), knowledge_base(), config, gateway,
+                            own_round1(), ALL_ROUND1, [], REAL_PROMPTS)
+
+    assert argument is not None and argument.status == "failed"
+    assert argument.failure_reason == "Rebuttal response_claims: must contain at least one response claim"
+
+
 def test_binding_judge_concern_kept_gets_overridden(config: Config, tmp_path: Path) -> None:
     """Both judges flag C1; the specialist keeps it anyway both times; code overrides it."""
     scores = [

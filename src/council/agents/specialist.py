@@ -340,9 +340,12 @@ def binding_kept_issues(draft: ArgumentDraft, binding_ids: Collection[str]) -> l
 
 def rebuttal_issues(draft: ArgumentDraft, own_role: Role, round1_arguments: Sequence[Argument]) -> list[RepairIssue]:
     """Rule 5: the rebuttal targets a real Round 1 argument from a different role, and a
-    claim that's actually inside it. A rebuttal is required every Round 2 turn."""
+    claim that's actually inside it. A rebuttal is required every Round 2 turn and
+    must contain at least one response claim."""
     if draft.rebuttal is None:
         return [RepairIssue("Rebuttal", "a rebuttal is required in Round 2")]
+    if not draft.rebuttal.response_claims:
+        return [RepairIssue("Rebuttal response_claims", "must contain at least one response claim")]
     by_id = {argument.argument_id: argument for argument in round1_arguments
              if argument.round == 1 and argument.status != "failed"}
     target = by_id.get(draft.rebuttal.target_argument_id)
