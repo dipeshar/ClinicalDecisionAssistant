@@ -2788,3 +2788,35 @@ Not applicable: T20 is a delivery task and does not change `docs/data-contracts.
 Not applicable: this entry records documentation and presentation artifacts only.
 
 What I verified by hand:
+
+## Standalone read-only trace watcher
+
+Added `tools/watch_run.py`, an independent second-terminal viewer that accepts one existing run folder and polls only its `trace.jsonl`. It buffers a partial final line until the writer completes it, prints one fixed, human-readable line per valid event, and stops after the human-decision event. Its wording stays within what the trace proves: a provider attempt responded, a repair or API retry was attempted, a call failed with the recorded safe reason, or a block/budget/validation/decision event was recorded. It never calls a result "finished", "successful", or "ok", and never prints prompt or raw-output fields.
+
+No execution-path file changed: `cli.py`, `orchestrator.py`, `gateway.py`, all agent modules, and `trace.py` are untouched. Running the watcher against the committed complete contrast run replayed all 35 real events and exited on its saved decision. The full suite passes: 1,193 tests.
+
+What went wrong / limits:
+
+- Pytest's default Windows temporary root became unreadable during a repeat run, before test setup. Re-running with `--basetemp .venv/pytest-watch` and `.venv/pytest-full` succeeded; this was an environment permission problem, not a watcher failure.
+- A trace event proves an attempt returned, not that later parsing or validation accepted it. The watcher deliberately does not infer turn completion or accepted judge scores.
+- A run that aborts before writing a human-decision event remains watched until the user presses Ctrl+C.
+
+#### Contract check
+
+No `docs/data-contracts.md` field or execution rule changes. The watcher reads existing `TraceEvent` JSON as untrusted dictionaries so a future unknown `event_type` can be reported generically instead of crashing. Malformed complete lines receive a fixed warning that never repeats their content; incomplete lines stay buffered.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| Newly appended trace lines are observed | Returned instead of polling again after the current batch | `test_watches_lines_appended_after_start` |
+| A partial final line is buffered until its newline arrives | Parsed the unterminated bytes immediately and discarded the buffer | `test_holds_a_partial_final_line_until_it_is_complete` |
+| Repair attempts are labelled without claiming validation | Removed the `repair attempted` label | `test_reports_retry_repair_and_failure_without_claiming_validation` |
+| Failed calls show the recorded safe reason rather than looking like responses | Reported every LLM event as `model responded`, even with `error` set | `test_reports_retry_repair_and_failure_without_claiming_validation` |
+| Unknown future event types are reported generically | Mislabelled every unknown event as a model response | `test_unknown_event_type_gets_an_honest_generic_line` |
+| A watcher may start before `trace.jsonl` exists | Raised immediately when the file was absent instead of continuing to poll | `test_waits_when_trace_does_not_exist_yet` |
+| Malformed lines never echo their potentially sensitive content | Included the raw malformed bytes in the warning | `test_skips_malformed_complete_line_without_printing_its_content` |
+
+All seven mutations were detected and restored with `git restore`. The committed watcher tests passed again after restoration. The watcher and test files were clean after every restore; unrelated pre-existing run-artifact changes remained untouched.
+
+What I verified by hand:
