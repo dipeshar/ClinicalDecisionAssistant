@@ -420,6 +420,8 @@ A specialist whose final stance is not in the accepted list is a **dissenter**. 
 
 29. **Gateway-level injection scoring.** In addition to the identifier check (rule 20), the gateway scores every outbound prompt, system and user combined, against the same weighted injection pattern list ingest uses (section 3). If the total score meets or exceeds the role's configured threshold, the call is refused, an `injection_block` trace event is written (kind, matched pattern names, and total score only, never the matched text), and the turn counts as failed immediately, with no repair retry — resending identical content would be blocked identically. Specialists, judges, and the red team share the stricter threshold, since all three read the case document directly. The chair, which never reads the case directly, uses a looser threshold.
 
+30. **Null values in explanation dictionaries.** Any field shaped as a dictionary of fixed keys to string explanations — `judge.justification`, `chair.role_notes`, and any future field of the same shape — treats a null value for a key the same as that key being omitted entirely, before validation runs. A model writing "nothing to say here" as null and a model simply leaving the key out mean the same thing; both are accepted. This applies uniformly across every role's schema, not as a fix scoped to one field.
+
 ## 14. Run folder
 
 Each run writes one folder, `runs/<run_id>/`:
