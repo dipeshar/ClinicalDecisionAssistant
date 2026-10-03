@@ -1,0 +1,729 @@
+{
+  "code_ungrounded_claims": [
+    "R1-SURG-C5",
+    "R1-PHYS-C4",
+    "R1-ANAES-C3",
+    "R1-ANAES-C4",
+    "R1-ADMIN-C2",
+    "R1-ADMIN-C3",
+    "R1-ADMIN-C5",
+    "R2-PHYS-C4",
+    "R2-ANAES-C1",
+    "R2-ANAES-C2",
+    "R2-ANAES-C3",
+    "R2-ANAES-C5",
+    "R2-ADMIN-C2",
+    "R2-ADMIN-C3",
+    "R2-ADMIN-C5"
+  ],
+  "failed_judge_calls": [],
+  "per_argument": [
+    {
+      "argument_id": "R1-SURG",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 1,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 4.5,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "SURG",
+      "round": 1
+    },
+    {
+      "argument_id": "R1-PHYS",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "PHYS",
+      "round": 1
+    },
+    {
+      "argument_id": "R1-ANAES",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 1,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 4.5,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ANAES",
+      "round": 1
+    },
+    {
+      "argument_id": "R1-ADMIN",
+      "disagreement_count": 1,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 3,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 3.5,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ADMIN",
+      "round": 1
+    },
+    {
+      "argument_id": "R2-SURG",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 1,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 4.5,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "SURG",
+      "round": 2
+    },
+    {
+      "argument_id": "R2-PHYS",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "PHYS",
+      "round": 2
+    },
+    {
+      "argument_id": "R2-ANAES",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 1,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 4.5,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ANAES",
+      "round": 2
+    },
+    {
+      "argument_id": "R2-ADMIN",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ADMIN",
+      "round": 2
+    }
+  ],
+  "round_comparison": [
+    {
+      "revisions": {
+        "dropped": 0,
+        "kept": 3,
+        "revised": 2
+      },
+      "role": "SURG",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": 0.0,
+        "round1": 4.833333333333333,
+        "round2": 4.833333333333333
+      },
+      "ungrounded_claims": {
+        "round1": 1,
+        "round2": 0
+      }
+    },
+    {
+      "revisions": {
+        "dropped": 1,
+        "kept": 3,
+        "revised": 0
+      },
+      "role": "PHYS",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": 0.0,
+        "round1": 5.0,
+        "round2": 5.0
+      },
+      "ungrounded_claims": {
+        "round1": 1,
+        "round2": 1
+      }
+    },
+    {
+      "revisions": {
+        "dropped": 0,
+        "kept": 2,
+        "revised": 2
+      },
+      "role": "ANAES",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": 0.0,
+        "round1": 4.833333333333333,
+        "round2": 4.833333333333333
+      },
+      "ungrounded_claims": {
+        "round1": 2,
+        "round2": 4
+      }
+    },
+    {
+      "revisions": {
+        "dropped": 1,
+        "kept": 2,
+        "revised": 2
+      },
+      "role": "ADMIN",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": 0.5,
+        "round1": 4.5,
+        "round2": 5.0
+      },
+      "ungrounded_claims": {
+        "round1": 3,
+        "round2": 3
+      }
+    }
+  ],
+  "run_id": "run-20261003-030231-contrast-02",
+  "scores": [
+    {
+      "argument_id": "R1-SURG",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": "R1-SURG-C4",
+          "note": "Clarify that while SURG-KB-05 supports TAVI as preferred in high-risk patients, it does not address outcomes in those with recent stroke or severe frailty\u2014important context for weighing risks."
+        },
+        {
+          "claim_id": "R1-SURG-C5",
+          "note": "Strengthen the link between the patient\u2019s expressed desire to avoid hospitalization and procedural necessity by noting how TAVI, though less invasive, still requires hospital admission and recovery time."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider distinguishing between short-term procedural survival and longer-term quality-of-life outcomes, which may better align with patient goals around comfort and family time."
+        },
+        {
+          "claim_id": "R1-SURG-C3",
+          "note": "While STS and EuroSCORE II are cited accurately, note that these scores were designed for surgical AVR and may not fully capture risk for TAVI in this complex population."
+        },
+        {
+          "claim_id": null,
+          "note": "Emphasize shared decision-making: the cardiologist explicitly avoids recommending intervention, underscoring the need to prioritize patient values over technical feasibility alone."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "All claims cite relevant sources that directly support them. For example, R1-SURG-C2 correctly uses SURG-KB-03 to link frailty to higher complication rates and cites the patient's Clinical Frailty Scale score of 7 from CASE-comorbidities.",
+        "logic": "The stance against TAVI follows coherently from the claims about high risk, limited benefit, and patient preferences. Each claim contributes to the conclusion without contradiction.",
+        "uncertainty": "The argument explicitly lists three key uncertainties\u2014anaesthetic risk, long-term survival benefit in dialysis patients, and functional decline\u2014calibrated appropriately to the available evidence."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-PHYS",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": "R1-PHYS-C1",
+          "note": "Clarify that 'median survival under two years' is a population-level estimate; individual prognosis may vary, especially post-stroke and with frailty. Consider citing how recent stroke modifies this risk."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider discussing how dialysis dependence specifically affects TAVI outcomes, as this is a major comorbidity not fully addressed in current claims."
+        },
+        {
+          "claim_id": "R1-PHYS-C4",
+          "note": "The claim about EF improvement relies on general physiology; add caution that recovery may be limited in a patient with chronic kidney disease and post-stroke frailty."
+        },
+        {
+          "claim_id": null,
+          "note": "The conditions for proceeding are well-framed but could be strengthened by specifying what 'medically optimized' entails\u2014e.g., dialysis timing, neuro checks, or cardiac stabilization."
+        },
+        {
+          "claim_id": null,
+          "note": "While NT-proBNP is elevated, consider noting that levels can be chronically high in dialysis patients, potentially reducing specificity for acute valve-related strain."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "Each claim cites directly supportive sources: PHYS-KB-01 supports R1-PHYS-C1's survival prognosis; PHYS-KB-07 directly backs R1-PHYS-C2 on lack of medical therapy; PHYS-KB-03 and CASE-tests jointly support R1-PHYS-C3 on NT-proBNP; PHYS-KB-08 and CASE-diagnoses support R1-PHYS-C4 on EF improvement post-intervention.",
+        "logic": "The stance follows clearly: given the poor prognosis without intervention and lack of effective medical therapy, intervention is conditionally supported, but only if goals of care and procedural stability are confirmed\u2014consistent with all claims and the patient's context.",
+        "uncertainty": "Explicitly acknowledges key unknowns: peri-procedural risk in this high-comorbidity population, the patient\u2019s precise wishes given communication challenges, and the balance between symptom relief and hospitalisation burden."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ANAES",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": "R1-ANAES-C4",
+          "note": "Clarify that ANAES-KB-08 refers to combined valve and bypass surgery, not isolated surgical AVR, to avoid overgeneralizing the recovery advantage of TAVI."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider specifying how 'neurological stability' will be assessed\u2014e.g., repeat imaging or clinical exam\u2014since this is a key condition for proceeding."
+        },
+        {
+          "claim_id": null,
+          "note": "The blood-management plan could include whether erythropoietin optimization is ongoing, given she's already on ESA therapy."
+        },
+        {
+          "claim_id": null,
+          "note": "Note that frailty improved slightly post-stroke in mobility context; clarify if CFS 7 reflects current or pre-stroke status, as this affects risk interpretation."
+        },
+        {
+          "claim_id": null,
+          "note": "Emphasize that patient\u2019s expressed goal of comfort must actively shape benefit-risk discussion, not just be acknowledged in passing."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "All claims cite relevant sources that directly support them: ASA class IV is correctly applied based on multiple severe comorbidities (C1); dialysis planning is warranted given ESRD and high AKI risk (C2); anaemia management is indicated pre-procedure (C3); TAVI\u2019s lower physiological burden is supported by comparison to surgical recovery (C4).",
+        "logic": "The stance follows from the claims: identifying modifiable risks and procedural advantages leads logically to a conditional recommendation, with clear conditions tied to each identified risk factor. No contradictions exist.",
+        "uncertainty": "Explicit uncertainties are named\u2014stroke timing, ICU availability, pulmonary hypertension impact\u2014and acknowledged as unresolved, showing appropriate caution despite technical feasibility."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ADMIN",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": "R1-ADMIN-C5",
+          "note": "The cited policy on contrast allergy premedication does not apply to penicillin allergy. Reassess whether this requirement is valid, as cross-reactivity between penicillin and contrast is not established."
+        },
+        {
+          "claim_id": null,
+          "note": "Clarify whether the TAVI procedure itself will involve iodinated contrast, as that determines if any allergy protocol\u2014even if correctly indicated\u2014is actually needed."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider specifying that heart team review (R1-ADMIN-C2) remains necessary even when surgical AVR is not feasible, to ensure consensus on TAVI appropriateness given overall prognosis."
+        },
+        {
+          "claim_id": null,
+          "note": "Ensure the goals-of-care discussion explicitly includes trade-offs between symptom relief from TAVI and risks given recent stroke, dialysis dependence, and frailty."
+        },
+        {
+          "claim_id": null,
+          "note": "Verify current institutional policies on antibiotic prophylaxis for penicillin-allergic patients undergoing TAVI, as this may be more relevant than contrast protocols."
+        }
+      ],
+      "groundedness": 2,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "Claim R1-ADMIN-C5 cites ADMIN-KB-05 about contrast allergy premedication, but the patient has a documented anaphylaxis to penicillin, not contrast media. The source does not support applying it to penicillin allergy, which is unrelated to contrast reactions. This misapplication triggers the capping rule.",
+        "logic": "All claims support the conditional stance: each administrative requirement must be met before proceeding, and together they form a coherent framework for safe, ethical decision-making. No internal contradictions.",
+        "uncertainty": "The argument clearly states uncertainties\u2014whether contrast will be needed beyond CT, real-time ICU/dialysis availability, and the patient\u2019s final decision\u2014calibrating confidence appropriately without overreaching."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": [
+        {
+          "claim_id": "R1-ADMIN-C5",
+          "reason": "Cites ADMIN-KB-05, which applies to documented allergic reaction to contrast media, but the patient's allergy is to penicillin, not contrast. The source does not support requiring premedication for contrast in this case."
+        }
+      ]
+    },
+    {
+      "argument_id": "R1-SURG",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider discussing the potential impact of TAVI on the patient's quality of life and functional status."
+        },
+        {
+          "claim_id": null,
+          "note": "Provide more information about the patient's current symptom burden and how it affects her daily life."
+        },
+        {
+          "claim_id": null,
+          "note": "Explore the possibility of a multidisciplinary team discussion to weigh the benefits and risks of TAVI in this patient."
+        },
+        {
+          "claim_id": null,
+          "note": "Discuss the patient's preferences and values in more detail, including her priorities and concerns."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider seeking input from a palliative care specialist to inform the discussion about the patient's goals and priorities."
+        }
+      ],
+      "groundedness": 4,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "The argument cites relevant sources, such as SURG-KB-08 and CASE-tests, to support its claims about the patient's condition and the risks associated with TAVI.",
+        "logic": "The argument presents a clear and logical stance against TAVI, considering the patient's severe frailty, recent stroke, and expressed preference for comfort.",
+        "uncertainty": "The argument acknowledges uncertainties, such as the exact peri-procedural anaesthetic risk and the long-term survival benefit of TAVI in patients with end-stage renal disease on dialysis."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-PHYS",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider discussing the potential impact of the patient's recent stroke on her quality of life and how it may influence her decision-making."
+        },
+        {
+          "claim_id": null,
+          "note": "It might be helpful to explore the patient's understanding of her condition and the proposed procedure, given her communication limitations."
+        },
+        {
+          "claim_id": null,
+          "note": "The argument could benefit from a clearer explanation of how the patient's frailty and dialysis dependence affect her suitability for the transcatheter approach."
+        },
+        {
+          "claim_id": null,
+          "note": "A discussion on the role of the patient's son in decision-making and his understanding of her wishes could add depth to the argument."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider addressing potential alternative treatments or palliative care options that could align with the patient's goal of comfort."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "Every claim is grounded, and every citation clearly supports it, such as R1-PHYS-C1 citing PHYS-KB-01.",
+        "logic": "The stance follows clearly from the claims, and every claim supports the direction taken, as seen in the conditional stance based on the patient's goals and peri-procedural safety.",
+        "uncertainty": "Uncertainties are clearly stated, including the exact peri-procedural risk and the patient's precise wishes, demonstrating calibrated confidence."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ANAES",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider providing more details about the patient's current symptom control and quality of life to better inform the decision-making process."
+        },
+        {
+          "claim_id": null,
+          "note": "It would be helpful to discuss the potential benefits and risks of TAVI in the context of the patient's stated priority of comfort rather than prolonging life."
+        },
+        {
+          "claim_id": null,
+          "note": "The argument could benefit from a clearer explanation of how the proposed conditions, such as confirmed neurological stability, will be assessed and confirmed."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider addressing the potential consequences of not proceeding with TAVI, including the potential impact on the patient's quality of life and survival."
+        },
+        {
+          "claim_id": null,
+          "note": "It would be useful to provide more information about the patient's support system and how they will be involved in the decision-making process and care plan."
+        }
+      ],
+      "groundedness": 4,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "The argument cites relevant sources, such as ANAES-KB-01 and CASE-comorbidities, to support its claims about the patient's ASA physical status class IV and severe systemic disease.",
+        "logic": "The argument logically connects the patient's condition, the proposed procedure, and the necessary conditions for proceeding, such as a peri-operative dialysis plan and blood-management strategy.",
+        "uncertainty": "The argument explicitly states uncertainties, such as the specific risk of recurrent stroke or haemorrhagic transformation with TAVI performed 6 weeks after an ischaemic stroke, and the impact of severe pulmonary hypertension on peri-operative haemodynamics."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ADMIN",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider explicitly addressing the patient's priority for comfort in the informed consent process."
+        },
+        {
+          "claim_id": null,
+          "note": "Ensure that the heart-team review includes a discussion on the patient's recent stroke and its implications for the procedure."
+        },
+        {
+          "claim_id": null,
+          "note": "Verify that the patient's son, as her proxy, is fully informed and supportive of the decision-making process."
+        },
+        {
+          "claim_id": null,
+          "note": "Explore the possibility of a waiting period to assess the patient's recovery from the stroke before proceeding with TAVI."
+        },
+        {
+          "claim_id": null,
+          "note": "Confirm that the institutional resources, including intensive care and dialysis capacity, will be available for post-procedure care."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "Every claim is grounded, and every citation clearly supports it, such as R1-ADMIN-C1 citing ADMIN-KB-01.",
+        "logic": "The stance follows clearly from the claims, and every claim supports the direction taken, as seen in the conditional stance for proceeding with TAVI.",
+        "uncertainty": "Uncertainties are clearly stated, such as whether the planned TAVI device and imaging protocol will require additional contrast administration."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-SURG",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "Directly addresses PHYS's survival argument by contextualizing population-level data with patient-specific factors like frailty and dialysis, using cited evidence to justify why survival extension may not apply here.",
+        "groundedness": "All claims cite sources that directly support them. For example, R2-SURG-C1 correctly cites SURG-KB-08 on symptom onset marking worse prognosis, and the echocardiogram in CASE-tests confirms severity.",
+        "logic": "The stance against TAVI follows coherently from the claims: high frailty, recent stroke, dialysis dependence, and patient's comfort preference collectively outweigh potential benefits. No contradictions.",
+        "uncertainty": "Explicitly acknowledges uncertainty about neurologic risk post-stroke and long-term functional benefit in this specific population, avoiding overstatement."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-PHYS",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "The rebuttal directly addresses R1-SURG-C5\u2019s concern about neurologic risk post-stroke by citing evidence of mild, improving deficits and arguing for relative stability, offering a substantive counter grounded in clinical trajectory rather than restating prior points.",
+        "groundedness": "All claims are well-grounded: R2-PHYS-C1 correctly cites survival data and symptom onset; R2-PHYS-C2 accurately reflects guideline limits of medical therapy; R2-PHYS-C3 properly uses NT-proBNP as corroborating evidence; R2-PHYS-C4 cites improving stroke deficits to support neurological stability.",
+        "logic": "The stance follows from the claims: the poor prognosis of untreated aortic stenosis justifies intervention consideration, while comorbidities and goals necessitate caution. The rebuttal directly engages surgical concerns about neurologic risk with evidence of improvement.",
+        "uncertainty": "Two key uncertainties are explicitly named\u2014dialysis impact on TAVI outcomes and NT-proBNP interpretation\u2014with acknowledgment that these factors limit confidence in outcome predictions."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ANAES",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "The rebuttal directly engages R1-PHYS-C1\u2019s claim about poor prognosis by acknowledging it but contextualizing it within the patient\u2019s high procedural risk and comfort goals, using ANAES-KB-01 and CASE-comorbidities to ground the counterpoint.",
+        "groundedness": "Each claim cites relevant sources that directly support the assertion. For example, R2-ANAES-C1 correctly applies ANAES-KB-01 to the patient\u2019s multiple severe comorbidities listed in CASE-comorbidities. No claim overreaches its citation.",
+        "logic": "The stance follows from the claims: the conditions for proceeding (dialysis plan, blood management, neurological stability, goals discussion) are directly supported by the cited risks. The rebuttal logically weighs survival benefit against frailty and comfort goals without contradiction.",
+        "uncertainty": "The argument explicitly names key uncertainties\u2014symptomatic benefit in frailty, peri-procedural stroke risk, ICU bed availability\u2014and does not overstate what can be known, aligning confidence with evidence limits."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ADMIN",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "R2-ADMIN-C5 and R2-ADMIN-C6 directly engage R1-SURG-C5 by incorporating recent stroke and patient comfort into required heart-team review and informed consent, using the same cited sources to extend the reasoning rather than restate prior points.",
+        "groundedness": "All claims cite relevant administrative policies (ADMIN-KB-01, -06, -07, -08) that directly support the stated requirements. For example, R2-ADMIN-C1 accurately reflects ADMIN-KB-01's mandate for informed consent in high-intermediate risk procedures.",
+        "logic": "The stance follows clearly from the claims: each condition (consent, heart-team review, resource confirmation, respect for patient autonomy) logically supports a conditional permissibility of TAVI. No contradictions exist.",
+        "uncertainty": "The argument explicitly names an uncertainty\u2014whether iodinated contrast will be used and if allergy premedication is needed\u2014showing appropriate caution where institutional policy does not resolve clinical specifics."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-SURG",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 4,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal effectively addresses the opposing claim by highlighting the differences between the patient's situation and the broader populations from which survival data are derived.",
+        "groundedness": "The argument cites relevant sources, such as SURG-KB-08 and CASE-tests, to support its claims, but could more explicitly address potential counterarguments to strengthen its grounding.",
+        "logic": "The argument logically connects the patient's severe frailty, recent stroke, and expressed goals to the conclusion that TAVI's risks outweigh its benefits.",
+        "uncertainty": "The argument clearly states uncertainties, such as the exact magnitude of peri-procedural neurologic risk and long-term functional benefit, demonstrating a strong awareness of the limitations of the evidence."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-PHYS",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal engages the opposing claim directly, with a grounded, substantive response, as seen in the response to R1-SURG-C5.",
+        "groundedness": "Every claim is grounded, and every citation clearly supports it, such as R2-PHYS-C1 citing PHYS-KB-01.",
+        "logic": "The stance follows clearly from the claims, and every claim supports the direction taken, as seen in the conditional stance based on the patient's goals and peri-procedural safety.",
+        "uncertainty": "Uncertainties are clearly stated, such as how dialysis dependence modifies TAVI outcomes and whether the elevated NT-proBNP is driven by valve disease or chronic kidney disease."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ANAES",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 4,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal effectively addresses the opposing claim, highlighting the patient's high peri-operative risk and the need to balance expected survival gain against potential loss of comfort.",
+        "groundedness": "The argument cites relevant sources, such as ANAES-KB-01 and CASE-comorbidities, to support its claims about the patient's ASA physical status class IV and severe systemic disease.",
+        "logic": "The reasoning is sound, as the argument clearly outlines the conditions under which transfemoral TAVI may be acceptable, including a detailed peri-operative plan and confirmed neurological stability.",
+        "uncertainty": "The argument explicitly states uncertainties, such as the magnitude of symptomatic benefit from TAVI in the context of severe frailty and the exact peri-procedural stroke risk."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ADMIN",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal engages the opposing claim directly, with a grounded, substantive response, as in R2-ADMIN-C5 addressing R1-SURG-C5.",
+        "groundedness": "Every claim is grounded, and every citation clearly supports it, such as R2-ADMIN-C1 citing ADMIN-KB-01.",
+        "logic": "The stance follows clearly from the claims, and every claim supports the direction taken, as seen in the conditional stance based on high-risk informed consent and multidisciplinary heart-team review.",
+        "uncertainty": "Uncertainties are clearly stated, such as the potential need for iodinated contrast and its implications, demonstrating calibrated confidence."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    }
+  ],
+  "skipped_arguments": []
+}
