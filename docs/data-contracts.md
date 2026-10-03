@@ -327,6 +327,7 @@ A **disagreement** is one argument-and-criterion pair where the two judges diffe
 | latency_ms | int or null | |
 | attempt | int | API attempt number: 1 or 2 |
 | repair | bool | True if this call is the repair retry |
+| repair_problems | string or null | The exact, code-generated problem list already included in a repair attempt's own prompt — the same text sent to the model, not anything parsed from a model's response. Present only on a repair attempt's trace event, null otherwise. This is a convenience copy of existing, already-trusted content, not a new judgment or a new check. |
 | budget_tokens_used | int | Total tokens used after this event |
 | error | str or null | |
 | finish_reason | str or null | Why the model stopped: "stop", "length", or similar. Null on a failed call with no response. |
