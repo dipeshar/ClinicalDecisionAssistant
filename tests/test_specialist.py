@@ -8,7 +8,7 @@ from council.agents import specialist as s
 from council.budget import Budget
 from council.gateway import LLMGateway
 from council.kb import KnowledgeBase
-from council.models import CaseSection, CaseContext, Config, Passage, Role, ScoreDraft
+from council.models import CaseSection, CaseContext, Config, Passage, ReportDraft, Role, ScoreDraft
 from council.providers.base import ProviderError
 from council.providers.fake import FakeProvider, Scripted
 from council.trace import TraceWriter
@@ -183,6 +183,61 @@ def test_parse_draft_leaves_an_unclosed_fence_alone() -> None:
     # confirms strip_code_fence itself left the text untouched, not just that
     # parsing failed for some other reason
     assert s.strip_code_fence(unclosed) == unclosed
+
+
+def test_parse_draft_removes_null_from_judge_justification() -> None:
+    payload = json.loads(REAL_FENCED_JUDGE_RESPONSE.removeprefix("```json\n").removesuffix("\n```"))
+    payload["justification"]["counterarguments"] = None
+
+    draft, error = s.parse_draft(json.dumps(payload), ScoreDraft)
+
+    assert error is None
+    assert draft is not None
+    assert draft.model_dump(mode="json")["justification"] == {
+        key: value for key, value in payload["justification"].items() if value is not None
+    }
+
+
+def test_parse_draft_removes_null_from_chair_role_notes() -> None:
+    payload = {
+        "recommendation": "delay_pending_investigation",
+        "recommendation_basis": ["R2-SURG"],
+        "strongest_for": ["R2-SURG-C1"],
+        "strongest_against": [],
+        "required_actions": [],
+        "role_notes": {"SURG": "Supports delay.", "PHYS": None},
+        "narrative": "Further review is required [R2-SURG-C1].",
+    }
+
+    draft, error = s.parse_draft(json.dumps(payload), ReportDraft)
+
+    assert error is None
+    assert draft is not None
+    assert draft.model_dump(mode="json")["role_notes"] == {"SURG": "Supports delay."}
+
+
+def test_parse_draft_leaves_real_explanation_strings_unchanged() -> None:
+    payload = json.loads(REAL_FENCED_JUDGE_RESPONSE.removeprefix("```json\n").removesuffix("\n```"))
+    expected = dict(payload["justification"])
+
+    draft, error = s.parse_draft(json.dumps(payload), ScoreDraft)
+
+    assert error is None
+    assert draft is not None
+    assert draft.model_dump(mode="json")["justification"] == expected
+
+
+def test_parse_draft_does_not_hide_wrong_explanation_value_types() -> None:
+    for wrong_value in (42, ["not", "an", "explanation"]):
+        payload = json.loads(REAL_FENCED_JUDGE_RESPONSE.removeprefix("```json\n").removesuffix("\n```"))
+        payload["justification"]["logic"] = wrong_value
+
+        draft, error = s.parse_draft(json.dumps(payload), ScoreDraft)
+
+        assert draft is None
+        assert error is not None
+        assert "justification.logic" in error
+        assert "valid string" in error
 
 
 def test_strip_code_fence_leaves_unfenced_content_unchanged() -> None:

@@ -20,6 +20,7 @@ the turn or stay silently as-is.
 """
 
 from collections.abc import Callable, Collection, Mapping, Sequence
+import json
 from pathlib import Path
 import re
 from typing import Any
@@ -75,6 +76,66 @@ def strip_code_fence(raw_output: str) -> str:
     return match.group(1) if match is not None else raw_output
 
 
+def _resolve_schema(schema: dict[str, Any], root: dict[str, Any]) -> dict[str, Any]:
+    """Resolve local JSON-Schema references emitted by Pydantic."""
+    while "$ref" in schema:
+        reference = schema["$ref"]
+        if not isinstance(reference, str) or not reference.startswith("#/"):
+            return schema
+        resolved: Any = root
+        for part in reference[2:].split("/"):
+            if not isinstance(resolved, dict) or part not in resolved:
+                return schema
+            resolved = resolved[part]
+        if not isinstance(resolved, dict):
+            return schema
+        schema = resolved
+    return schema
+
+
+def _is_fixed_key_string_dictionary(schema: dict[str, Any], root: dict[str, Any]) -> bool:
+    schema = _resolve_schema(schema, root)
+    value_schema = schema.get("additionalProperties")
+    key_schema = schema.get("propertyNames")
+    if not isinstance(value_schema, dict) or not isinstance(key_schema, dict):
+        return False
+    value_schema = _resolve_schema(value_schema, root)
+    key_schema = _resolve_schema(key_schema, root)
+    return value_schema.get("type") == "string" and isinstance(key_schema.get("enum"), list)
+
+
+def _normalize_null_explanations(value: Any, schema: dict[str, Any],
+                                 root: dict[str, Any]) -> Any:
+    """Drop null entries only from fixed-key dictionaries whose values are strings."""
+    schema = _resolve_schema(schema, root)
+    alternatives = schema.get("anyOf") or schema.get("oneOf")
+    if isinstance(alternatives, list):
+        normalized = value
+        for alternative in alternatives:
+            if isinstance(alternative, dict):
+                normalized = _normalize_null_explanations(normalized, alternative, root)
+        return normalized
+
+    if isinstance(value, dict):
+        normalized_dict = dict(value)
+        if _is_fixed_key_string_dictionary(schema, root):
+            normalized_dict = {key: item for key, item in normalized_dict.items() if item is not None}
+
+        properties = schema.get("properties", {})
+        additional = schema.get("additionalProperties")
+        for key, item in list(normalized_dict.items()):
+            child_schema = properties.get(key) if isinstance(properties, dict) else None
+            if child_schema is None and isinstance(additional, dict):
+                child_schema = additional
+            if isinstance(child_schema, dict):
+                normalized_dict[key] = _normalize_null_explanations(item, child_schema, root)
+        return normalized_dict
+
+    if isinstance(value, list) and isinstance(schema.get("items"), dict):
+        return [_normalize_null_explanations(item, schema["items"], root) for item in value]
+    return value
+
+
 def parse_draft(raw_output: str, schema_source: SchemaSource) -> tuple[Any | None, str | None]:
     """Bad JSON is not the gateway's job (T8); this is where it's actually checked.
 
@@ -89,6 +150,18 @@ def parse_draft(raw_output: str, schema_source: SchemaSource) -> tuple[Any | Non
     """
     unfenced = strip_code_fence(raw_output)
     try:
+        decoded = json.loads(unfenced)
+    except json.JSONDecodeError:
+        decoded = None
+
+    try:
+        if decoded is not None:
+            root_schema = (schema_source.model_json_schema() if isinstance(schema_source, type)
+                           else schema_source.json_schema())
+            normalized = _normalize_null_explanations(decoded, root_schema, root_schema)
+            if isinstance(schema_source, type):
+                return schema_source.model_validate(normalized), None
+            return schema_source.validate_python(normalized), None
         if isinstance(schema_source, type):
             return schema_source.model_validate_json(unfenced), None
         return schema_source.validate_json(unfenced), None

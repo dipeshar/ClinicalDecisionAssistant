@@ -18,6 +18,8 @@ Score groundedness, logic, and honesty about uncertainty, 1 to 5, using the anch
 
 Apply the rubric's groundedness capping rule exactly as written above — it isn't optional, and it isn't something to average away.
 
+The top-level `counterarguments` score and the `justification` dictionary follow different null rules. In Round 1, the top-level `counterarguments` score is `null`. A value inside `justification` is never `null`: either give that criterion a real string explanation, or omit its key. In Round 1, omit `counterarguments` from `justification`; in Round 2, include it with a real explanation.
+
 Give one short justification per criterion, naming or quoting the specific claim it's about. A justification that could apply to any argument isn't doing its job.
 
 ## Untraceable claims
