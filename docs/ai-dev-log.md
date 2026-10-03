@@ -2820,3 +2820,45 @@ No `docs/data-contracts.md` field or execution rule changes. The watcher reads e
 All seven mutations were detected and restored with `git restore`. The committed watcher tests passed again after restoration. The watcher and test files were clean after every restore; unrelated pre-existing run-artifact changes remained untouched.
 
 What I verified by hand:
+
+## Trace watcher trusted attempt count and judge argument label
+
+Extended `tools/watch_run.py` without changing the execution path. At startup it reads
+`budget.max_calls` once from `config.yaml`; each valid `llm_call` trace event advances a
+display-only counter, and every printed event carries the real count and configured ceiling.
+For judge calls it reads only the sent `prompt` field and accepts exactly one canonical
+`BEGIN R1/R2-{specialist}` argument block label. A missing, malformed, or ambiguous label
+keeps the generic judge line rather than guessing an argument ID. The extraction test uses
+the real committed judge prompt in `run-20261003-030231-contrast-02`.
+
+No execution-path file changed: `cli.py`, `orchestrator.py`, `gateway.py`, and every agent
+module are untouched. The full suite passes: 1,196 tests.
+
+What went wrong / limits:
+
+- The sandbox initially denied Git's index lock; the already-authorized task commit was
+  completed with the required repository-write escalation.
+- The count is a truthful count of trace-recorded attempts against the configured ceiling.
+  It deliberately does not predict how many calls the run will ultimately need.
+- Judge argument display depends on the exact trusted prompt wrapper. If that wrapper ever
+  changes, the watcher safely falls back until its narrow matcher is deliberately updated.
+
+#### Contract check
+
+No `docs/data-contracts.md` rule or field changed. `budget.max_calls` remains enforced by
+the gateway; the watcher only displays its configured value. `TraceEvent.prompt` remains
+the recorded outbound prompt; the watcher reads its fixed argument-block label and never
+uses `raw_output` or parsed model content to identify the argument.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| The displayed ceiling comes from `config.yaml` | Returned a hard-coded 60 after reading the config | `test_attempt_counter_uses_configured_ceiling` |
+| Only `llm_call` events advance the attempt count | Incremented the count for the human-decision event too | `test_attempt_counter_uses_configured_ceiling` |
+| A judge argument ID comes from the exact outbound prompt label | Read `raw_output` instead of `prompt` | `test_judge_argument_id_comes_from_exact_real_prompt_label` |
+
+All three mutations were detected and restored with `git restore`. The 12 watcher tests
+passed after restoration. Unrelated pre-existing run-artifact changes were left untouched.
+
+What I verified by hand:
