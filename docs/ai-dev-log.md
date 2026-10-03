@@ -1641,6 +1641,8 @@ All seven mutations were detected by their named tests. The committed source was
 What I verified by hand:
 
 
+
+
 ## T14: chair and report checks
 
 `run_chair` (`src/council/agents/chair.py`) first calls T6's `final_arguments`. When that result is empty, it skips `LLMGateway` entirely and returns the section 8 bare report with `"all specialists failed"`, as explicitly required for T14. Otherwise the chair sees only final specialist arguments (Round 2 with Round 1 fallback), judge scores for those exact argument IDs, and the red-team report. Confidence, dissent, the council warning, status, failed-turn lists, citations, the disclaimer, and the human-decision placeholder are not in the chair draft schema and are filled by `src/council/report.py`.
@@ -2703,5 +2705,38 @@ What went wrong / limits:
 | A real-shaped but nonexistent ID still triggers repair | Removed the known-ID comparison from `narrative_issues` | `test_narrative_unknown_id_alone_triggers_repair` |
 
 Both mutations were detected and restored with `git restore`; `git status --short` was clean after each restore. The complete suite passed before the audit: 1,179 tests. Both focused tests passed again on restored committed code.
+
+What I verified by hand:
+
+## Normalize null-valued explanation entries before draft validation
+
+Added one schema-driven normalization step to the shared draft parser. Before Pydantic validates a successfully decoded response, the parser finds fields whose generated schema is a fixed enum-key dictionary with string values and removes only entries whose value is `null`. This covers `ScoreDraft.justification` and `ReportDraft.role_notes` through their types rather than their field names, and applies to future draft fields with the same shape. Invalid numbers and lists remain present and fail normal validation.
+
+Clarified the judge prompt: the top-level Round 1 `counterarguments` score is `null`, while values inside `justification` are strings; an inapplicable justification key is omitted. No live model call was made.
+
+What went wrong / limits:
+
+- The first mutation-audit review found that the prompt clarification had no focused regression test. Added and committed one before running the prompt mutation.
+- Invalid JSON still follows the existing Pydantic JSON-validation path so its established diagnostics and repair behavior remain unchanged.
+- Removing a null entry makes it identical to an omitted entry before draft validation. Later role-specific semantic checks, such as the chair's exact role-note key set, continue to apply equally to both forms.
+
+#### Contract check
+
+- **Section 13 rule 30, null-valued explanation dictionaries**: `_normalize_null_explanations` in `specialist.py` recursively follows the draft's generated JSON Schema and removes only null entries from fixed enum-key/string-value dictionaries before `parse_draft` calls Pydantic.
+- **Judge `justification`**: `test_parse_draft_removes_null_from_judge_justification` proves a null criterion is treated as omitted.
+- **Chair `role_notes`**: `test_parse_draft_removes_null_from_chair_role_notes` proves the same shared mechanism applies to the chair draft.
+- **Valid and invalid non-null values**: `test_parse_draft_leaves_real_explanation_strings_unchanged` proves strings are preserved byte-for-byte; `test_parse_draft_does_not_hide_wrong_explanation_value_types` proves numbers and lists still fail.
+- **Judge prompt distinction**: `test_judge_prompt_distinguishes_score_null_from_justification_values` protects the top-level-score versus explanation-value guidance.
+- All requested contract changes were implemented exactly.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| Null entries in fixed-key string explanation dictionaries are treated as omitted for every draft role | Bypassed `_normalize_null_explanations` in the shared parser | `test_parse_draft_removes_null_from_judge_justification`; `test_parse_draft_removes_null_from_chair_role_notes` |
+| Only null is removed; genuinely wrong value types still fail validation | Changed the filter to retain strings and silently remove every other value | `test_parse_draft_does_not_hide_wrong_explanation_value_types` |
+| The judge prompt distinguishes the nullable top-level score from string-valued justifications | Removed the new distinction paragraph from `prompts/judge.md` | `test_judge_prompt_distinguishes_score_null_from_justification_values` |
+
+Every mutation was detected and restored with `git restore`. The task's tracked files were clean after each restore; the previously generated, untracked complete-run `report.html` was left untouched. The restored complete suite passed: 1,184 tests.
 
 What I verified by hand:
