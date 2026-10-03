@@ -565,10 +565,17 @@ class TraceEvent(ContractModel):
     latency_ms: int | None
     attempt: Literal[1, 2]
     repair: bool
+    repair_problems: str | None = None
     budget_tokens_used: int
     error: str | None
     finish_reason: str | None
     reasoning: str | None
+
+    @model_validator(mode="after")
+    def repair_problems_only_on_repair(self) -> Self:
+        if not self.repair and self.repair_problems is not None:
+            raise ValueError("repair_problems must be null on a non-repair event")
+        return self
 
 
 class BudgetState(ContractModel):

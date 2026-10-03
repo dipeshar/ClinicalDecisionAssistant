@@ -199,16 +199,20 @@ def format_issues(issues: Sequence[RepairIssue]) -> str:
     return "\n".join(lines)
 
 
-def repair_system(original_system: str, issues: Sequence[RepairIssue],
+def repair_system(original_system: str, problem_list: str,
                   prompts_dir: str | Path = DEFAULT_PROMPTS_DIR) -> str:
     """The original system content, then repair_intro.md, the issue list, then repair_fix.md.
 
     `original_system` is whatever `*_parts` produced for the turn being repaired.
+    `problem_list` is formatted once by the caller so this prompt and the trace's
+    trusted convenience copy contain the exact same string.
     repair_intro.md introduces the problem list ("listed below"); repair_fix.md
     refers back to it ("the problems above"), so the list has to sit between
     the two files, not after both. The caller separately builds the repair user
     message from the original data, previous raw response, and schema.
     """
+    if not problem_list:
+        raise ValueError("a repair prompt needs at least one issue")
     intro = load_prompt("repair_intro.md", prompts_dir)
     fix = load_prompt("repair_fix.md", prompts_dir)
-    return join_sections([original_system, intro, format_issues(issues), fix])
+    return join_sections([original_system, intro, problem_list, fix])

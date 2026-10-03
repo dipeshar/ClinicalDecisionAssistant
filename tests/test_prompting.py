@@ -156,7 +156,8 @@ def test_repair_system_puts_the_issue_list_between_intro_and_fix() -> None:
         p.RepairIssue("Citation R1-SURG-C1 (passage ANAES-KB-04)", "quote not found in passage"),
         p.RepairIssue("Claim R1-SURG-C2", "cites passage SURG-KB-99, which was not shown this turn"),
     ]
-    system = p.repair_system(parts.system, issues, REAL_PROMPTS)
+    problem_list = p.format_issues(issues)
+    system = p.repair_system(parts.system, problem_list, REAL_PROMPTS)
     intro_text = p.load_prompt("repair_intro.md", REAL_PROMPTS)
     fix_text = p.load_prompt("repair_fix.md", REAL_PROMPTS)
     assert system.startswith(parts.system)
@@ -175,7 +176,9 @@ def test_repair_user_contains_verbatim_previous_output_as_separate_data() -> Non
     parts = p.specialist_parts(Role.SURG, 1, [("Case", "Synthetic case text")], REAL_PROMPTS)
     previous = "  {\n  \"claims\": [\"unchanged — exactly\"]\n}\n  "
     user = p.repair_user(parts.user, previous, ArgumentDraft)
-    repaired_system = p.repair_system(parts.system, [p.RepairIssue("X", "Y")], REAL_PROMPTS)
+    repaired_system = p.repair_system(
+        parts.system, p.format_issues([p.RepairIssue("X", "Y")]), REAL_PROMPTS,
+    )
     block = p.wrap_data("Previous response", previous)
 
     assert user.startswith(parts.user + "\n\n")
@@ -189,7 +192,7 @@ def test_repair_user_contains_verbatim_previous_output_as_separate_data() -> Non
 
 def test_repair_system_requires_at_least_one_issue() -> None:
     with pytest.raises(ValueError, match="at least one issue"):
-        p.repair_system("SYSTEM", [], REAL_PROMPTS)
+        p.repair_system("SYSTEM", "", REAL_PROMPTS)
 
 
 def test_format_issues_requires_at_least_one_issue() -> None:
@@ -210,7 +213,7 @@ def test_missing_prompt_file_fails_the_whole_assembly_loudly(tmp_path: Path) -> 
     p.judge_parts([("Case", "text")], tmp_path)
     p.chair_parts([("Case", "text")], tmp_path)
     p.red_team_parts([("Case", "text")], tmp_path)
-    p.repair_system("SYSTEM", [p.RepairIssue("X", "Y")], tmp_path)
+    p.repair_system("SYSTEM", p.format_issues([p.RepairIssue("X", "Y")]), tmp_path)
 
 
 def test_missing_persona_file_fails_loudly(tmp_path: Path) -> None:
@@ -225,7 +228,7 @@ def test_missing_repair_file_fails_loudly(tmp_path: Path, missing: str) -> None:
     present = "repair_fix.md" if missing == "repair_intro.md" else "repair_intro.md"
     (tmp_path / present).write_text(f"# {present}\ncontent", encoding="utf-8")
     with pytest.raises(p.PromptFileMissing, match=missing):
-        p.repair_system("SYSTEM", [p.RepairIssue("X", "Y")], tmp_path)
+        p.repair_system("SYSTEM", p.format_issues([p.RepairIssue("X", "Y")]), tmp_path)
 
 
 def test_all_real_prompt_files_assemble_without_error() -> None:

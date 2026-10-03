@@ -52,6 +52,7 @@ def test_successful_call_returns_output_and_writes_one_llm_call_event(config: Co
     assert len(events) == 1
     event = events[0]
     assert event["event_type"] == "llm_call" and event["attempt"] == 1 and event["repair"] is False
+    assert event["repair_problems"] is None
     assert event["error"] is None and event["role"] == "SURG" and event["round"] == 1
     # The trace's single `prompt` field carries the real system/user split sent
     # to the provider, clearly labeled, not one flattened string.
@@ -61,6 +62,48 @@ def test_successful_call_returns_output_and_writes_one_llm_call_event(config: Co
     assert event["budget_tokens_used"] == 7
     assert event["finish_reason"] == "length" and event["reasoning"] == "Synthetic reasoning trace"
     assert provider.calls_made == 1
+
+
+def test_repair_trace_uses_only_trusted_precomputed_problems(
+    config: Config, tmp_path: Path,
+) -> None:
+    trusted = "1. Claim R1-SURG-C1: no citation was given"
+    model_text = '{"repair_problems":"invented by the model"}'
+    provider = FakeProvider("fake", [Scripted(raw_output=model_text)])
+    gateway, trace_path = make_gateway(config, tmp_path, {"fake": provider})
+
+    gateway.call(
+        role=Role.SURG, step=Step.SPECIALIST, round_number=1,
+        system="repair instructions", user="repair data", repair=True,
+        repair_problems=trusted,
+    )
+
+    event = read_events(trace_path)[0]
+    assert event["repair"] is True
+    assert event["repair_problems"] == trusted
+    assert event["raw_output"] == model_text
+    assert "invented by the model" not in str(event["repair_problems"])
+
+
+def test_refused_repair_attempt_keeps_trusted_problems(
+    config: Config, tmp_path: Path,
+) -> None:
+    trusted = "1. Response: invalid JSON"
+    provider = FakeProvider("fake", [Scripted()])
+    gateway, trace_path = make_gateway(
+        config, tmp_path, {"fake": provider}, budget=tiny_budget(),
+    )
+
+    with pytest.raises(GatewayRefusal, match="token budget"):
+        gateway.call(
+            role=Role.SURG, step=Step.SPECIALIST, round_number=1,
+            system="s", user="p", repair=True, repair_problems=trusted,
+        )
+
+    event = read_events(trace_path)[0]
+    assert event["event_type"] == "budget"
+    assert event["repair"] is True and event["repair_problems"] == trusted
+    assert provider.calls_made == 0
 
 
 def test_bad_json_output_is_returned_as_is_grounding_is_not_gateways_job(config: Config, tmp_path: Path) -> None:

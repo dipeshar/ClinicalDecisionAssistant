@@ -100,6 +100,7 @@ def contract_samples() -> dict[str, dict[str, Any]]:
                            event_type="error", role="JUDGE_B", round=1, model="fake-judge", prompt="Synthetic data",
                            retrieved_passage_ids=None, raw_output="invalid json", parsed_ref=None,
                            tokens_in=10, tokens_out=2, latency_ms=1, attempt=2, repair=True,
+                           repair_problems="1. Response: invalid JSON",
                            budget_tokens_used=12, error="Invalid output", finish_reason=None, reasoning=None)
     s["BudgetState"] = dict(tokens_used=12, calls_used=1, started_at=123.5, exhausted=False, reason=None)
     s["ModelChoice"] = dict(provider="fake", model="fake-model")
@@ -161,13 +162,21 @@ def test_extra_fields_rejected(name: str) -> None:
 
 @pytest.mark.parametrize("name,field", [
     (name, field) for name, data in SAMPLES.items() for field in data
-    if (name, field) not in {("HumanDecision", "comment"), ("Report", "disclaimer"), ("RoleConfig", "persona_prompt")}
+    if (name, field) not in {("HumanDecision", "comment"), ("Report", "disclaimer"),
+                             ("RoleConfig", "persona_prompt"), ("TraceEvent", "repair_problems")}
 ])
 def test_required_fields(name: str, field: str) -> None:
     data = deepcopy(SAMPLES[name])
     del data[field]
     with pytest.raises(ValidationError, match="missing"):
         getattr(m, name).model_validate(data)
+
+
+def test_trace_repair_problems_must_be_null_on_nonrepair_event() -> None:
+    data = dict(SAMPLES["TraceEvent"], repair=False, repair_problems="model-controlled text")
+
+    with pytest.raises(ValidationError, match="must be null on a non-repair event"):
+        m.TraceEvent.model_validate(data)
 
 
 ENUMS = {

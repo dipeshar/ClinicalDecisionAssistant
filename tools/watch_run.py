@@ -77,7 +77,10 @@ def format_event(event: dict[str, Any]) -> str:
     if event_type == "llm_call":
         repair = event.get("repair") is True
         attempt = event.get("attempt")
+        repair_problems = event.get("repair_problems")
         prefix = "repair attempted; " if repair else ""
+        if repair and isinstance(repair_problems, str) and repair_problems:
+            prefix = f"repair needed: {_one_line(repair_problems)}; "
         if not repair and isinstance(attempt, int) and attempt > 1:
             prefix = f"retry attempt {attempt}; "
         outcome = f"call failed{reason}" if error else "model responded"

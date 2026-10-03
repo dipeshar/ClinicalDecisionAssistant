@@ -8,7 +8,7 @@ from council.agents import specialist as s
 from council.budget import Budget
 from council.gateway import LLMGateway
 from council.kb import KnowledgeBase
-from council.models import CaseSection, CaseContext, Config, Passage, ReportDraft, Role, ScoreDraft
+from council.models import ArgumentDraft, CaseSection, CaseContext, Config, Passage, ReportDraft, Role, ScoreDraft
 from council.providers.base import ProviderError
 from council.providers.fake import FakeProvider, Scripted
 from council.trace import TraceWriter
@@ -280,6 +280,12 @@ def test_bad_json_then_fixed_uses_the_repair_retry(config: Config, tmp_path: Pat
     events = trace_events(trace_path)
     assert len(events) == 2
     assert [event["repair"] for event in events] == [False, True]
+    _, parse_error = s.parse_draft(BAD_JSON, ArgumentDraft)
+    expected_problems = p.format_issues([
+        p.RepairIssue("Response", parse_error or "could not parse as JSON matching the schema"),
+    ])
+    assert events[0]["repair_problems"] is None
+    assert events[1]["repair_problems"] == expected_problems
     # The repair keeps the original data, adds the failed response verbatim as
     # delimited user data, and leaves the schema at the end. Trusted system
     # instructions contain the problem list but never the model's raw output.
@@ -291,6 +297,7 @@ def test_bad_json_then_fixed_uses_the_repair_retry(config: Config, tmp_path: Pat
     assert users[1].endswith(initial_schema)
     assert BAD_JSON not in systems[1]
     assert systems[0] != systems[1] and systems[0] in systems[1]
+    assert expected_problems in systems[1]
 
 
 def test_bad_json_twice_fails_the_turn(config: Config, tmp_path: Path) -> None:

@@ -211,11 +211,13 @@ def call_and_parse_with_repair(
     repair_issues = issues if draft is not None else [
         RepairIssue("Response", parse_error or "could not parse as JSON matching the schema"),
     ]
-    repair_system = prompting.repair_system(parts.system, repair_issues, prompts_dir)
+    repair_problems = prompting.format_issues(repair_issues)
+    repair_system = prompting.repair_system(parts.system, repair_problems, prompts_dir)
     repair_user = prompting.repair_user(parts.user, result.raw_output, schema_model)
     try:
         repaired = gateway.call(role=role, step=step, round_number=round_number,
                                 system=repair_system, user=repair_user, repair=True,
+                                repair_problems=repair_problems,
                                 retrieved_passage_ids=list(retrieved_ids))
     except GatewayRefusal as error:
         return None, True, f"gateway refused the repair attempt: {error}", None

@@ -133,7 +133,8 @@ class LLMGateway:
         self._providers_used: set[str] = set()
 
     def call(self, *, role: Role, step: Step, round_number: Round | None, system: str, user: str,
-             repair: bool = False, retrieved_passage_ids: list[str] | None = None) -> GatewayResult:
+             repair: bool = False, repair_problems: str | None = None,
+             retrieved_passage_ids: list[str] | None = None) -> GatewayResult:
         role = Role(role)
         choice = model_choice_for(self._config, role)
         model_label = f"{choice.provider}/{choice.model}"
@@ -144,9 +145,11 @@ class LLMGateway:
 
         self._refuse_if_privacy_blocked(role=role, step=step, round_number=round_number,
                                         repair=repair, provider=choice.provider,
-                                        system=system, user=user, model_label=model_label)
+                                        repair_problems=repair_problems, system=system, user=user,
+                                        model_label=model_label)
         self._refuse_if_injection_blocked(role=role, step=step, round_number=round_number,
-                                          repair=repair, system=system, user=user, model_label=model_label)
+                                          repair=repair, repair_problems=repair_problems,
+                                          system=system, user=user, model_label=model_label)
 
         provider = self._providers[choice.provider]
         cap = self._budget.output_cap(role)
@@ -159,6 +162,7 @@ class LLMGateway:
         for attempt in range(1, max_attempts + 1):
             reservation = self._reserve_or_refuse(role=role, step=step, round_number=round_number,
                                                    repair=repair, model_label=model_label,
+                                                   repair_problems=repair_problems,
                                                    tokens_in=tokens_in, cap=cap, attempt=attempt)
             start = perf_counter()
             with self._usage_lock:
@@ -187,7 +191,8 @@ class LLMGateway:
                     role=role, round=round_number, model=model_label, prompt=prompt,
                     retrieved_passage_ids=retrieved_passage_ids, raw_output=None, parsed_ref=None,
                     tokens_in=None, tokens_out=None, latency_ms=latency_ms, attempt=attempt,
-                    repair=repair, budget_tokens_used=failed_state.tokens_used, error=last_error,
+                    repair=repair, repair_problems=repair_problems,
+                    budget_tokens_used=failed_state.tokens_used, error=last_error,
                     finish_reason=None, reasoning=None,
                 ))
                 if isinstance(error, RETRYABLE_ERRORS) and attempt < max_attempts:
@@ -208,6 +213,7 @@ class LLMGateway:
                         retrieved_passage_ids=retrieved_passage_ids, raw_output=response.raw_output,
                         parsed_ref=None, tokens_in=response.tokens_in, tokens_out=response.tokens_out,
                         latency_ms=latency_ms, attempt=attempt, repair=repair,
+                        repair_problems=repair_problems,
                         budget_tokens_used=state.tokens_used, error=detail,
                         finish_reason=response.finish_reason, reasoning=response.reasoning,
                     ))
@@ -218,6 +224,7 @@ class LLMGateway:
                     retrieved_passage_ids=retrieved_passage_ids, raw_output=response.raw_output,
                     parsed_ref=None, tokens_in=response.tokens_in, tokens_out=response.tokens_out,
                     latency_ms=latency_ms, attempt=attempt, repair=repair,
+                    repair_problems=repair_problems,
                     budget_tokens_used=state.tokens_used, error=None,
                     finish_reason=response.finish_reason, reasoning=response.reasoning,
                 ))
@@ -254,8 +261,8 @@ class LLMGateway:
             )
 
     def _refuse_if_privacy_blocked(self, *, role: Role, step: Step, round_number: Round | None,
-                                   repair: bool, provider: str, system: str, user: str,
-                                   model_label: str) -> None:
+                                   repair: bool, repair_problems: str | None, provider: str,
+                                   system: str, user: str, model_label: str) -> None:
         """Contracts rule 20: provider approval and the identifier scan, before the budget check."""
         if provider not in self._config.privacy.approved_providers:
             reason = "provider not approved"
@@ -270,13 +277,15 @@ class LLMGateway:
             run_id="", seq=0, timestamp="", step=step, event_type=EventType.PRIVACY_BLOCK,
             role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,
             raw_output=None, parsed_ref=None, tokens_in=None, tokens_out=None, latency_ms=None,
-            attempt=1, repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used, error=reason,
+            attempt=1, repair=repair, repair_problems=repair_problems,
+            budget_tokens_used=self._budget.snapshot().tokens_used, error=reason,
             finish_reason=None, reasoning=None,
         ))
         raise GatewayRefusal(reason)
 
     def _refuse_if_injection_blocked(self, *, role: Role, step: Step, round_number: Round | None,
-                                     repair: bool, system: str, user: str, model_label: str) -> None:
+                                     repair: bool, repair_problems: str | None, system: str,
+                                     user: str, model_label: str) -> None:
         """Contracts rule 29: a second, scored check, after the identifier check (rule 20)
         and before the budget check. Unlike ingest's per-line flagging, this scores the
         whole outbound system+user text and can block agent-to-agent content (another
@@ -290,14 +299,16 @@ class LLMGateway:
             run_id="", seq=0, timestamp="", step=step, event_type=EventType.INJECTION_BLOCK,
             role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,
             raw_output=None, parsed_ref=None, tokens_in=None, tokens_out=None, latency_ms=None,
-            attempt=1, repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used,
+            attempt=1, repair=repair, repair_problems=repair_problems,
+            budget_tokens_used=self._budget.snapshot().tokens_used,
             error=f"injection: score {score} >= threshold {threshold} (patterns: {', '.join(matched)})",
             finish_reason=None, reasoning=None,
         ))
         raise GatewayRefusal(f"injection score {score} met the threshold ({threshold}) for {role.value}")
 
     def _reserve_or_refuse(self, *, role: Role, step: Step, round_number: Round | None, repair: bool,
-                           model_label: str, tokens_in: int, cap: int, attempt: int) -> Reservation:
+                           repair_problems: str | None, model_label: str, tokens_in: int,
+                           cap: int, attempt: int) -> Reservation:
         try:
             return self._budget.check_and_reserve(role, tokens_in, cap)
         except BudgetExhausted as error:
@@ -305,7 +316,8 @@ class LLMGateway:
                 run_id="", seq=0, timestamp="", step=step, event_type=EventType.BUDGET,
                 role=role, round=round_number, model=model_label, prompt=None, retrieved_passage_ids=None,
                 raw_output=None, parsed_ref=None, tokens_in=None, tokens_out=None, latency_ms=None,
-                attempt=attempt, repair=repair, budget_tokens_used=self._budget.snapshot().tokens_used,
+                attempt=attempt, repair=repair, repair_problems=repair_problems,
+                budget_tokens_used=self._budget.snapshot().tokens_used,
                 error=str(error), finish_reason=None, reasoning=None,
             ))
             raise GatewayRefusal(str(error)) from error

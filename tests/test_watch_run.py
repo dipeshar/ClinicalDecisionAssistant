@@ -96,6 +96,22 @@ def test_reports_retry_repair_and_failure_without_claiming_validation(tmp_path: 
     assert not any(word in line.casefold() for line in output for word in ("finished", "succeeded", " ok"))
 
 
+def test_repair_event_prints_real_problems_and_null_keeps_generic_line() -> None:
+    real_problem = (
+        "1. Claim R1-SURG-C5 citation to CASE-consultant-review: "
+        "quote text not found in source in order"
+    )
+    with_reason = event(repair=True, repair_problems=real_problem)
+    without_reason = event(repair=True, repair_problems=None)
+
+    assert watch_run.format_event(with_reason) == (
+        "Round 1 SURG: repair needed: " + real_problem + "; model responded"
+    )
+    assert watch_run.format_event(without_reason) == (
+        "Round 1 SURG: repair attempted; model responded"
+    )
+
+
 def test_every_role_and_round_gets_an_honest_subject() -> None:
     expected = {
         (1, "SURG"): "Round 1 SURG: model responded",
