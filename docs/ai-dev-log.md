@@ -2862,3 +2862,56 @@ All three mutations were detected and restored with `git restore`. The 12 watche
 passed after restoration. Unrelated pre-existing run-artifact changes were left untouched.
 
 What I verified by hand:
+
+## Trusted repair reasons in trace events and the watcher
+
+Added the optional `TraceEvent.repair_problems` field specified in section 10 of
+`docs/data-contracts.md`. The shared repair helper formats its code-generated issue list
+once, uses that exact string in the repair instructions, and passes the same string to the
+gateway. Every trace outcome for that repair attempt carries it, including privacy,
+injection, budget, provider-failure, settlement-failure, and successful-call events. A
+non-repair event must keep the field null. Because judges, red team, chair, and both
+specialist rounds all use this helper, the behavior applies uniformly without orchestration
+or CLI changes.
+
+The standalone watcher prints the trusted problem list on repair events and keeps its old
+generic `repair attempted` wording for older traces or other events where the optional field
+is null. Multiline lists are flattened onto the watcher's one terminal line without reading
+or interpreting model output. The full suite passes: 1,200 tests.
+
+What went wrong / limits:
+
+- The trace contract had to change before the code because strict `TraceEvent` models reject
+  unknown fields; this was committed separately as required.
+- Existing saved traces naturally lack the optional field. They remain readable by the
+  standalone watcher and retain its generic repair line.
+- `repair_problems` records why code requested the repair. It does not claim the repaired
+  response passed validation, and the watcher continues to say only that the model responded
+  or the call failed.
+
+#### Contract check
+
+| Contract rule or field | Implementation | Tests |
+|---|---|---|
+| `TraceEvent.repair_problems` is the exact code-generated list sent in the repair prompt | `prompting.format_issues`, `specialist.call_and_parse_with_repair`, `LLMGateway.call` | `test_bad_json_then_fixed_uses_the_repair_retry` |
+| It is populated on the repair attempt, including refusal before a provider call | All gateway trace-construction paths receive the same optional argument | `test_refused_repair_attempt_keeps_trusted_problems` |
+| It is null on non-repair events | `TraceEvent.repair_problems_only_on_repair`; default `None` | `test_successful_call_returns_output_and_writes_one_llm_call_event`; `test_trace_repair_problems_must_be_null_on_nonrepair_event` |
+| It never comes from model response content | The gateway copies its input parameter directly; it never parses `raw_output` for this field | `test_repair_trace_uses_only_trusted_precomputed_problems` |
+| Watcher shows the real reason when present and safely falls back when absent | `tools.watch_run.format_event` | `test_repair_event_prints_real_problems_and_null_keeps_generic_line` |
+
+Everything in the new contract field was implemented exactly as written.
+
+#### Mutation audit
+
+| Rule | What I broke | Which test failed |
+|---|---|---|
+| Prompt and trace share the exact code-generated problem list | Put the model's first raw response in the trace field instead | `test_bad_json_then_fixed_uses_the_repair_retry` |
+| Non-repair events cannot carry repair problems | Removed the `TraceEvent` invariant | `test_trace_repair_problems_must_be_null_on_nonrepair_event` |
+| A refused repair retains its trusted reason | Cleared the field on the budget-refusal event | `test_refused_repair_attempt_keeps_trusted_problems` |
+| Model output cannot control the field | Copied `response.raw_output` into the successful repair event | `test_repair_trace_uses_only_trusted_precomputed_problems` |
+| Watcher displays a present reason and falls back only when absent | Removed the reason-specific watcher branch | `test_repair_event_prints_real_problems_and_null_keeps_generic_line` |
+
+All five mutations were detected and restored with `git restore`. The 736 focused tests
+passed after restoration. Unrelated pre-existing run artifacts remained untouched.
+
+What I verified by hand:
