@@ -46,4 +46,8 @@ The council finds that severe symptomatic aortic stenosis strongly supports valv
 
 ## Human decision
 
-Pending human clinical sign-off.
+- Decision: **approved**
+- Reviewer: human
+- Decided at: 2026-10-03T03:31:41.803202+00:00
+- Comment: none
+- Report hash: `cd1338391d34136cd48716b809185eb5c26c305f6a9ace5e12024b6342927c39`

@@ -2010,7 +2010,14 @@
     "disclaimer": "decision support only, requires human clinical sign-off, synthetic data",
     "dissent": [],
     "failed_turns": [],
-    "human_decision": null,
+    "human_decision": {
+      "comment": "",
+      "decided_at": "2026-10-03T03:31:41.803202Z",
+      "decision": "approved",
+      "report_hash": "cd1338391d34136cd48716b809185eb5c26c305f6a9ace5e12024b6342927c39",
+      "reviewer": "human",
+      "run_id": "run-20261003-031830-cardiac-01-injection"
+    },
     "incomplete_reasons": [],
     "injection_check": {
       "claims_citing_flagged_lines": [],
