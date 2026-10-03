@@ -2740,3 +2740,51 @@ What went wrong / limits:
 Every mutation was detected and restored with `git restore`. The task's tracked files were clean after each restore; the previously generated, untracked complete-run `report.html` was left untouched. The restored complete suite passed: 1,184 tests.
 
 What I verified by hand:
+
+## T18: more cases completed with real-run evidence
+
+T18's three evidence paths are now committed. The contrasting case itself was added in `31a1e68`, and its first complete real run was committed in `d69d2bd` as `runs/run-20261003-030231-contrast-02`, with status `COMPLETE` and recommendation `proceed_with_modifications`.
+
+The real injection-defense run was committed in `cf34a60` as `runs/run-20261003-031830-cardiac-01-injection`. Its scanner found the hidden-text line in `CASE-consultant-review`; the run completed with injection verdict `no_sign`. That result was checked independently of the report summary: all 93 citations across all eight final specialist arguments in both rounds were enumerated, including rebuttal response claims, and zero cited `CASE-consultant-review`; no finalized citation quote overlapped the flagged line. The raw specialist outputs in the trace were also checked and did not cite or repeat the flagged content.
+
+The fake-identifier case was committed in `8f1a714` as `cases/cardiac_01_identifier.md`. Running the real ingest path detected the required synthetic marker, then rejected the case for a phone-shaped identifier on line 9. A provider spy around the full run-command boundary recorded zero provider calls; rejection occurred before `Budget` or `LLMGateway` construction, so token cost was zero.
+
+What went wrong / limits:
+
+- The task evidence was committed before this development-log entry, leaving a documentation gap that this entry closes.
+- The identifier rejection check intercepted the rejection-file writer to keep the requested verification read-only. It exercised the real scanner, `ingest_case`, and full run-command ordering; it did not add another rejected-run artifact to the repository.
+- No code changed for this completion entry, so there was no new mutation audit. The committed real-run folders and case fixture are the evidence.
+
+#### Contract check
+
+- **T18 contrasting case:** `cases/contrast_02.md` and `runs/run-20261003-030231-contrast-02/` are committed.
+- **T18 injection case:** `runs/run-20261003-031830-cardiac-01-injection/` is committed; the flagged line was present and no specialist citation used it.
+- **T18 fake-identifier case:** `cases/cardiac_01_identifier.md` is committed; real ingest rejected it before any gateway call or token use.
+
+#### Mutation audit
+
+Not applicable: this entry records already-committed cases and real-run evidence; it changes no executable rule.
+
+What I verified by hand:
+
+## T20: README and presentation committed; recording outstanding
+
+The project README is complete and committed in `194dc2f`, with the follow-up RAG/instructions clarification committed in `75cc005`. The presentation deck is committed in `38b1569` at `slides/council-presentation.pptx`; the committed file was copied byte-for-byte from the latest downloaded deck and its SHA-256 hash matched the source after copying.
+
+The backup demo recording is still outstanding. T20 therefore has its README and slides deliverables in the repository, but the full task is not complete until that recording exists.
+
+What went wrong / limits:
+
+- The README and deck were committed before this development-log entry, leaving the T20 state undocumented here until now.
+- No `slides/` source project accompanies the binary PowerPoint file; the deliverable currently consists of the committed `.pptx`.
+- No code changed, so no automated tests or mutation checks apply to this entry.
+
+#### Contract check
+
+Not applicable: T20 is a delivery task and does not change `docs/data-contracts.md`.
+
+#### Mutation audit
+
+Not applicable: this entry records documentation and presentation artifacts only.
+
+What I verified by hand:
