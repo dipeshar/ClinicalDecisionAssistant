@@ -115,6 +115,13 @@ def test_judge_parts_system_combines_rubric_then_judge_file() -> None:
     assert "Synthetic case text" in parts.user
 
 
+def test_judge_prompt_distinguishes_score_null_from_justification_values() -> None:
+    judge_text = p.load_prompt("judge.md", REAL_PROMPTS)
+    assert "top-level `counterarguments` score is `null`" in judge_text
+    assert "A value inside `justification` is never `null`" in judge_text
+    assert "omit `counterarguments` from `justification`" in judge_text
+
+
 def test_chair_parts_system_stands_alone() -> None:
     parts = p.chair_parts([("Council output", "Synthetic council output")], REAL_PROMPTS)
     chair_text = p.load_prompt("chair.md", REAL_PROMPTS)
