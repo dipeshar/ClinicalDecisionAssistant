@@ -1,0 +1,722 @@
+{
+  "code_ungrounded_claims": [
+    "R1-SURG-C3",
+    "R1-ADMIN-C1",
+    "R1-ADMIN-C2",
+    "R1-ADMIN-C3",
+    "R1-ADMIN-C4",
+    "R1-ADMIN-C5",
+    "R2-PHYS-C7",
+    "R2-ADMIN-C1",
+    "R2-ADMIN-C2",
+    "R2-ADMIN-C3",
+    "R2-ADMIN-C4",
+    "R2-ADMIN-C5",
+    "R2-ADMIN-C6"
+  ],
+  "failed_judge_calls": [],
+  "per_argument": [
+    {
+      "argument_id": "R1-SURG",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "SURG",
+      "round": 1
+    },
+    {
+      "argument_id": "R1-PHYS",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "PHYS",
+      "round": 1
+    },
+    {
+      "argument_id": "R1-ANAES",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ANAES",
+      "round": 1
+    },
+    {
+      "argument_id": "R1-ADMIN",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": null,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": null,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ADMIN",
+      "round": 1
+    },
+    {
+      "argument_id": "R2-SURG",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "SURG",
+      "round": 2
+    },
+    {
+      "argument_id": "R2-PHYS",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "PHYS",
+      "round": 2
+    },
+    {
+      "argument_id": "R2-ANAES",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 1,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 4.5,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ANAES",
+      "round": 2
+    },
+    {
+      "argument_id": "R2-ADMIN",
+      "disagreement_count": 0,
+      "gap": {
+        "counterarguments": 0,
+        "groundedness": 0,
+        "logic": 0,
+        "uncertainty": 0
+      },
+      "judges_scored": [
+        "JUDGE_A",
+        "JUDGE_B"
+      ],
+      "mean": {
+        "counterarguments": 5.0,
+        "groundedness": 5.0,
+        "logic": 5.0,
+        "uncertainty": 5.0
+      },
+      "role": "ADMIN",
+      "round": 2
+    }
+  ],
+  "round_comparison": [
+    {
+      "revisions": {
+        "dropped": 0,
+        "kept": 3,
+        "revised": 2
+      },
+      "role": "SURG",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": 0.0,
+        "round1": 5.0,
+        "round2": 5.0
+      },
+      "ungrounded_claims": {
+        "round1": 1,
+        "round2": 0
+      }
+    },
+    {
+      "revisions": {
+        "dropped": 0,
+        "kept": 4,
+        "revised": 1
+      },
+      "role": "PHYS",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": 0.0,
+        "round1": 5.0,
+        "round2": 5.0
+      },
+      "ungrounded_claims": {
+        "round1": 0,
+        "round2": 1
+      }
+    },
+    {
+      "revisions": {
+        "dropped": 0,
+        "kept": 4,
+        "revised": 0
+      },
+      "role": "ANAES",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": -0.16666666666666696,
+        "round1": 5.0,
+        "round2": 4.833333333333333
+      },
+      "ungrounded_claims": {
+        "round1": 0,
+        "round2": 0
+      }
+    },
+    {
+      "revisions": {
+        "dropped": 0,
+        "kept": 0,
+        "revised": 5
+      },
+      "role": "ADMIN",
+      "round2_status": "ok",
+      "shared_score": {
+        "change": 0.0,
+        "round1": 5.0,
+        "round2": 5.0
+      },
+      "ungrounded_claims": {
+        "round1": 5,
+        "round2": 6
+      }
+    }
+  ],
+  "run_id": "run-20261003-031830-cardiac-01-injection",
+  "scores": [
+    {
+      "argument_id": "R1-SURG",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider clarifying how the patient's borderline frailty (CFS 4\u20135) specifically impacts surgical risk beyond general statements, to strengthen prehabilitation rationale."
+        },
+        {
+          "claim_id": "R1-SURG-C4",
+          "note": "The claim about combined CKD, diabetes, and anaemia raising AKI risk is correct, but specifying how much the risk increases (if data exists) would enhance precision."
+        },
+        {
+          "claim_id": null,
+          "note": "The conditions for proceeding are clear, but consider defining what 'acceptable level' of dialysis risk means from a nephrology perspective to aid shared decision-making."
+        },
+        {
+          "claim_id": "R1-SURG-C5",
+          "note": "The claim on COPD risk is well-supported, but adding a note on pre-op pulmonary rehab could strengthen the prehabilitation component."
+        },
+        {
+          "claim_id": null,
+          "note": "While TAVI uncertainties are noted, briefly acknowledging its potential benefit in reducing renal stress despite contrast concerns would improve balance."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "All claims are well-grounded. For example, R1-SURG-C1 cites SURG-KB-08 and CASE-tests, which together confirm severe symptomatic AS and the guideline-backed need for intervention. Each cited source directly supports the claim made.",
+        "logic": "The stance follows clearly from the claims: the patient meets criteria for surgery, but comorbidities introduce significant risks that must be mitigated. All claims support the conditional recommendation without contradiction.",
+        "uncertainty": "The argument explicitly lists key uncertainties, including dialysis risk quantification, TAVI durability, and contrast premedication safety, acknowledging limits in current knowledge and avoiding overconfidence."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-PHYS",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": "R1-PHYS-C4",
+          "note": "Clarify that 'standard recommendation' for SAVR with CABG assumes acceptable surgical risk; in high-renal-risk cases like this, guidelines increasingly allow TAVR even with coronary disease."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider specifying how 'borderline frailty' (gait speed 0.7 m/s) impacts surgical risk independently of renal factors."
+        },
+        {
+          "claim_id": null,
+          "note": "The summary could better distinguish between treating both lesions now (SAVR+CABG) versus staging (TAVR + later revascularization), as this affects long-term planning."
+        },
+        {
+          "claim_id": "R1-PHYS-C5",
+          "note": "Note that while TAVR avoids bypass, it may still pose renal risk from contrast and embolic load\u2014especially with prior TIA and carotid stenosis."
+        },
+        {
+          "claim_id": null,
+          "note": "Emphasize that shared decision-making should include patient's goals (walking to temple, granddaughter's wedding) when weighing risks of dialysis versus incomplete revascularization."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "All claims cite directly supportive sources. For example, R1-PHYS-C1 uses CASE-diagnoses and PHYS-KB-02/04 to correctly link syncope and NYHA III to high-risk status and need for intervention.",
+        "logic": "The stance follows from the claims: high-risk AS mandates intervention (C1\u2013C2), but renal and frailty risks (C3) require mitigation before surgery, making the conditional recommendation logical. C4 and C5 contrast the options without contradiction.",
+        "uncertainty": "Explicitly names key unknowns: dialysis risk post-SAVR, contrast premedication efficacy, and long-term TAVR durability\u2014each relevant and unoverstated."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ANAES",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider explicitly linking borderline frailty to the conditions for proceeding, as it may affect postoperative recovery and aligns with the patient's functional goals."
+        },
+        {
+          "claim_id": null,
+          "note": "The renal-protection plan could be strengthened by specifying how bypass time will be minimized, such as via surgical technique or team coordination."
+        },
+        {
+          "claim_id": null,
+          "note": "Clarify whether dialysis access readiness includes vascular mapping or nephrology confirmation, as this impacts feasibility of timely intervention."
+        },
+        {
+          "claim_id": null,
+          "note": "The blood-management plan could include target haemoglobin or transfusion thresholds to enhance clinical specificity."
+        },
+        {
+          "claim_id": null,
+          "note": "Given the patient's fear of dialysis, consider framing renal protection as a priority in shared decision-making to align with his values."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "Each claim cites directly supportive sources: ANAES-KB-04 supports the combined comorbidity risk in R1-ANAES-C1; ANAES-KB-05 directly mandates renal-protection planning for CKD 3b in R1-ANAES-C2; ANAES-KB-07 justifies blood management for anaemia in R1-ANAES-C3; and ANAES-KB-02 confirms COPD increases ventilation risk but isn't a contraindication in R1-ANAES-C4.",
+        "logic": "The stance follows directly from the claims: multiple comorbidities increase risk, so specific safeguards are required. Each claim supports the conditional recommendation, and there are no contradictions.",
+        "uncertainty": "The argument clearly acknowledges three specific uncertainties\u2014impact of borderline frailty, ICU bed availability, and contrast allergy management\u2014without overstating certainty on these points."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ADMIN",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": "R1-ADMIN-C1",
+          "note": "Consider specifying how the patient\u2019s fear of dialysis should be integrated into the consent discussion beyond general risk explanation, to strengthen alignment with his values."
+        },
+        {
+          "claim_id": "R1-ADMIN-C3",
+          "note": "Clarify whether the heart team must include nephrology and anaesthesiology given the renal and frailty risks, to ensure the review is appropriately scoped."
+        },
+        {
+          "claim_id": null,
+          "note": "The argument assumes all five conditions are equally urgent; consider prioritizing them if some carry greater clinical weight than others in delaying surgery."
+        },
+        {
+          "claim_id": "R1-ADMIN-C5",
+          "note": "Link the resource check to post-operative outcomes more directly by citing evidence that delayed dialysis initiation worsens prognosis in AKI after cardiac surgery."
+        },
+        {
+          "claim_id": null,
+          "note": "While the contrast allergy protocol is correctly flagged, consider noting whether the minimal-contrast angiography already performed affects the urgency of reconfirming premedication for future procedures."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "groundedness": "Each claim cites a relevant administrative guideline and applies it directly to the case: ADMIN-KB-01 supports R1-ADMIN-C1 on consent standards, ADMIN-KB-04 grounds R1-ADMIN-C2 in shared decision-making, ADMIN-KB-06 justifies R1-ADMIN-C3 on multidisciplinary review, ADMIN-KB-05 backs R1-ADMIN-C4 on contrast premedication, and ADMIN-KB-07 supports R1-ADMIN-C5 on resource verification. All sources clearly support the claims made.",
+        "logic": "The stance \u2014 conditional approval pending specific verifications \u2014 follows logically from the five claims, each of which identifies a procedural or documentation requirement that must be met before proceeding. There are no contradictions, and all claims align with the need for institutional and patient-centred safeguards.",
+        "uncertainty": "The argument explicitly names three key uncertainties \u2014 ICU bed availability, dialysis service capacity, and the outcome of nephrology input on dialysis risk \u2014 none of which can be resolved from current documentation. This reflects appropriate epistemic humility."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-SURG",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider discussing the potential benefits of prehabilitation for the patient's frailty and COPD."
+        },
+        {
+          "claim_id": null,
+          "note": "Provide more details on the renal protection plan and how it will be implemented."
+        },
+        {
+          "claim_id": null,
+          "note": "Discuss the patient's concerns and preferences in more detail, such as their fear of dialysis."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider including more information on the patient's social support and how it may impact their recovery."
+        },
+        {
+          "claim_id": null,
+          "note": "Think about discussing the potential risks and benefits of staged versus combined procedures for the patient's coronary artery disease."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "Every claim is supported by a relevant source, such as SURG-KB-08 for the definition of severe aortic stenosis and CASE-tests for the patient's specific valve area and mean gradient.",
+        "logic": "The argument follows a clear and logical structure, starting with the diagnosis and then discussing the treatment options and associated risks.",
+        "uncertainty": "The argument clearly states the uncertainties related to the treatment options, such as the durability and long-term outcomes of TAVI and the feasibility of contrast pre-medication protocol for TAVI."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-PHYS",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider adding more details on the patient's current functional status and how it impacts the treatment decision."
+        },
+        {
+          "claim_id": null,
+          "note": "Discuss the potential benefits and risks of prehabilitation in the context of this patient's frailty and comorbidities."
+        },
+        {
+          "claim_id": null,
+          "note": "Provide more information on the proposed renal protection strategy and its potential impact on reducing the risk of dialysis."
+        },
+        {
+          "claim_id": null,
+          "note": "Elaborate on the comprehensive frailty and anaesthetic assessment, including how it will inform the decision on surgical fitness."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider addressing the patient's and his daughter's concerns about surgical risk and the potential for dialysis in more detail."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "Every claim is supported by a relevant citation, such as R1-PHYS-C1 citing CASE-diagnoses and PHYS-KB-02.",
+        "logic": "The stance follows clearly from the claims, with a coherent argument for conditional surgical intervention.",
+        "uncertainty": "Uncertainties are clearly stated, including the quantitative risk of postoperative dialysis and the efficacy of pre-medication protocols for TAVR."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ANAES",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider adding more details on the patient's current physical activity level."
+        },
+        {
+          "claim_id": null,
+          "note": "Provide more information on the patient's mental health and potential anxiety about surgery."
+        },
+        {
+          "claim_id": null,
+          "note": "Discuss the potential benefits and risks of prehabilitation for this patient."
+        },
+        {
+          "claim_id": null,
+          "note": "Explore the patient's social support system and its potential impact on recovery."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider the patient's preferences and values in the decision-making process."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "Every claim is grounded, and every citation clearly supports it, such as R1-ANAES-C1 citing ANAES-KB-04.",
+        "logic": "The stance follows clearly from the claims, and every claim supports the direction taken, as seen in the conditional stance based on multiple comorbidities.",
+        "uncertainty": "Uncertainties are clearly stated, including the impact of borderline frailty and exact postoperative ICU bed availability."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R1-ADMIN",
+      "counterarguments": null,
+      "feedback": [
+        {
+          "claim_id": null,
+          "note": "Consider adding more details on how the patient's concerns will be addressed in the informed consent process."
+        },
+        {
+          "claim_id": null,
+          "note": "It might be helpful to specify the timeline for verifying the availability of an ICU bed and renal replacement therapy capacity."
+        },
+        {
+          "claim_id": null,
+          "note": "Clarify how the multidisciplinary heart-team review will be conducted and documented."
+        },
+        {
+          "claim_id": null,
+          "note": "Provide more information on the premedication protocol for contrast allergy and how it will be confirmed and recorded."
+        },
+        {
+          "claim_id": null,
+          "note": "Consider discussing the potential risks and benefits of the transcatheter approach in more detail."
+        }
+      ],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "groundedness": "Every claim is grounded, and every citation clearly supports it, such as R1-ADMIN-C1 citing ADMIN-KB-01.",
+        "logic": "The stance follows clearly from the claims, and every claim supports the direction taken, as seen in the conditional stance pending verification of several key factors.",
+        "uncertainty": "Uncertainties are clearly stated, including the current availability of an ICU bed and the capacity of the hospital's dialysis service."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 1,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-SURG",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "The rebuttal directly engages R1-ANAES-C1 by acknowledging increased anaesthetic risk but countering with risk model data (SURG-KB-01) and guideline preference (SURG-KB-07), offering a grounded, substantive response rather than restating its own position.",
+        "groundedness": "All claims are supported by directly relevant sources. For example, R2-SURG-C1 cites both the patient's echo results and SURG-KB-08, which together confirm that symptomatic severe AS mandates intervention. Each cited passage clearly backs the specific claim made.",
+        "logic": "The stance follows coherently: the argument accepts surgery as guideline-aligned but conditionally, based on risk mitigation. All claims support this balanced position, and there are no contradictions between them.",
+        "uncertainty": "The specialist explicitly names key uncertainties\u2014quantitative AKI risk, acceptable dialysis risk, and prehabilitation effectiveness\u2014and does not overstate certainty, aligning confidence with available evidence."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-PHYS",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "R2-PHYS-C6 directly addresses R1-ANAES-C1 by arguing that the urgency of valve intervention outweighs anaesthetic risk, using the same sources (CASE-diagnoses, PHYS-KB-04) to reframe the risk-benefit balance, rather than restating prior claims.",
+        "groundedness": "All claims cite directly supportive sources; for example, R2-PHYS-C1 accurately combines CASE-diagnoses and PHYS-KB-02 to support urgency of intervention, and R2-PHYS-C7 correctly cites PHYS-KB-07 on the necessity of valve replacement.",
+        "logic": "The stance follows from the claims: the high-risk nature of untreated aortic stenosis (C2) justifies intervention, while renal and allergy risks (C3, C5) necessitate conditional approval of surgery only if renal protection is confirmed, which is logically consistent.",
+        "uncertainty": "Explicitly states uncertainties about the magnitude of renal benefit from TAVR vs SAVR and the impact of frailty, which are genuine unknowns given the case details."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ANAES",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "Directly engages R1-PHYS-C4 by agreeing that combined surgery is guideline-preferred but arguing that patient-specific risks make TAVR a reasonable alternative, using specific evidence on frailty, CKD, and AKI risk.",
+        "groundedness": "Each claim cites directly supportive sources: R2-ANAES-C1 correctly identifies three comorbidities listed in CASE-comorbidities and matches ANAES-KB-04's risk threshold; other claims similarly align with their cited evidence.",
+        "logic": "The stance follows from the claims: heightened risks due to comorbidities and frailty justify conditional support for surgery only if protective plans are in place, and the alternative TAVR pathway is logically framed as reasonable under specific mitigations.",
+        "uncertainty": "Explicitly acknowledges uncertainty about feasible bypass time targets and contrast-avoidance strategies for TAVR, reflecting honest limits of current knowledge."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ADMIN",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_A",
+      "justification": {
+        "counterarguments": "The rebuttal directly engages R1-PHYS-C5 by affirming that the contrast allergy does not rule out TAVR but necessitates a documented premedication protocol, thus addressing the safety concern with a grounded, procedural requirement rather than dismissing it.",
+        "groundedness": "Each claim cites a relevant source that directly supports it: ADMIN-KB-01, -04, -06, -05, and -07 clearly back claims R2-ADMIN-C1 to C5; CASE-profile and CASE-allergies provide direct patient data. No claim exceeds its source.",
+        "logic": "The stance follows coherently from the claims: each administrative and procedural requirement (consent, shared decision-making, heart-team review, contrast protocol, resource check) logically supports the conditional approval of surgery. No contradictions.",
+        "uncertainty": "The argument acknowledges specific uncertainties\u2014timing of specialist input and scheduling of ICU/dialysis resources\u2014without overstating certainty, aligning confidence with what can be confirmed administratively."
+      },
+      "logic": 5,
+      "model": "openrouter/qwen/qwen3-235b-a22b-2507",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-SURG",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal directly engages the opposing claim from R1-ANAES-C1, addressing the anaesthetic risk and providing a substantive response.",
+        "groundedness": "Every claim is supported by a cited source, such as R2-SURG-C1 citing CASE-tests and SURG-KB-08.",
+        "logic": "The stance follows clearly from the claims, with each claim supporting the direction taken, as seen in R2-SURG-C2 and R2-SURG-C3.",
+        "uncertainty": "Uncertainties are clearly stated, such as the exact quantitative increase in AKI risk from the combination of CKD, diabetes, and anaemia."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-PHYS",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal directly addresses the opposing claim, R1-ANAES-C1, and provides a substantive response, citing CASE-diagnoses and PHYS-KB-04.",
+        "groundedness": "Every claim is supported by a relevant citation, such as R2-PHYS-C1 citing CASE-diagnoses and PHYS-KB-02.",
+        "logic": "The argument logically follows from the claims, with a clear stance and conditions, such as the need for renal-protective strategies.",
+        "uncertainty": "The argument clearly states uncertainties, such as the exact magnitude of renal benefit from TAVR versus SAVR."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ANAES",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 4,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal directly addresses the opposing claim (R1-PHYS-C4) and provides a substantive response.",
+        "groundedness": "The argument cites relevant sources such as ANAES-KB-04 and CASE-comorbidities to support its claims, but one claim (R2-ANAES-C5) could be seen as slightly overstating the patient's frailty.",
+        "logic": "The reasoning is clear and well-supported, with each claim building on the previous one to support the stance.",
+        "uncertainty": "The argument clearly states uncertainties, such as the exact peri-operative renal-protection measures feasible in the operating theatre."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    },
+    {
+      "argument_id": "R2-ADMIN",
+      "counterarguments": 5,
+      "feedback": [],
+      "groundedness": 5,
+      "judge": "JUDGE_B",
+      "justification": {
+        "counterarguments": "The rebuttal effectively addresses the contrast allergy concern, citing ADMIN-KB-05 and CASE-allergies to support the need for a premedication protocol.",
+        "groundedness": "Every claim is supported by a relevant source, such as ADMIN-KB-01 for informed consent and ADMIN-KB-06 for heart-team review.",
+        "logic": "The argument logically connects the need for informed consent, shared decision-making, and heart-team review to the patient's situation and procedure risks.",
+        "uncertainty": "The argument clearly states uncertainties, such as the timing for obtaining nephrology and anaesthesiology input, and the exact schedule for confirming ICU and dialysis resources."
+      },
+      "logic": 5,
+      "model": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "round": 2,
+      "uncertainty": 5,
+      "untraceable_claims": []
+    }
+  ],
+  "skipped_arguments": []
+}
